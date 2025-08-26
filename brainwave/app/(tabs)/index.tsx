@@ -1,4 +1,4 @@
-import { Text, View, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
 import axios from "axios";
 import { useEffect } from "react";
 import AppText from "../../components/AppText";
