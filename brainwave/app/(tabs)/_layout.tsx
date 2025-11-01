@@ -1,23 +1,65 @@
 import { Tabs } from "expo-router";
-import Ionicons from "@expo/vector-icons/Ionicons";
+import { useTheme } from "../contexts/ThemeContexts";
+import { Ionicons } from "@expo/vector-icons";
 
-export default function TabLayout() {
+export default function TabsLayout() {
+  const { theme } = useTheme(); // 'light', 'dark', or null
+
   return (
-    <Tabs screenOptions={{tabBarActiveTintColor: '##ffd33d',
-    tabBarStyle: {
-        backgroundColor: '#d9d9d9',
-    }
-    }}>
-        
-      <Tabs.Screen name="index" options={{ headerShown: false, title: 'Home', tabBarIcon: ({color, focused}) => (
-        <Ionicons name={focused ? 'home-sharp' : 'home-outline'} color={color} size={24}/>
-      ),
-      }} 
+    <>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.border,
+          borderTopWidth: 1,
+        },
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.text.secondary,
+        tabBarLabelStyle: {
+          fontFamily: theme.fonts.regular,
+          fontSize: 12,
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          tabBarLabel: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={color} />
+          ),
+        }}
       />
-      <Tabs.Screen name="account" options={{headerShown: false, title: 'Account', tabBarIcon: ({color, focused}) => (
-        <Ionicons name={focused ? 'person-sharp' : 'person-outline'} color={color} size={24}/>
-      ),
-      }} />
+      <Tabs.Screen
+        name="planner"
+        options={{
+          title: "Planner",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="progress"
+        options={{
+          title: "Progress",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bar-chart" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
+    </>
   );
 }
