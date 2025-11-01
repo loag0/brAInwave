@@ -1,21 +1,47 @@
 import { Stack } from "expo-router";
-import { useFonts } from "expo-font";
-import AppLoading from "expo-app-loading";
+import { StatusBar } from "expo-status-bar";
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
+import { AuthProvider } from "./contexts/AuthContexts";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContexts";
 
-export default function RootLayout() {
+export default function RootLayout() { // 'light', 'dark', or null
   const [fontsLoaded] = useFonts({
-    Poppins: require('../assets/fonts/Poppins-Regular.ttf'),
-    'Poppins-Bold': require('../assets/fonts/Poppins-Bold.ttf'),
-    'Poppins-Italic': require('../assets/fonts/Poppins-Italic.ttf'),
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   });
 
   if (!fontsLoaded) {
-    return <AppLoading />;
+    return null;
   }
 
-  return (
-  <Stack>
-    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-  </Stack>
-  );
+  return(
+    <ThemeProvider>
+      <ThemedApp />
+    </ThemeProvider>
+  )
+
+  function ThemedApp() {
+    const { isDark } = useTheme();
+
+    return (
+      <>
+        <StatusBar style={isDark ? "light" : "dark"} />
+        <AuthProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="onboarding" />
+          </Stack>
+        </AuthProvider>
+      </>
+    );
+  }
 }
