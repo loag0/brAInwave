@@ -35,8 +35,8 @@ export default function Schedule() {
     {
       id: 1,
       time: "8:00 am",
-      subject: "data structures",
-      task: "review binary trees",
+      subject: "Data structures",
+      task: "Review binary trees",
       duration: "45 min",
       completed: true,
       difficulty: "medium",
@@ -44,8 +44,8 @@ export default function Schedule() {
     {
       id: 2,
       time: "10:00 am",
-      subject: "data structures",
-      task: "class lecture",
+      subject: "Data structures",
+      task: "Class lecture",
       duration: "90 min",
       completed: false,
       difficulty: "easy",
@@ -53,8 +53,8 @@ export default function Schedule() {
     {
       id: 3,
       time: "2:00 pm",
-      subject: "calculus ii",
-      task: "class lecture",
+      subject: "Calculus ii",
+      task: "Class lecture",
       duration: "90 min",
       completed: false,
       difficulty: "easy",
@@ -62,8 +62,8 @@ export default function Schedule() {
     {
       id: 4,
       time: "4:00 pm",
-      subject: "data structures",
-      task: "complete algorithm assignment",
+      subject: "Data structures",
+      task: "Complete algorithm assignment",
       duration: "120 min",
       completed: false,
       difficulty: "hard",
@@ -71,8 +71,8 @@ export default function Schedule() {
     {
       id: 5,
       time: "8:00 pm",
-      subject: "calculus ii",
-      task: "practice integration problems",
+      subject: "Calculus ii",
+      task: "Practice integration problems",
       duration: "60 min",
       completed: false,
       difficulty: "medium",
@@ -82,11 +82,11 @@ export default function Schedule() {
   const styles = createStyles(theme);
 
   const weekDays: WeekDay[] = [
-    { id: "today", label: "today", date: "thu 9" },
-    { id: "tomorrow", label: "tomorrow", date: "fri 10" },
-    { id: "sat", label: "sat", date: "11" },
-    { id: "sun", label: "sun", date: "12" },
-    { id: "mon", label: "mon", date: "13" },
+    { id: "today", label: "Today", date: "Thu 9" },
+    { id: "tomorrow", label: "Tomorrow", date: "Fri 10" },
+    { id: "sat", label: "Sat", date: "11" },
+    { id: "sun", label: "Sun", date: "12" },
+    { id: "mon", label: "Mon", date: "13" },
   ];
 
   const toggleTaskCompletion = (id: number) => {
@@ -132,9 +132,9 @@ export default function Schedule() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>study planner</Text>
+            <Text style={styles.headerTitle}>Study planner</Text>
             <Text style={styles.headerSubtitle}>
-              ai-optimized schedule for your success
+              AI-optimized schedule for your success
             </Text>
           </View>
         </View>
@@ -146,9 +146,9 @@ export default function Schedule() {
               <Ionicons name="bulb" size={20} color={theme.colors.surface} />
             </View>
             <View style={styles.insightText}>
-              <Text style={styles.insightTitle}>ai insight</Text>
+              <Text style={styles.insightTitle}>AI insight</Text>
               <Text style={styles.insightDescription}>
-                you're most productive in the evening. i've scheduled
+                You're most productive in the evening. I've scheduled
                 challenging tasks after 6 pm.
               </Text>
             </View>
@@ -195,9 +195,9 @@ export default function Schedule() {
         {/* Study Plan */}
         <View style={styles.planContainer}>
           <View style={styles.planHeader}>
-            <Text style={styles.planTitle}>today's schedule</Text>
+            <Text style={styles.planTitle}>Today's schedule</Text>
             <TouchableOpacity>
-              <Text style={styles.regenerateButton}>regenerate</Text>
+              <Text style={styles.regenerateButton}>Regenerate</Text>
             </TouchableOpacity>
           </View>
 
@@ -273,7 +273,7 @@ export default function Schedule() {
         {/* Add Custom Task Button */}
         <View style={styles.addTaskContainer}>
           <TouchableOpacity style={styles.addTaskButton}>
-            <Text style={styles.addTaskText}>+ add custom task</Text>
+            <Text style={styles.addTaskText}>+ Add custom task</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

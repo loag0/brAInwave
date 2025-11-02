@@ -40,47 +40,47 @@ export default function Progress() {
   const styles = createStyles(theme);
 
   const weeklyStats: WeeklyStat[] = [
-    { day: "mon", hours: 3.5 },
-    { day: "tue", hours: 4.2 },
-    { day: "wed", hours: 2.8 },
-    { day: "thu", hours: 4.5 },
-    { day: "fri", hours: 3.1 },
-    { day: "sat", hours: 1.5 },
-    { day: "sun", hours: 2.0 },
+    { day: "Mon", hours: 3.5 },
+    { day: "Tue", hours: 4.2 },
+    { day: "Wed", hours: 2.8 },
+    { day: "Thu", hours: 4.5 },
+    { day: "Fri", hours: 3.1 },
+    { day: "Sat", hours: 1.5 },
+    { day: "Sun", hours: 2.0 },
   ];
 
   const subjects: Subject[] = [
-    { name: "data structures", hours: 12.5, progress: 78, color: "#1a1a1a" },
-    { name: "calculus ii", hours: 10.2, progress: 65, color: "#4a4a4a" },
-    { name: "english literature", hours: 8.3, progress: 82, color: "#6a6a6a" },
-    { name: "physics", hours: 6.8, progress: 45, color: "#8a8a8a" },
+    { name: "Data structures", hours: 12.5, progress: 78, color: "#1a1a1a" },
+    { name: "Calculus ii", hours: 10.2, progress: 65, color: "#4a4a4a" },
+    { name: "English literature", hours: 8.3, progress: 82, color: "#6a6a6a" },
+    { name: "Physics", hours: 6.8, progress: 45, color: "#8a8a8a" },
   ];
 
   const achievements: Achievement[] = [
     {
       id: 1,
       title: "7-day streak",
-      description: "studied every day this week",
+      description: "Studied every day this week",
       icon: "🔥",
       unlocked: true,
     },
     {
       id: 2,
-      title: "early bird",
-      description: "completed 5 morning sessions",
+      title: "Early bird",
+      description: "Completed 5 morning sessions",
       icon: "🌅",
       unlocked: true,
     },
     {
       id: 3,
-      title: "night owl",
+      title: "Night owl",
       description: "10 late night study sessions",
       icon: "🦉",
       unlocked: false,
     },
     {
       id: 4,
-      title: "perfect week",
+      title: "Perfect week",
       description: "met all weekly goals",
       icon: "⭐",
       unlocked: true,
@@ -103,12 +103,12 @@ export default function Progress() {
           <Text
             style={[styles.headerTitle, { color: isDark ? "#000" : "#fff" }]}
           >
-            your progress
+            Your progress
           </Text>
           <Text
             style={[styles.headerSubtitle, { color: isDark ? "#666" : "#ccc" }]}
           >
-            track your study journey
+            Track your study journey
           </Text>
         </LinearGradient>
 
@@ -121,7 +121,7 @@ export default function Progress() {
                 size={16}
                 color={theme.colors.text.primary}
               />
-              <Text style={styles.statLabel}>this week</Text>
+              <Text style={styles.statLabel}>This week</Text>
             </View>
             <Text style={styles.statValue}>21.6 hrs</Text>
             <View style={styles.statTrend}>
@@ -141,7 +141,7 @@ export default function Progress() {
                 size={16}
                 color={theme.colors.text.primary}
               />
-              <Text style={styles.statLabel}>weekly goal</Text>
+              <Text style={styles.statLabel}>Weekly goal</Text>
             </View>
             <Text style={styles.statValue}>87%</Text>
             <View style={styles.progressBarMini}>
@@ -163,10 +163,10 @@ export default function Progress() {
                 size={16}
                 color={theme.colors.text.primary}
               />
-              <Text style={styles.statLabel}>study streak</Text>
+              <Text style={styles.statLabel}>Study streak</Text>
             </View>
             <Text style={styles.statValue}>7 days</Text>
-            <Text style={styles.statSubtext}>🔥 keep it up!</Text>
+            <Text style={styles.statSubtext}>🔥 Keep it up!</Text>
           </View>
 
           <View style={styles.statCard}>
@@ -176,17 +176,17 @@ export default function Progress() {
                 size={16}
                 color={theme.colors.text.primary}
               />
-              <Text style={styles.statLabel}>total sessions</Text>
+              <Text style={styles.statLabel}>Total sessions</Text>
             </View>
             <Text style={styles.statValue}>42</Text>
-            <Text style={styles.statSubtext}>this month</Text>
+            <Text style={styles.statSubtext}>This month</Text>
           </View>
         </View>
 
         <View style={styles.content}>
           {/* Weekly Chart */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>study hours this week</Text>
+            <Text style={styles.cardTitle}>Study hours this week</Text>
             <View style={styles.chartContainer}>
               {weeklyStats.map((stat, index) => (
                 <View key={stat.day} style={styles.chartBar}>
@@ -210,7 +210,7 @@ export default function Progress() {
 
           {/* Subject Progress */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>subject progress</Text>
+            <Text style={styles.cardTitle}>Subject progress</Text>
             <View style={styles.subjectList}>
               {subjects.map((subject, index) => (
                 <View
@@ -268,7 +268,7 @@ export default function Progress() {
                   size={20}
                   color={theme.colors.text.primary}
                 />
-                <Text style={styles.cardTitle}>achievements</Text>
+                <Text style={styles.cardTitle}>Achievements</Text>
               </View>
               <View style={styles.achievementBadge}>
                 <Text style={styles.achievementBadgeText}>3/4</Text>
@@ -521,7 +521,7 @@ const createStyles = (theme: Theme) =>
     achievementGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: theme.spacing.sm,
+      gap: theme.spacing.xs,
     },
     achievementCard: {
       width:

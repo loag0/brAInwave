@@ -28,10 +28,10 @@ export default function Profile() {
   const styles = createStyles(theme);
 
   const handleLogout = () => {
-    Alert.alert("log out", "are you sure you want to log out?", [
-      { text: "cancel", style: "cancel" },
+    Alert.alert("Log out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: "log out",
+        text: "Log out",
         style: "destructive",
         onPress: logout,
       },
@@ -57,9 +57,9 @@ export default function Profile() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>settings</Text>
+            <Text style={styles.headerTitle}>Settings</Text>
             <Text style={styles.headerSubtitle}>
-              customize your study experience
+              Customize your study experience
             </Text>
           </View>
         </View>
@@ -73,10 +73,10 @@ export default function Profile() {
               </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>
-                  {user?.name?.toLowerCase() || "alex johnson"}
+                  {user?.name?.toLowerCase() || "Alex johnson"}
                 </Text>
                 <Text style={styles.profileSubtitle}>
-                  {user?.university?.toLowerCase() || "computer science major"}
+                  {user?.university?.toLowerCase() || "Computer science major"}
                 </Text>
               </View>
               <Ionicons
@@ -95,13 +95,13 @@ export default function Profile() {
                 size={20}
                 color={theme.colors.text.primary}
               />
-              <Text style={styles.cardTitle}>notifications</Text>
+              <Text style={styles.cardTitle}>Notifications</Text>
             </View>
             <View style={styles.cardContent}>
               <SettingItem
                 theme={theme}
-                label="study reminders"
-                description="get notified before study sessions"
+                label="Study reminders"
+                description="Get notified before study sessions"
                 value={notifications.studyReminders}
                 onValueChange={(val) =>
                   setNotifications({ ...notifications, studyReminders: val })
@@ -110,8 +110,8 @@ export default function Profile() {
               <Separator theme={theme} />
               <SettingItem
                 theme={theme}
-                label="assignment deadlines"
-                description="alerts for upcoming due dates"
+                label="Assignment deadlines"
+                description="Alerts for upcoming due dates"
                 value={notifications.assignmentDeadlines}
                 onValueChange={(val) =>
                   setNotifications({
@@ -123,8 +123,8 @@ export default function Profile() {
               <Separator theme={theme} />
               <SettingItem
                 theme={theme}
-                label="goal achievements"
-                description="celebrate your milestones"
+                label="Goal achievements"
+                description="Celebrate your milestones"
                 value={notifications.goalAchievements}
                 onValueChange={(val) =>
                   setNotifications({ ...notifications, goalAchievements: val })
@@ -133,8 +133,8 @@ export default function Profile() {
               <Separator theme={theme} />
               <SettingItem
                 theme={theme}
-                label="daily summary"
-                description="end-of-day progress report"
+                label="Daily summary"
+                description="End-of-day progress report"
                 value={notifications.dailySummary}
                 onValueChange={(val) =>
                   setNotifications({ ...notifications, dailySummary: val })
@@ -151,7 +151,7 @@ export default function Profile() {
                 size={20}
                 color={theme.colors.text.primary}
               />
-              <Text style={styles.cardTitle}>study preferences</Text>
+              <Text style={styles.cardTitle}>Study preferences</Text>
             </View>
             <View style={styles.cardContent}>
               <TouchableOpacity style={styles.menuItem}>
@@ -162,7 +162,7 @@ export default function Profile() {
                     color={theme.colors.text.secondary}
                   />
                   <View style={styles.menuItemText}>
-                    <Text style={styles.menuItemTitle}>session duration</Text>
+                    <Text style={styles.menuItemTitle}>Session duration</Text>
                     <Text style={styles.menuItemSubtitle}>45 minutes</Text>
                   </View>
                 </View>
@@ -181,7 +181,7 @@ export default function Profile() {
                     color={theme.colors.text.secondary}
                   />
                   <View style={styles.menuItemText}>
-                    <Text style={styles.menuItemTitle}>subjects & classes</Text>
+                    <Text style={styles.menuItemTitle}>Subjects & classes</Text>
                     <Text style={styles.menuItemSubtitle}>
                       4 active subjects
                     </Text>
@@ -202,7 +202,7 @@ export default function Profile() {
                     color={theme.colors.text.secondary}
                   />
                   <View style={styles.menuItemText}>
-                    <Text style={styles.menuItemTitle}>study hours goal</Text>
+                    <Text style={styles.menuItemTitle}>Study hours goal</Text>
                     <Text style={styles.menuItemSubtitle}>4 hours per day</Text>
                   </View>
                 </View>
@@ -223,7 +223,7 @@ export default function Profile() {
                 size={20}
                 color={theme.colors.text.primary}
               />
-              <Text style={styles.cardTitle}>app settings</Text>
+              <Text style={styles.cardTitle}>App settings</Text>
             </View>
             <View style={styles.cardContent}>
               <View style={styles.darkModeContainer}>
@@ -233,7 +233,7 @@ export default function Profile() {
                     size={20}
                     color={theme.colors.text.secondary}
                   />
-                  <Text style={styles.menuItemTitle}>dark mode</Text>
+                  <Text style={styles.menuItemTitle}>Dark mode</Text>
                 </View>
                 <Switch
                   value={isDark}
@@ -255,7 +255,7 @@ export default function Profile() {
                     size={20}
                     color={theme.colors.text.secondary}
                   />
-                  <Text style={styles.menuItemTitle}>email preferences</Text>
+                  <Text style={styles.menuItemTitle}>Email preferences</Text>
                 </View>
                 <Ionicons
                   name="chevron-forward"
@@ -273,7 +273,7 @@ export default function Profile() {
                     size={20}
                     color={theme.colors.text.secondary}
                   />
-                  <Text style={styles.menuItemTitle}>privacy & security</Text>
+                  <Text style={styles.menuItemTitle}>Privacy & Security</Text>
                 </View>
                 <Ionicons
                   name="chevron-forward"
@@ -292,7 +292,7 @@ export default function Profile() {
                 size={20}
                 color={theme.colors.text.secondary}
               />
-              <Text style={styles.supportButtonText}>help & support</Text>
+              <Text style={styles.supportButtonText}>Help & support</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -305,13 +305,13 @@ export default function Profile() {
                 color={theme.colors.error}
               />
               <Text style={[styles.supportButtonText, styles.logoutButtonText]}>
-                log out
+                Log out
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Version */}
-          <Text style={styles.version}>brainwave v1.0.0</Text>
+          <Text style={styles.version}>brAInwave v1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
