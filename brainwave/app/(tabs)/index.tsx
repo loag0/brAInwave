@@ -50,20 +50,20 @@ export default function Home() {
   const styles = createStyles(theme);
 
   const upcomingClasses: Class[] = [
-    { id: 1, name: 'data structures', time: '10:00 am', room: 'cs-201', color: '#1a1a1a' },
-    { id: 2, name: 'calculus ii', time: '2:00 pm', room: 'math-105', color: '#4a4a4a' },
-    { id: 3, name: 'english literature', time: '4:30 pm', room: 'eng-302', color: '#6a6a6a' },
+    { id: 1, name: 'Data structures', time: '10:00 am', room: 'cs-201', color: '#1a1a1a' },
+    { id: 2, name: 'Calculus ii', time: '2:00 pm', room: 'math-105', color: '#4a4a4a' },
+    { id: 3, name: 'English literature', time: '4:30 pm', room: 'eng-302', color: '#6a6a6a' },
   ];
 
   const assignments: Assignment[] = [
-    { id: 1, title: 'algorithm analysis essay', subject: 'data structures', due: 'tomorrow', priority: 'high' },
-    { id: 2, title: 'chapter 5 practice problems', subject: 'calculus ii', due: '3 days', priority: 'medium' },
-    { id: 3, title: 'book report draft', subject: 'english literature', due: '1 week', priority: 'low' },
+    { id: 1, title: 'Algorithm analysis essay', subject: 'Data structures', due: 'tomorrow', priority: 'high' },
+    { id: 2, title: 'Chapter 5 practice problems', subject: 'Calculus ii', due: '3 days', priority: 'medium' },
+    { id: 3, title: 'Book report draft', subject: 'English literature', due: '1 week', priority: 'low' },
   ];
 
   const studySessions: StudySession[] = [
-    { id: 1, subject: 'data structures', duration: '45 min', time: '8:00 pm', type: 'review' },
-    { id: 2, subject: 'calculus ii', duration: '60 min', time: '9:00 pm', type: 'practice' },
+    { id: 1, subject: 'Data structures', duration: '45 min', time: '8:00 pm', type: 'review' },
+    { id: 2, subject: 'Calculus ii', duration: '60 min', time: '9:00 pm', type: 'practice' },
   ];
 
   const toggleAssignment = (id: number) => {
@@ -99,16 +99,13 @@ export default function Home() {
       >
         {/* Header Section */}
         <LinearGradient
-          colors={isDark ? ['#ffffff', '#f5f5f5'] : ['#1a1a1a', '#2d2d2d']}
+          colors={isDark ? ['#2c2c2c', '#2c2c2c'] : ['#f5f5f5', '#f5f5f5']}
           style={styles.headerGradient}
         >
           <View style={styles.header}>
             <View>
-              <Text style={[styles.welcomeText, { color: isDark ? '#000' : '#fff' }]}>
-                welcome back, {user?.name?.split(' ')[0].toLowerCase() || 'alex'}!
-              </Text>
-              <Text style={[styles.dateText, { color: isDark ? '#666' : '#ccc' }]}>
-                thursday, october 17, 2025
+              <Text style={[styles.welcomeText, { color: isDark ? '#fff' : '#000' }]}>
+                Welcome back, {user?.name?.split(' ')[0].toLowerCase() || 'alex'}!
               </Text>
             </View>
           </View>
@@ -116,10 +113,10 @@ export default function Home() {
           {/* Today's Progress Card */}
           <View style={[styles.progressCard, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)' }]}>
             <View style={styles.progressHeader}>
-              <Text style={[styles.progressTitle, { color: isDark ? '#000' : '#fff' }]}>
-                today's progress
+              <Text style={[styles.progressTitle, { color: isDark ? '#fff' : '#000' }]}>
+                Today's progress
               </Text>
-              <Text style={[styles.progressValue, { color: isDark ? '#000' : '#fff' }]}>
+              <Text style={[styles.progressValue, { color: isDark ? '#fff' : '#000' }]}>
                 2.5 / 4 hours
               </Text>
             </View>
@@ -135,8 +132,8 @@ export default function Home() {
                 </View>
               </View>
             </View>
-            <Text style={[styles.progressMessage, { color: isDark ? '#666' : '#ccc' }]}>
-              great! you're on track 🎯
+            <Text style={[styles.progressMessage, { color: isDark ? '#f5f5f5' : '#666' }]}>
+              Great! you're on track 🎯
             </Text>
           </View>
         </LinearGradient>
@@ -155,7 +152,7 @@ export default function Home() {
               end={{ x: 1, y: 0 }}
             >
               <Ionicons name="timer-outline" size={20} color="#fff" />
-              <Text style={styles.pomodoroText}>start pomodoro session</Text>
+              <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -166,7 +163,7 @@ export default function Home() {
                 <Ionicons name="calendar-outline" size={20} color={theme.colors.text.primary} />
                 <Text style={styles.cardTitle}>Today's classes</Text>
               </View>
-              <Text style={styles.viewAllText}>view all</Text>
+              <Text style={styles.viewAllText}>View all</Text>
             </View>
             <View style={styles.cardContent}>
               {upcomingClasses.map((cls, index) => (
@@ -197,9 +194,9 @@ export default function Home() {
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
                 <Ionicons name="book-outline" size={20} color={theme.colors.text.primary} />
-                <Text style={styles.cardTitle}>assignments</Text>
+                <Text style={styles.cardTitle}>Assignments</Text>
               </View>
-              <Text style={styles.viewAllText}>view all</Text>
+              <Text style={styles.viewAllText}>View all</Text>
             </View>
             <View style={styles.cardContent}>
               {assignments.map((assignment, index) => (
@@ -243,9 +240,9 @@ export default function Home() {
               <View>
                 <View style={styles.cardTitleContainer}>
                   <Ionicons name="trending-up-outline" size={20} color={theme.colors.text.primary} />
-                  <Text style={styles.cardTitle}>ai suggested sessions</Text>
+                  <Text style={styles.cardTitle}>AI Suggested Sessions</Text>
                 </View>
-                <Text style={styles.aiSubtitle}>optimized for your learning style</Text>
+                <Text style={styles.aiSubtitle}>Optimized for your learning style</Text>
               </View>
             </View>
             <View style={styles.cardContent}>
@@ -278,7 +275,7 @@ export default function Home() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Text style={styles.startSessionText}>start study session</Text>
+                  <Text style={styles.startSessionText}>Start Study Session</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -463,6 +460,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
     marginHorizontal: theme.spacing.lg,
     padding: theme.spacing.md,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   progressHeader: {
     flexDirection: 'row',
