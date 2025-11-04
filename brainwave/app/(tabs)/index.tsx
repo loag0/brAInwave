@@ -1,5 +1,4 @@
-// app/(tabs)/home.tsx - Complete Dashboard with no external components
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,178 +6,177 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-} from 'react-native';
+} from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../contexts/ThemeContexts';
-import { useAuth } from '../contexts/AuthContexts';
-import { Theme } from '../types';
-import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from "../contexts/ThemeContexts";
+import { useAuth } from "../contexts/AuthContexts";
+import { Theme } from "../types";
+import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 
-const { width } = Dimensions.get('window');
-
-interface Class {
-  id: number;
-  name: string;
-  time: string;
-  room: string;
-  color: string;
-}
-
-interface Assignment {
-  id: number;
-  title: string;
-  subject: string;
-  due: string;
-  priority: 'high' | 'medium' | 'low';
-}
-
-interface StudySession {
-  id: number;
-  subject: string;
-  duration: string;
-  time: string;
-  type: string;
-}
+const { width } = Dimensions.get("window");
 
 export default function Home() {
-  const { theme, isDark, toggleTheme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { user } = useAuth();
   const [showPomodoro, setShowPomodoro] = useState(false);
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
+  const statusBarHeight = Constants.statusBarHeight;
 
-  const styles = createStyles(theme);
-
-  const upcomingClasses: Class[] = [
-    { id: 1, name: 'Data structures', time: '10:00 am', room: 'cs-201', color: '#1a1a1a' },
-    { id: 2, name: 'Calculus ii', time: '2:00 pm', room: 'math-105', color: '#4a4a4a' },
-    { id: 3, name: 'English literature', time: '4:30 pm', room: 'eng-302', color: '#6a6a6a' },
+  // sample data
+  const upcomingClasses = [
+    {
+      id: 1,
+      name: "Data Structures",
+      time: "10:00 AM",
+      room: "CS-201",
+      color: "#1a1a1a",
+    },
+    {
+      id: 2,
+      name: "Calculus II",
+      time: "2:00 PM",
+      room: "MATH-105",
+      color: "#4a4a4a",
+    },
+    {
+      id: 3,
+      name: "English Literature",
+      time: "4:30 PM",
+      room: "ENG-302",
+      color: "#6a6a6a",
+    },
+  ];
+  const assignments = [
+    {
+      id: 1,
+      title: "Algorithm Analysis Essay",
+      subject: "Data Structures",
+      due: "Tomorrow",
+      priority: "high",
+    },
+    {
+      id: 2,
+      title: "Chapter 5 Practice Problems",
+      subject: "Calculus II",
+      due: "3 days",
+      priority: "medium",
+    },
+    {
+      id: 3,
+      title: "Book Report Draft",
+      subject: "English Literature",
+      due: "1 week",
+      priority: "low",
+    },
+  ];
+  const studySessions = [
+    {
+      id: 1,
+      subject: "Data Structures",
+      duration: "45 min",
+      time: "8:00 PM",
+      type: "Review",
+    },
+    {
+      id: 2,
+      subject: "Calculus II",
+      duration: "60 min",
+      time: "9:00 PM",
+      type: "Practice",
+    },
   ];
 
-  const assignments: Assignment[] = [
-    { id: 1, title: 'Algorithm analysis essay', subject: 'Data structures', due: 'tomorrow', priority: 'high' },
-    { id: 2, title: 'Chapter 5 practice problems', subject: 'Calculus ii', due: '3 days', priority: 'medium' },
-    { id: 3, title: 'Book report draft', subject: 'English literature', due: '1 week', priority: 'low' },
-  ];
+  function toggleAssignment(id: number) {
+    setCheckedAssignments((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }
 
-  const studySessions: StudySession[] = [
-    { id: 1, subject: 'Data structures', duration: '45 min', time: '8:00 pm', type: 'review' },
-    { id: 2, subject: 'Calculus ii', duration: '60 min', time: '9:00 pm', type: 'practice' },
-  ];
+  function getPriorityColor(priority: string) {
+    if (priority === "high") return theme.colors.error;
+    if (priority === "medium") return theme.colors.warning;
+    return theme.colors.text.secondary;
+  }
 
-  const toggleAssignment = (id: number) => {
-    if (checkedAssignments.includes(id)) {
-      setCheckedAssignments(checkedAssignments.filter(item => item !== id));
-    } else {
-      setCheckedAssignments([...checkedAssignments, id]);
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return theme.colors.error;
-      case 'medium': return theme.colors.warning;
-      case 'low': return theme.colors.text.secondary;
-      default: return theme.colors.text.secondary;
-    }
-  };
+  const styles = createStyles(theme, isDark);
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Pomodoro Modal */}
-      {showPomodoro && (
-        <PomodoroTimer 
-          theme={theme}
-          onClose={() => setShowPomodoro(false)}
-        />
-      )}
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      <StatusBar style={isDark ? "light" : "dark"} />
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section */}
-        <LinearGradient
-          colors={isDark ? ['#2c2c2c', '#2c2c2c'] : ['#f5f5f5', '#f5f5f5']}
-          style={styles.headerGradient}
-        >
-          <View style={styles.header}>
-            <View>
-              <Text style={[styles.welcomeText, { color: isDark ? '#fff' : '#000' }]}>
-                Welcome back, {user?.name?.split(' ')[0].toLowerCase() || 'alex'}!
-              </Text>
-            </View>
+        <View style={styles.headerBg}>
+          <View style={styles.headerContent}>
+            <Text style={styles.welcomeText}>
+              Welcome back, {user?.name?.split(" ")[0] || "alex"}!
+            </Text>
+            <Text style={styles.dateText}>Thursday, October 17, 2025</Text>
           </View>
 
-          {/* Today's Progress Card */}
-          <View style={[styles.progressCard, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)' }]}>
+          <View style={styles.progressCard}>
             <View style={styles.progressHeader}>
-              <Text style={[styles.progressTitle, { color: isDark ? '#fff' : '#000' }]}>
-                Today's progress
-              </Text>
-              <Text style={[styles.progressValue, { color: isDark ? '#fff' : '#000' }]}>
-                2.5 / 4 hours
-              </Text>
+              <Text style={styles.progressTitle}>Today's Progress</Text>
+              <Text style={styles.progressValue}>2.5 / 4 hours</Text>
             </View>
             <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBarBackground, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)' }]}>
-                <View style={[styles.progressBarFill, { width: '62.5%' }]}>
-                  <LinearGradient
-                    colors={[theme.colors.primary, theme.colors.secondary]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.progressGradient}
-                  />
-                </View>
-              </View>
+              <View style={styles.progressBarFill} />
             </View>
-            <Text style={[styles.progressMessage, { color: isDark ? '#f5f5f5' : '#666' }]}>
-              Great! you're on track 🎯
+            <Text style={styles.progressMessage}>
+              Great! You're on track 🎯
             </Text>
           </View>
-        </LinearGradient>
+        </View>
 
-        {/* Main Content */}
         <View style={styles.content}>
-          {/* Pomodoro Quick Access */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.pomodoroButton}
             onPress={() => setShowPomodoro(true)}
           >
-            <LinearGradient
-              colors={[theme.colors.primary, theme.colors.secondary]}
-              style={styles.pomodoroGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Ionicons name="timer-outline" size={20} color="#fff" />
-              <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
-            </LinearGradient>
+            <Ionicons name="timer-outline" size={20} color="#fff" />
+            <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
           </TouchableOpacity>
 
-          {/* Today's Classes Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <Ionicons name="calendar-outline" size={20} color={theme.colors.text.primary} />
-                <Text style={styles.cardTitle}>Today's classes</Text>
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={theme.colors.text.primary}
+                />
+                <Text style={styles.cardTitle}>Today's Classes</Text>
               </View>
-              <Text style={styles.viewAllText}>View all</Text>
+              <Text style={styles.viewAllText}>View All</Text>
             </View>
             <View style={styles.cardContent}>
-              {upcomingClasses.map((cls, index) => (
-                <View 
-                  key={cls.id} 
+              {upcomingClasses.map((cls, idx) => (
+                <View
+                  key={cls.id}
                   style={[
                     styles.classItem,
-                    index !== upcomingClasses.length - 1 && styles.itemMargin
+                    idx !== upcomingClasses.length - 1 && styles.itemMargin,
                   ]}
                 >
-                  <View style={[styles.classIndicator, { backgroundColor: cls.color }]} />
+                  <View
+                    style={[
+                      styles.classIndicator,
+                      { backgroundColor: cls.color },
+                    ]}
+                  />
                   <View style={styles.classInfo}>
                     <Text style={styles.className}>{cls.name}</Text>
                     <View style={styles.classDetails}>
-                      <Ionicons name="time-outline" size={12} color={theme.colors.text.secondary} />
+                      <Ionicons
+                        name="time-outline"
+                        size={12}
+                        color={theme.colors.text.secondary}
+                      />
                       <Text style={styles.classTime}>{cls.time}</Text>
                       <Text style={styles.classSeparator}>•</Text>
                       <Text style={styles.classRoom}>{cls.room}</Text>
@@ -193,39 +191,62 @@ export default function Home() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <Ionicons name="book-outline" size={20} color={theme.colors.text.primary} />
+                <Ionicons
+                  name="book-outline"
+                  size={20}
+                  color={theme.colors.text.primary}
+                />
                 <Text style={styles.cardTitle}>Assignments</Text>
               </View>
-              <Text style={styles.viewAllText}>View all</Text>
+              <Text style={styles.viewAllText}>View All</Text>
             </View>
             <View style={styles.cardContent}>
-              {assignments.map((assignment, index) => (
-                <View 
-                  key={assignment.id} 
+              {assignments.map((a, idx) => (
+                <View
+                  key={a.id}
                   style={[
                     styles.assignmentItem,
-                    index !== assignments.length - 1 && styles.itemMargin
+                    idx !== assignments.length - 1 && styles.itemMargin,
                   ]}
                 >
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.checkbox}
-                    onPress={() => toggleAssignment(assignment.id)}
+                    onPress={() => toggleAssignment(a.id)}
                   >
-                    {checkedAssignments.includes(assignment.id) && (
-                      <Ionicons name="checkmark" size={16} color={theme.colors.primary} />
+                    {checkedAssignments.includes(a.id) && (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={theme.colors.primary}
+                      />
                     )}
                   </TouchableOpacity>
                   <View style={styles.assignmentInfo}>
-                    <Text style={[
-                      styles.assignmentTitle,
-                      checkedAssignments.includes(assignment.id) && styles.assignmentTitleChecked
-                    ]}>
-                      {assignment.title}
+                    <Text
+                      style={[
+                        styles.assignmentTitle,
+                        checkedAssignments.includes(a.id) &&
+                          styles.assignmentTitleChecked,
+                      ]}
+                    >
+                      {a.title}
                     </Text>
-                    <Text style={styles.assignmentSubject}>{assignment.subject}</Text>
-                    <View style={[styles.badge, { backgroundColor: getPriorityColor(assignment.priority) + '20' }]}>
-                      <Text style={[styles.badgeText, { color: getPriorityColor(assignment.priority) }]}>
-                        due {assignment.due}
+                    <Text style={styles.assignmentSubject}>{a.subject}</Text>
+                    <View
+                      style={[
+                        styles.badge,
+                        {
+                          backgroundColor: getPriorityColor(a.priority) + "20",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          { color: getPriorityColor(a.priority) },
+                        ]}
+                      >
+                        Due {a.due}
                       </Text>
                     </View>
                   </View>
@@ -235,32 +256,44 @@ export default function Home() {
           </View>
 
           {/* AI Suggested Sessions Card */}
-          <View style={[styles.card, styles.aiCard]}>
+          <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View>
                 <View style={styles.cardTitleContainer}>
-                  <Ionicons name="trending-up-outline" size={20} color={theme.colors.text.primary} />
+                  <Ionicons
+                    name="trending-up-outline"
+                    size={20}
+                    color={theme.colors.text.primary}
+                  />
                   <Text style={styles.cardTitle}>AI Suggested Sessions</Text>
                 </View>
-                <Text style={styles.aiSubtitle}>Optimized for your learning style</Text>
+                <Text style={styles.aiSubtitle}>
+                  Optimized for your learning style
+                </Text>
               </View>
             </View>
             <View style={styles.cardContent}>
-              {studySessions.map((session, index) => (
-                <View 
-                  key={session.id} 
+              {studySessions.map((session, idx) => (
+                <View
+                  key={session.id}
                   style={[
                     styles.sessionItem,
-                    index !== studySessions.length - 1 && styles.itemMargin
+                    idx !== studySessions.length - 1 && styles.itemMargin,
                   ]}
                 >
                   <View style={styles.sessionInfo}>
                     <Text style={styles.sessionSubject}>{session.subject}</Text>
                     <View style={styles.sessionDetails}>
-                      <Ionicons name="time-outline" size={12} color={theme.colors.text.secondary} />
+                      <Ionicons
+                        name="time-outline"
+                        size={12}
+                        color={theme.colors.text.secondary}
+                      />
                       <Text style={styles.sessionTime}>{session.time}</Text>
                       <Text style={styles.sessionSeparator}>•</Text>
-                      <Text style={styles.sessionDuration}>{session.duration}</Text>
+                      <Text style={styles.sessionDuration}>
+                        {session.duration}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.sessionBadge}>
@@ -269,149 +302,126 @@ export default function Home() {
                 </View>
               ))}
               <TouchableOpacity style={styles.startSessionButton}>
-                <LinearGradient
-                  colors={[theme.colors.primary, theme.colors.secondary]}
-                  style={styles.startSessionGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.startSessionText}>Start Study Session</Text>
-                </LinearGradient>
+                <Text style={styles.startSessionText}>Start Study Session</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </ScrollView>
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowUploadMenu(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
+
+      {showPomodoro && (
+        <PomodoroTimer theme={theme} onClose={() => setShowPomodoro(false)} />
+      )}
+
+      {showUploadMenu && (
+        <UploadMenu
+          theme={theme}
+          onClose={() => setShowUploadMenu(false)}
+          onSelectOption={(opt) => console.log("selected:", opt)}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
-// Pomodoro Timer Component
-interface PomodoroTimerProps {
+/* ---------- PomodoroTimer ---------- */
+const PomodoroTimer = ({
+  theme,
+  onClose,
+}: {
   theme: Theme;
   onClose: () => void;
-}
-
-const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ theme, onClose }) => {
+}) => {
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  React.useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+  useEffect(() => {
     if (isRunning) {
-      interval = setInterval(() => {
-        if (seconds === 0) {
-          if (minutes === 0) {
-            setIsRunning(false);
-          } else {
-            setMinutes(prev => prev - 1);
-            setSeconds(59);
+      intervalRef.current = setInterval(() => {
+        setSeconds((prev) => {
+          if (prev === 0) {
+            setMinutes((m) => {
+              if (m === 0) {
+                setIsRunning(false);
+                return 0;
+              }
+              return m - 1;
+            });
+            return 59;
           }
-        } else {
-          setSeconds(prev => prev - 1);
-        }
+          return prev - 1;
+        });
       }, 1000);
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     return () => {
-      if (interval) clearInterval(interval);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [isRunning, minutes, seconds]);
-
-  const timerStyles = StyleSheet.create({
-    overlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.7)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1000,
-    },
-    modal: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 20,
-      padding: 30,
-      width: width - 60,
-      alignItems: 'center',
-    },
-    closeButton: {
-      position: 'absolute',
-      top: 15,
-      right: 15,
-    },
-    title: {
-      fontSize: 24,
-      fontFamily: theme.fonts.bold,
-      color: theme.colors.text.primary,
-      marginBottom: 30,
-    },
-    timerDisplay: {
-      fontSize: 72,
-      fontFamily: theme.fonts.bold,
-      color: theme.colors.primary,
-      marginVertical: 30,
-    },
-    buttonContainer: {
-      flexDirection: 'row',
-      gap: 15,
-      marginTop: 20,
-    },
-    button: {
-      paddingHorizontal: 30,
-      paddingVertical: 12,
-      borderRadius: 10,
-      backgroundColor: theme.colors.primary,
-    },
-    buttonText: {
-      color: '#fff',
-      fontFamily: theme.fonts.semiBold,
-      fontSize: 16,
-    },
-    resetButton: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 2,
-      borderColor: theme.colors.border,
-    },
-    resetButtonText: {
-      color: theme.colors.text.primary,
-    },
-  });
+  }, [isRunning]);
 
   return (
-    <View style={timerStyles.overlay}>
-      <View style={timerStyles.modal}>
-        <TouchableOpacity style={timerStyles.closeButton} onPress={onClose}>
-          <Ionicons name="close" size={24} color={theme.colors.text.secondary} />
+    <View style={pomoStyles.overlay}>
+      <View
+        style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
+      >
+        <TouchableOpacity style={pomoStyles.close} onPress={onClose}>
+          <Ionicons
+            name="close"
+            size={24}
+            color={theme.colors.text.secondary}
+          />
         </TouchableOpacity>
-        
-        <Text style={timerStyles.title}>pomodoro timer</Text>
-        
-        <Text style={timerStyles.timerDisplay}>
-          {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+        <Text style={[pomoStyles.title, { color: theme.colors.text.primary }]}>
+          pomodoro timer
         </Text>
-        
-        <View style={timerStyles.buttonContainer}>
-          <TouchableOpacity 
-            style={timerStyles.button}
+        <Text style={[pomoStyles.timer, { color: theme.colors.primary }]}>
+          {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+        </Text>
+        <View style={pomoStyles.buttonBar}>
+          <TouchableOpacity
+            style={[
+              pomoStyles.button,
+              { backgroundColor: theme.colors.primary },
+            ]}
             onPress={() => setIsRunning(!isRunning)}
           >
-            <Text style={timerStyles.buttonText}>
-              {isRunning ? 'pause' : 'start'}
+            <Text style={pomoStyles.buttonText}>
+              {isRunning ? "pause" : "start"}
             </Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[timerStyles.button, timerStyles.resetButton]}
+          <TouchableOpacity
+            style={[
+              pomoStyles.button,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.primary,
+                borderWidth: 2,
+              },
+            ]}
             onPress={() => {
               setMinutes(25);
               setSeconds(0);
               setIsRunning(false);
             }}
           >
-            <Text style={[timerStyles.buttonText, timerStyles.resetButtonText]}>
+            <Text
+              style={[pomoStyles.buttonText, { color: theme.colors.primary }]}
+            >
               reset
             </Text>
           </TouchableOpacity>
@@ -421,305 +431,447 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ theme, onClose }) => {
   );
 };
 
-const createStyles = (theme: Theme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
+/* ---------- UploadMenu ---------- */
+const UploadMenu = ({
+  theme,
+  onClose,
+  onSelectOption,
+}: {
+  theme: Theme;
+  onClose: () => void;
+  onSelectOption: (opt: string) => void;
+}) => {
+  const uploadOptions = [
+    {
+      id: "schedule",
+      icon: "calendar-outline",
+      label: "Upload schedule",
+      description: "Add your class timetable",
+    },
+    {
+      id: "syllabus",
+      icon: "document-text-outline",
+      label: "Upload syllabus",
+      description: "Import course syllabus",
+    },
+    {
+      id: "assignment",
+      icon: "clipboard-outline",
+      label: "Add assignment",
+      description: "Create a new task",
+    },
+    {
+      id: "notes",
+      icon: "reader-outline",
+      label: "Upload notes",
+      description: "Add study materials",
+    },
+  ];
+
+  return (
+    <TouchableOpacity
+      style={menuStyles.overlay}
+      activeOpacity={1}
+      onPress={onClose}
+    >
+      <View
+        style={[menuStyles.modal, { backgroundColor: theme.colors.surface }]}
+      >
+        <View style={menuStyles.header}>
+          <Text
+            style={[menuStyles.title, { color: theme.colors.text.primary }]}
+          >
+            Upload content
+          </Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons
+              name="close"
+              size={24}
+              color={theme.colors.text.secondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {uploadOptions.map((opt) => (
+          <TouchableOpacity
+            key={opt.id}
+            style={[
+              menuStyles.option,
+              {
+                backgroundColor: theme.colors.background,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => {
+              onSelectOption(opt.id);
+              onClose();
+            }}
+          >
+            <View
+              style={[
+                menuStyles.iconContainer,
+                { backgroundColor: theme.colors.primary + "22" },
+              ]}
+            >
+              <Ionicons
+                name={opt.icon as any}
+                size={24}
+                color={theme.colors.primary}
+              />
+            </View>
+            <View style={menuStyles.optionText}>
+              <Text
+                style={[
+                  menuStyles.optionLabel,
+                  { color: theme.colors.text.primary },
+                ]}
+              >
+                {opt.label}
+              </Text>
+              <Text
+                style={[
+                  menuStyles.optionDescription,
+                  { color: theme.colors.text.secondary },
+                ]}
+              >
+                {opt.description}
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={theme.colors.text.secondary}
+            />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+/* ---------- styles ---------- */
+const createStyles = (theme: Theme, isDark: boolean) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    scrollView: { flex: 1 },
+    headerBg: {
+      width: "100%",
+      paddingTop: 10,
+      paddingBottom: 40,
+      backgroundColor: isDark ? "#2d2d2d" : "#f9f9f9",
+    },
+    headerContent: {
+      paddingLeft: theme.spacing.lg,
+      paddingBottom: theme.spacing.md,
+    },
+    welcomeText: {
+      fontSize: 24,
+      fontFamily: theme.fonts.bold,
+      color: theme.colors.text.primary,
+    },
+    dateText: {
+      fontSize: 16,
+      color: theme.colors.text.secondary,
+      fontFamily: theme.fonts.regular,
+    },
+    progressCard: {
+      width: width - 48,
+      alignSelf: "center",
+      backgroundColor: isDark ? "#3a3a3a" : "#fff",
+      borderRadius: 14,
+      marginTop: 16,
+      padding: 20,
+      elevation: 2,
+    },
+    progressHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 10,
+    },
+    progressTitle: {
+      fontSize: 14,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.primary,
+    },
+    progressValue: {
+      fontSize: 16,
+      fontFamily: theme.fonts.semiBold,
+      color: theme.colors.primary,
+    },
+    progressBarContainer: {
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: "#eee",
+      overflow: "hidden",
+      marginVertical: 10,
+    },
+    progressBarFill: {
+      height: 10,
+      width: "62%",
+      backgroundColor: theme.colors.primary,
+    },
+    progressMessage: {
+      color: theme.colors.text.secondary,
+      fontFamily: theme.fonts.regular,
+      fontSize: 12,
+    },
+    content: { padding: 24, paddingBottom: 120 },
+    pomodoroButton: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 10,
+      borderRadius: 10,
+      marginBottom: 24,
+    },
+    pomodoroText: {
+      color: "#fff",
+      fontSize: 16,
+      fontFamily: theme.fonts.semiBold,
+      marginLeft: 8,
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 6,
+      elevation: 1,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    cardTitleContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
+    cardTitle: {
+      fontSize: 18,
+      fontFamily: theme.fonts.semiBold,
+      color: theme.colors.text.primary,
+      marginLeft: 8,
+    },
+    viewAllText: {
+      fontSize: 14,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.primary,
+    },
+    aiSubtitle: {
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+      marginTop: 2,
+      marginLeft: 28,
+    },
+    cardContent: { gap: 8 },
+    classItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 10,
+      backgroundColor: theme.colors.background,
+      borderRadius: 12,
+      gap: 10,
+    },
+    classIndicator: { width: 4, height: 44, borderRadius: 2 },
+    classInfo: { flex: 1 },
+    className: {
+      fontSize: 16,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.primary,
+      marginBottom: 2,
+    },
+    classDetails: { flexDirection: "row", alignItems: "center", gap: 6 },
+    classTime: {
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+    },
+    classSeparator: { fontSize: 12, color: theme.colors.text.secondary },
+    classRoom: {
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+    },
+    assignmentItem: {
+      flexDirection: "row",
+      padding: 10,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      gap: 10,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 2,
+    },
+    assignmentInfo: { flex: 1 },
+    assignmentTitle: {
+      fontSize: 16,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.primary,
+      marginBottom: 3,
+    },
+    assignmentTitleChecked: {
+      textDecorationLine: "line-through",
+      opacity: 0.5,
+    },
+    assignmentSubject: {
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+      marginBottom: 5,
+    },
+    badge: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    badgeText: { fontSize: 11, fontFamily: theme.fonts.medium },
+    sessionItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 10,
+      backgroundColor: theme.colors.background,
+      borderRadius: 12,
+    },
+    sessionInfo: { flex: 1 },
+    sessionSubject: {
+      fontSize: 16,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.primary,
+      marginBottom: 2,
+    },
+    sessionDetails: { flexDirection: "row", alignItems: "center", gap: 6 },
+    sessionTime: {
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+    },
+    sessionSeparator: { fontSize: 12, color: theme.colors.text.secondary },
+    sessionDuration: {
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+    },
+    sessionBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: theme.colors.border + "40",
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    sessionBadgeText: {
+      fontSize: 12,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.secondary,
+    },
+    startSessionButton: {
+      borderRadius: 10,
+      alignItems: "center",
+      paddingVertical: 10,
+      backgroundColor: theme.colors.primary,
+      marginTop: 8,
+    },
+    startSessionText: {
+      color: "#fff",
+      fontSize: 16,
+      fontFamily: theme.fonts.semiBold,
+    },
+    itemMargin: { marginBottom: 8 },
+    fab: {
+      position: "absolute",
+      bottom: 30,
+      right: 20,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primary,
+    },
+  });
+
+const pomoStyles = StyleSheet.create({
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
   },
-  scrollView: {
-    flex: 1,
+  modal: {
+    borderRadius: 18,
+    padding: 32,
+    width: width - 54,
+    alignItems: "center",
   },
-  headerGradient: {
-    paddingTop: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+  close: { position: "absolute", top: 15, right: 15 },
+  title: { fontSize: 24, fontFamily: "bold", marginBottom: 28 },
+  timer: { fontSize: 68, fontFamily: "bold", marginVertical: 32 },
+  buttonBar: { flexDirection: "row", gap: 18, marginTop: 20 },
+  button: { paddingHorizontal: 30, paddingVertical: 14, borderRadius: 9 },
+  buttonText: { color: "#fff", fontFamily: "600", fontSize: 16 },
+});
+
+const menuStyles = StyleSheet.create({
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+    zIndex: 1000,
+  },
+  modal: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
   },
-  welcomeText: {
-    fontSize: 24,
-    fontFamily: theme.fonts.bold,
-    marginBottom: 4,
+  title: { fontSize: 24, fontFamily: "bold" },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 15,
+    marginBottom: 12,
+    gap: 14,
   },
-  dateText: {
-    fontSize: 14,
-    fontFamily: theme.fonts.regular,
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressCard: {
-    marginHorizontal: theme.spacing.lg,
-    padding: theme.spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: theme.spacing.sm,
-  },
-  progressTitle: {
-    fontSize: 14,
-    fontFamily: theme.fonts.medium,
-  },
-  progressValue: {
-    fontSize: 14,
-    fontFamily: theme.fonts.semiBold,
-  },
-  progressBarContainer: {
-    marginBottom: theme.spacing.sm,
-  },
-  progressBarBackground: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressGradient: {
-    flex: 1,
-  },
-  progressMessage: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular,
-  },
-  content: {
-    padding: theme.spacing.lg,
-    paddingBottom: 100,
-  },
-  pomodoroButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  pomodoroGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: theme.spacing.md,
-    gap: 8,
-  },
-  pomodoroText: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: theme.fonts.semiBold,
-  },
-  card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 16,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  aiCard: {
-    backgroundColor: theme.colors.surface,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  cardTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontFamily: theme.fonts.semiBold,
-    color: theme.colors.text.primary,
-  },
-  viewAllText: {
-    fontSize: 14,
-    fontFamily: theme.fonts.medium,
-    color: theme.colors.primary,
-  },
-  aiSubtitle: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular,
-    color: theme.colors.text.secondary,
-    marginTop: 2,
-    marginLeft: 28,
-  },
-  cardContent: {
-    gap: theme.spacing.sm,
-  },
-  classItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: theme.spacing.sm,
-    backgroundColor: theme.colors.background,
-    borderRadius: 12,
-    gap: 12,
-  },
-  classIndicator: {
-    width: 4,
-    height: 48,
-    borderRadius: 2,
-  },
-  classInfo: {
-    flex: 1,
-  },
-  className: {
-    fontSize: 16,
-    fontFamily: theme.fonts.medium,
-    color: theme.colors.text.primary,
-    marginBottom: 4,
-  },
-  classDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  classTime: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular,
-    color: theme.colors.text.secondary,
-  },
-  classSeparator: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
-  },
-  classRoom: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular,
-    color: theme.colors.text.secondary,
-  },
-  assignmentItem: {
-    flexDirection: 'row',
-    padding: theme.spacing.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    gap: 12,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  assignmentInfo: {
-    flex: 1,
-  },
-  assignmentTitle: {
-    fontSize: 16,
-    fontFamily: theme.fonts.medium,
-    color: theme.colors.text.primary,
-    marginBottom: 4,
-  },
-  assignmentTitleChecked: {
-    textDecorationLine: 'line-through',
-    opacity: 0.5,
-  },
-  assignmentSubject: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular,
-    color: theme.colors.text.secondary,
-    marginBottom: 8,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontFamily: theme.fonts.medium,
-  },
-  sessionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: theme.spacing.sm,
-    backgroundColor: theme.colors.background,
-    borderRadius: 12,
-  },
-  sessionInfo: {
-    flex: 1,
-  },
-  sessionSubject: {
-    fontSize: 16,
-    fontFamily: theme.fonts.medium,
-    color: theme.colors.text.primary,
-    marginBottom: 4,
-  },
-  sessionDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sessionTime: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular,
-    color: theme.colors.text.secondary,
-  },
-  sessionSeparator: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
-  },
-  sessionDuration: {
-    fontSize: 12,
-    fontFamily: theme.fonts.regular,
-    color: theme.colors.text.secondary,
-  },
-  sessionBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: theme.colors.border + '40',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  sessionBadgeText: {
-    fontSize: 12,
-    fontFamily: theme.fonts.medium,
-    color: theme.colors.text.secondary,
-  },
-  startSessionButton: {
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginTop: theme.spacing.sm,
-  },
-  startSessionGradient: {
-    paddingVertical: theme.spacing.sm,
-    alignItems: 'center',
-  },
-  startSessionText: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: theme.fonts.semiBold,
-  },
-  itemMargin: {
-    marginBottom: theme.spacing.sm,
-  },
+  optionText: { flex: 1 },
+  optionLabel: { fontSize: 16, fontFamily: "600", marginBottom: 2 },
+  optionDescription: { fontSize: 13 },
 });
