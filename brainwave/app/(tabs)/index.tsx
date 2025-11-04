@@ -12,8 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContexts";
 import { useAuth } from "../contexts/AuthContexts";
 import { Theme } from "../types";
-import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
+import { FontAwesome } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 
@@ -23,7 +22,6 @@ export default function Home() {
   const [showPomodoro, setShowPomodoro] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
-  const statusBarHeight = Constants.statusBarHeight;
 
   // sample data
   const upcomingClasses = [
@@ -138,15 +136,15 @@ export default function Home() {
             style={styles.pomodoroButton}
             onPress={() => setShowPomodoro(true)}
           >
-            <Ionicons name="timer-outline" size={20} color="#fff" />
+            <FontAwesome name="clock-o" size={20} color="#fff" />
             <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
           </TouchableOpacity>
 
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <Ionicons
-                  name="calendar-outline"
+                <FontAwesome
+                  name="calendar-check-o"
                   size={20}
                   color={theme.colors.text.primary}
                 />
@@ -172,8 +170,8 @@ export default function Home() {
                   <View style={styles.classInfo}>
                     <Text style={styles.className}>{cls.name}</Text>
                     <View style={styles.classDetails}>
-                      <Ionicons
-                        name="time-outline"
+                      <FontAwesome
+                        name="clock-o"
                         size={12}
                         color={theme.colors.text.secondary}
                       />
@@ -191,8 +189,8 @@ export default function Home() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <Ionicons
-                  name="book-outline"
+                <FontAwesome
+                  name="book"
                   size={20}
                   color={theme.colors.text.primary}
                 />
@@ -214,8 +212,8 @@ export default function Home() {
                     onPress={() => toggleAssignment(a.id)}
                   >
                     {checkedAssignments.includes(a.id) && (
-                      <Ionicons
-                        name="checkmark"
+                      <FontAwesome
+                        name="check"
                         size={16}
                         color={theme.colors.primary}
                       />
@@ -260,8 +258,8 @@ export default function Home() {
             <View style={styles.cardHeader}>
               <View>
                 <View style={styles.cardTitleContainer}>
-                  <Ionicons
-                    name="trending-up-outline"
+                  <FontAwesome
+                    name="star"
                     size={20}
                     color={theme.colors.text.primary}
                   />
@@ -284,8 +282,8 @@ export default function Home() {
                   <View style={styles.sessionInfo}>
                     <Text style={styles.sessionSubject}>{session.subject}</Text>
                     <View style={styles.sessionDetails}>
-                      <Ionicons
-                        name="time-outline"
+                      <FontAwesome
+                        name="clock-o"
                         size={12}
                         color={theme.colors.text.secondary}
                       />
@@ -314,7 +312,7 @@ export default function Home() {
         onPress={() => setShowUploadMenu(true)}
         activeOpacity={0.8}
       >
-        <Ionicons name="add" size={28} color="#fff" />
+        <FontAwesome name="plus" size={28} color="#fff" />
       </TouchableOpacity>
 
       {showPomodoro && (
@@ -380,7 +378,7 @@ const PomodoroTimer = ({
         style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
       >
         <TouchableOpacity style={pomoStyles.close} onPress={onClose}>
-          <Ionicons
+          <FontAwesome
             name="close"
             size={24}
             color={theme.colors.text.secondary}
@@ -484,7 +482,7 @@ const UploadMenu = ({
             Upload content
           </Text>
           <TouchableOpacity onPress={onClose}>
-            <Ionicons
+            <FontAwesome
               name="close"
               size={24}
               color={theme.colors.text.secondary}
@@ -513,7 +511,7 @@ const UploadMenu = ({
                 { backgroundColor: theme.colors.primary + "22" },
               ]}
             >
-              <Ionicons
+              <FontAwesome
                 name={opt.icon as any}
                 size={24}
                 color={theme.colors.primary}
@@ -537,8 +535,8 @@ const UploadMenu = ({
                 {opt.description}
               </Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
+            <FontAwesome
+              name="chevron-right"
               size={20}
               color={theme.colors.text.secondary}
             />
