@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { useTheme } from "../contexts/ThemeContexts";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome } from "@expo/vector-icons";
 
 export default function TabsLayout() {
   const { theme } = useTheme(); // 'light', 'dark', or null
@@ -28,7 +28,7 @@ export default function TabsLayout() {
         options={{
           tabBarLabel: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <FontAwesome name="home" size={32} color={color} />
           ),
         }}
       />
@@ -37,7 +37,7 @@ export default function TabsLayout() {
         options={{
           title: "Planner",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar" size={size} color={color} />
+            <FontAwesome name="calendar-check-o" size={size} color={color} />
           ),
         }}
       />
@@ -46,7 +46,7 @@ export default function TabsLayout() {
         options={{
           title: "Progress",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bar-chart" size={size} color={color} />
+            <FontAwesome name="line-chart" size={24} color={color} />
           ),
         }}
       />
@@ -55,7 +55,7 @@ export default function TabsLayout() {
         options={{
           title: "Settings",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <FontAwesome name="gear" size={28} color={color} />
           ),
         }}
       />
