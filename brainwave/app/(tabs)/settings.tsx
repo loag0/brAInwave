@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContexts";
 import { useAuth } from "../contexts/AuthContexts";
 import { Theme } from "../types";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome } from "@expo/vector-icons";
 
 export default function Profile() {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -79,8 +79,8 @@ export default function Profile() {
                   {user?.university?.toLowerCase() || "Computer science major"}
                 </Text>
               </View>
-              <Ionicons
-                name="chevron-forward"
+              <FontAwesome
+                name="chevron-right"
                 size={20}
                 color={theme.colors.text.secondary}
               />
@@ -90,8 +90,8 @@ export default function Profile() {
           {/* Notifications Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Ionicons
-                name="notifications-outline"
+              <FontAwesome
+                name="bell"
                 size={20}
                 color={theme.colors.text.primary}
               />
@@ -146,8 +146,8 @@ export default function Profile() {
           {/* Study Preferences Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Ionicons
-                name="book-outline"
+              <FontAwesome
+                name="book"
                 size={20}
                 color={theme.colors.text.primary}
               />
@@ -156,8 +156,8 @@ export default function Profile() {
             <View style={styles.cardContent}>
               <TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name="time-outline"
+                  <FontAwesome
+                    name="clock-o"
                     size={20}
                     color={theme.colors.text.secondary}
                   />
@@ -166,8 +166,8 @@ export default function Profile() {
                     <Text style={styles.menuItemSubtitle}>45 minutes</Text>
                   </View>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
+                <FontAwesome
+                  name="chevron-right"
                   size={20}
                   color={theme.colors.text.secondary}
                 />
@@ -175,8 +175,8 @@ export default function Profile() {
 
               <TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name="school-outline"
+                  <FontAwesome
+                    name="book"
                     size={20}
                     color={theme.colors.text.secondary}
                   />
@@ -187,8 +187,8 @@ export default function Profile() {
                     </Text>
                   </View>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
+                <FontAwesome
+                  name="chevron-right"
                   size={20}
                   color={theme.colors.text.secondary}
                 />
@@ -196,8 +196,8 @@ export default function Profile() {
 
               <TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name="flag-outline"
+                  <FontAwesome
+                    name="flag-checkered"
                     size={20}
                     color={theme.colors.text.secondary}
                   />
@@ -206,8 +206,8 @@ export default function Profile() {
                     <Text style={styles.menuItemSubtitle}>4 hours per day</Text>
                   </View>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
+                <FontAwesome
+                  name="chevron-right"
                   size={20}
                   color={theme.colors.text.secondary}
                 />
@@ -218,9 +218,9 @@ export default function Profile() {
           {/* App Settings Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Ionicons
-                name="phone-portrait-outline"
-                size={20}
+              <FontAwesome
+                name="mobile-phone"
+                size={36}
                 color={theme.colors.text.primary}
               />
               <Text style={styles.cardTitle}>App settings</Text>
@@ -228,8 +228,8 @@ export default function Profile() {
             <View style={styles.cardContent}>
               <View style={styles.darkModeContainer}>
                 <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name="moon-outline"
+                  <FontAwesome
+                    name="moon-o"
                     size={20}
                     color={theme.colors.text.secondary}
                   />
@@ -250,15 +250,15 @@ export default function Profile() {
 
               <TouchableOpacity style={styles.menuItemButton}>
                 <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name="mail-outline"
+                  <FontAwesome
+                    name="envelope"
                     size={20}
                     color={theme.colors.text.secondary}
                   />
                   <Text style={styles.menuItemTitle}>Email preferences</Text>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
+                <FontAwesome
+                  name="chevron-right"
                   size={20}
                   color={theme.colors.text.secondary}
                 />
@@ -268,15 +268,15 @@ export default function Profile() {
 
               <TouchableOpacity style={styles.menuItemButton}>
                 <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name="lock-closed-outline"
+                  <FontAwesome
+                    name="lock"
                     size={20}
                     color={theme.colors.text.secondary}
                   />
                   <Text style={styles.menuItemTitle}>Privacy & Security</Text>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
+                <FontAwesome
+                  name="chevron-right"
                   size={20}
                   color={theme.colors.text.secondary}
                 />
@@ -287,8 +287,8 @@ export default function Profile() {
           {/* Support Card */}
           <View style={styles.card}>
             <TouchableOpacity style={styles.supportButton}>
-              <Ionicons
-                name="help-circle-outline"
+              <FontAwesome
+                name="cog"
                 size={20}
                 color={theme.colors.text.secondary}
               />
@@ -299,8 +299,8 @@ export default function Profile() {
               style={[styles.supportButton, styles.logoutButton]}
               onPress={handleLogout}
             >
-              <Ionicons
-                name="log-out-outline"
+              <FontAwesome
+                name="sign-out"
                 size={20}
                 color={theme.colors.error}
               />
@@ -443,14 +443,14 @@ const createStyles = (theme: Theme) =>
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: theme.colors.text.primary,
+      backgroundColor: theme.colors.primary,
       justifyContent: "center",
       alignItems: "center",
     },
     avatarText: {
       fontSize: 20,
       fontFamily: theme.fonts.semiBold,
-      color: theme.colors.surface,
+      color: theme.colors.text.primary,
     },
     profileInfo: {
       flex: 1,

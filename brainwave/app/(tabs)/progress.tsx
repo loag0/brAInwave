@@ -37,7 +37,7 @@ interface Achievement {
 
 export default function Progress() {
   const { theme, isDark } = useTheme();
-  const styles = createStyles(theme);
+  const styles = createStyles(theme, isDark);
 
   const weeklyStats: WeeklyStat[] = [
     { day: "Mon", hours: 3.5 },
@@ -96,21 +96,20 @@ export default function Progress() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <LinearGradient
-          colors={isDark ? ["#ffffff", "#f5f5f5"] : ["#1a1a1a", "#2d2d2d"]}
+        <View
           style={styles.headerGradient}
         >
           <Text
-            style={[styles.headerTitle, { color: isDark ? "#000" : "#fff" }]}
+            style={[styles.headerTitle, { color: isDark ? "#fff" : "#000" }]}
           >
             Your progress
           </Text>
           <Text
-            style={[styles.headerSubtitle, { color: isDark ? "#666" : "#ccc" }]}
+            style={[styles.headerSubtitle, { color: isDark ? "#f5f5f5" : "#2c2c2c" }]}
           >
             Track your study journey
           </Text>
-        </LinearGradient>
+        </View>
 
         {/* Overview Stats Grid */}
         <View style={styles.statsGrid}>
@@ -196,7 +195,6 @@ export default function Progress() {
                         styles.chartBarFill,
                         {
                           height: `${(stat.hours / maxHours) * 100}%`,
-                          backgroundColor: theme.colors.text.primary,
                         },
                       ]}
                     />
@@ -300,7 +298,7 @@ export default function Progress() {
   );
 }
 
-const createStyles = (theme: Theme) =>
+const createStyles = (theme: Theme, isDark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -310,8 +308,10 @@ const createStyles = (theme: Theme) =>
       flex: 1,
     },
     headerGradient: {
+      backgroundColor: isDark ? "#2d2d2d" : "#f5f5f5",
       padding: theme.spacing.lg,
       paddingTop: theme.spacing.xl,
+      paddingBottom: 48
     },
     headerTitle: {
       fontSize: 28,
@@ -320,6 +320,7 @@ const createStyles = (theme: Theme) =>
     },
     headerSubtitle: {
       fontSize: 14,
+      color: theme.colors.text.secondary,
       fontFamily: theme.fonts.regular,
     },
     statsGrid: {
@@ -419,6 +420,7 @@ const createStyles = (theme: Theme) =>
       width: "100%",
       borderTopLeftRadius: 6,
       borderTopRightRadius: 6,
+      backgroundColor: theme.colors.primary,
     },
     chartDay: {
       fontSize: 11,

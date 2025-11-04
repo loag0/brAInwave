@@ -361,8 +361,7 @@ const createStyles = (theme: Theme) =>
       alignItems: "center",
     },
     dayButtonActive: {
-      backgroundColor: theme.colors.text.primary,
-      borderColor: theme.colors.text.primary,
+      backgroundColor: theme.colors.primary,
     },
     dayLabel: {
       fontSize: 14,
@@ -370,7 +369,7 @@ const createStyles = (theme: Theme) =>
       color: theme.colors.text.primary,
     },
     dayLabelActive: {
-      color: theme.colors.surface,
+      color: "#f5f5f5",
     },
     dayDate: {
       fontSize: 12,
@@ -379,7 +378,7 @@ const createStyles = (theme: Theme) =>
       marginTop: 4,
     },
     dayDateActive: {
-      color: theme.colors.surface,
+      color: "#f5f5f5",
       opacity: 0.7,
     },
     planContainer: {

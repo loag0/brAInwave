@@ -30,7 +30,7 @@ export default function Home() {
       name: "Data Structures",
       time: "10:00 AM",
       room: "CS-201",
-      color: "#1a1a1a",
+      color: theme.colors.primary,
     },
     {
       id: 2,
@@ -442,25 +442,25 @@ const UploadMenu = ({
   const uploadOptions = [
     {
       id: "schedule",
-      icon: "calendar-outline",
+      icon: "calendar",
       label: "Upload schedule",
       description: "Add your class timetable",
     },
     {
       id: "syllabus",
-      icon: "document-text-outline",
+      icon: "file-text",
       label: "Upload syllabus",
       description: "Import course syllabus",
     },
     {
       id: "assignment",
-      icon: "clipboard-outline",
+      icon: "clipboard",
       label: "Add assignment",
       description: "Create a new task",
     },
     {
       id: "notes",
-      icon: "reader-outline",
+      icon: "sticky-note",
       label: "Upload notes",
       description: "Add study materials",
     },
