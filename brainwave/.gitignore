@@ -10,5 +10,7 @@ ios/
 .env.local
 .env.*.local
 
+.easignore
+
 google-services.json
 GoogleService-Info.plist
