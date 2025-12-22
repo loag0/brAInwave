@@ -26,8 +26,8 @@ export default function AuthScreen() {
 
   // Google Auth
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId:
-      "1012156637414-nr24ptgm5kkqr2idmcgfjltqsuolrc7n.apps.googleusercontent.com",
+    clientId: process.env.EXPO_PUBLIC_WEB_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_ANDROID_CLIENT_ID
   });
 
   useEffect(() => {

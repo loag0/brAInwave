@@ -7,13 +7,13 @@ import { getAuth } from 'firebase/auth';
 
 // Initialize Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyCgEHSReWyqTdqWJDkfSSJxAk7nUXBgUxI",
-  authDomain: "brainwave-abe57.firebaseapp.com",
-  projectId: "brainwave-abe57",
-  storageBucket: "brainwave-abe57.firebasestorage.app",
-  messagingSenderId: "1012156637414",
-  appId: "1:1012156637414:web:b9c035b47113d8f9a65b27",
-  measurementId: "G-8FVSVLGM03",
+  apiKey: process.env.EXPO_PUBLIC_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_MEASUREMENT_ID,
 };
 
 const app = initializeApp(firebaseConfig);
