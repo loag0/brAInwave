@@ -10,7 +10,7 @@ import {
 import { AuthProvider } from "./contexts/AuthContexts";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContexts";
 
-export default function RootLayout() { // 'light', 'dark', or null
+export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -18,30 +18,29 @@ export default function RootLayout() { // 'light', 'dark', or null
     Inter_700Bold,
   });
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  if (!fontsLoaded) return null;
 
-  return(
+  return (
     <ThemeProvider>
-      <ThemedApp />
+      <AuthProvider>
+        <ThemedApp />
+      </AuthProvider>
     </ThemeProvider>
-  )
+  );
+}
 
-  function ThemedApp() {
-    const { isDark } = useTheme();
+function ThemedApp() {
+  const { isDark } = useTheme();
 
-    return (
-      <>
-        <StatusBar style={isDark ? "light" : "dark"} />
-        <AuthProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="onboarding" />
-          </Stack>
-        </AuthProvider>
-      </>
-    );
-  }
+  return (
+    <>
+      <StatusBar style={isDark ? "light" : "dark"} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </>
+  );
 }
