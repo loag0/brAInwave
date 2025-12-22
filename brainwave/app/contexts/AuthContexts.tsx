@@ -5,112 +5,73 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { User, AuthContextType, SignupData } from "../types";
+import {
+  onAuthStateChanged,
+  signOut,
+  User as FirebaseUser,
+} from "firebase/auth";
+import { auth } from "../../firebaseConfig"; // Ensure this is your updated auth
+import { User, AuthContextType } from "../types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
-};
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
 
-  // Check if user is already logged in on app start
   useEffect(() => {
-    checkAuthState();
-  }, []);
+    // 1. SESSION DETECTOR (The "Listener")
+    // This runs automatically whenever the user logs in, logs out, or the app starts
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // 2. JWT IMPLEMENTATION
+        // Get the JWT (ID Token) to send to your backend for extra security
+        const jwt = await firebaseUser.getIdToken();
+        setToken(jwt);
 
-  const checkAuthState = async () => {
-    try {
-      const userData = await AsyncStorage.getItem("user");
-      if (userData) {
-        setUser(JSON.parse(userData));
+        // Map Firebase user to your custom User type
+        const mappedUser: User = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || "New User",
+          email: firebaseUser.email || "",
+          university: "Tech University", // You can fetch this from Firestore later
+          studyPreferences: {
+            isMorningPerson: true,
+            preferredSessionLength: "medium",
+            subjects: [],
+          },
+        };
+        setUser(mappedUser);
+      } else {
+        setUser(null);
+        setToken(null);
       }
-    } catch (error) {
-      console.error("Error checking auth state:", error);
-    } finally {
       setIsLoading(false);
-    }
-  };
+    });
 
-  const login = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-
-      // TODO: Replace with actual API call
-      // For now, simulate login
-      const mockUser: User = {
-        id: "1",
-        name: "David Student",
-        email: email,
-        university: "Tech University",
-        studyPreferences: {
-          isMorningPerson: true,
-          preferredSessionLength: "medium",
-          subjects: ["Math", "Chemistry"],
-        },
-      };
-
-      await AsyncStorage.setItem("user", JSON.stringify(mockUser));
-      setUser(mockUser);
-    } catch (error) {
-      console.error("Login error:", error);
-      throw new Error("Login failed. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signup = async (userData: SignupData) => {
-    try {
-      setIsLoading(true);
-
-      // TODO: Replace with actual API call
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: userData.name,
-        email: userData.email,
-        university: userData.university,
-        studyPreferences: {
-          isMorningPerson: true,
-          preferredSessionLength: "medium",
-          subjects: [],
-        },
-      };
-
-      await AsyncStorage.setItem("user", JSON.stringify(newUser));
-      setUser(newUser);
-    } catch (error) {
-      console.error("Signup error:", error);
-      throw new Error("Signup failed. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return unsubscribe; // Cleanup listener on unmount
+  }, []);
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem("user");
-      setUser(null);
+      await signOut(auth);
     } catch (error) {
       console.error("Logout error:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, token, logout }}>
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
 };

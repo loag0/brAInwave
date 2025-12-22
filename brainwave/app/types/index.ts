@@ -13,6 +13,7 @@ export interface User {
 export interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  token: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (userData: SignupData) => Promise<void>;
   logout: () => Promise<void>;
