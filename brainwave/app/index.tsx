@@ -1,15 +1,14 @@
 import React from "react";
 import { View, ActivityIndicator } from "react-native";
-import { Redirect, Stack } from "expo-router";
+import { Redirect } from "expo-router";
 import { useAuth } from "./contexts/AuthContexts";
 import { useTheme } from "./contexts/ThemeContexts";
-import AuthScreen from "../components/AuthScreen";
 
 export default function Index() {
   const { user, isLoading } = useAuth();
   const { theme } = useTheme();
 
-  // 1. Loading State: Wait for both Auth and Theme to be ready
+  //Loading State
   if (isLoading || !theme) {
     return (
       <View
@@ -28,16 +27,18 @@ export default function Index() {
     );
   }
 
-  // 2. Authenticated: If Firebase finds a valid JWT, send to Dashboard
+  //Authenticated Flow
   if (user) {
-    return <Redirect href="/(tabs)" />;
+    // Check if user has picked subjects (Onboarding completion check)
+    const hasCompletedOnboarding = user.studyPreferences.subjects.length > 0;
+
+    if (!hasCompletedOnboarding) {
+      return <Redirect href="/(onboarding)/goals" />;
+    }
+
+    return <Redirect href="./(tabs)/dashboard" />;
   }
 
-  // 3. Unauthenticated: Show Login/Signup
-  return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <AuthScreen />
-    </>
-  );
+  //Unauthenticated Flow
+  return <Redirect href="/(auth)/welcome" />;
 }

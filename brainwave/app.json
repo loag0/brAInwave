@@ -31,7 +31,7 @@
       [
         "expo-splash-screen",
         {
-          "image": null,
+          "image": "./assets/images/splash-icon.png",
           "backgroundColor": "#ffffff"
         }
       ],
@@ -42,7 +42,7 @@
         "expo-build-properties",
         {
           "android": {
-            "ndkVersion": "26.1.10909125"
+            "ndkVersion": "27.1.12297006"
           }
         }
       ]

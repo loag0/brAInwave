@@ -22,3 +22,5 @@ const app = initializeApp(firebaseConfig);
 export const auth: Auth = initializeAuth(app, {
   persistence: getReactNativePersistence(ReactNativeAsyncStorage),
 });
+
+console.log("Checking API key:", process.env.EXPO_PUBLIC_FIREBASE_API_KEY ? "Found" : "Not Found");
