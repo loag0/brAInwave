@@ -4,11 +4,11 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
+  //FlatList,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContexts";
 import { useTheme } from "../contexts/ThemeContexts";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 const SUBJECT_OPTIONS = [
   "Math",
@@ -41,7 +41,10 @@ export default function GoalsScreen() {
     // For now, since we haven't built the Firestore update,
     // we'll just navigate. Note: The index.tsx check will still
     // trigger until the user object actually has subjects.
-    router.replace("./(tabs)/dashboard");
+    router.push({
+      pathname: "/(onboarding)/schedule",
+      params: { subjects: selectedSubjects.join(",") },
+    });
   };
 
   return (

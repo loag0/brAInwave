@@ -20,7 +20,7 @@ export default function Index() {
         }}
       >
         <ActivityIndicator
-          size="large"
+          size="small"
           color={theme?.colors?.primary || "#0000ff"}
         />
       </View>

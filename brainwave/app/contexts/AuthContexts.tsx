@@ -57,8 +57,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   // 2. LOGIN FUNCTION
   const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    
     try {
-      setIsLoading(true);
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       console.error("Login error:", error.message);
@@ -92,6 +93,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
+  const updateUser = (newData: Partial<User>) => {
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+      return {
+        ...prevUser,
+        ...newData,
+        studyPreferences: {
+          ...prevUser.studyPreferences,
+          ...newData.studyPreferences || {},
+        },
+      };
+    });
+  };
+
   // 4. LOGOUT FUNCTION
   const logout = async () => {
     try {
@@ -103,8 +118,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, token, login, signup, logout }}
-    >
+      value={{ user, isLoading, token, login, signup, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -554,7 +554,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     scrollView: { flex: 1 },
     headerBg: {
       width: "100%",
-      paddingTop: 10,
+      paddingTop: 20,
       paddingBottom: 40,
       backgroundColor: isDark ? "#2d2d2d" : "#f9f9f9",
     },

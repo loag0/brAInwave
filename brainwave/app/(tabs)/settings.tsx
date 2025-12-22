@@ -33,7 +33,14 @@ export default function Profile() {
       {
         text: "Log out",
         style: "destructive",
-        onPress: logout,
+        onPress: async () => {
+          try{
+            await logout();
+          } catch(error) {
+            console.error("Logout error:", error);
+            Alert.alert("Error logging out. Please try again.");
+          }
+        },
       },
     ]);
   };
