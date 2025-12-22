@@ -70,7 +70,7 @@ export default function Welcome() {
         {/* Buttons Section */}
         <View style={styles.footer}>
           <TouchableOpacity
-            onPress={() => router.push("/(auth)/login")}
+            onPress={() => router.push({ pathname: "/(auth)/login", params: { mode: "signup" } })}
             style={[
               styles.primaryBtn,
               { backgroundColor: theme.colors.primary },
@@ -80,7 +80,7 @@ export default function Welcome() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => router.push("/(auth)/login")}
+            onPress={() => router.push({ pathname: "/(auth)/login", params: { mode: "signin" } })}
             style={styles.secondaryBtn}
           >
             <Text

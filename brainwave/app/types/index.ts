@@ -12,6 +12,7 @@ export interface User {
 
 export interface AuthContextType {
   user: User | null;
+  updateUser: (newData: Partial<User>) => void;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (userData: SignupData) => Promise<void>;
