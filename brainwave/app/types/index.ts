@@ -4,10 +4,11 @@ export interface User {
   email: string;
   university?: string;
   studyPreferences: {
-    isMorningPerson: boolean;
+    isMorningPerson: boolean | null;
     preferredSessionLength: "short" | "medium" | "long";
     subjects: string[];
   };
+  hasFinishedSetup: boolean;
 }
 
 export interface AuthContextType {

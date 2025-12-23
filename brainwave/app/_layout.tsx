@@ -46,39 +46,49 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, [fontsLoaded, isLoading]);
 
   useEffect(() => {
+    // Wait for everything to load
     if (isLoading || !fontsLoaded) return;
 
     const inAuthGroup = segments[0] === "(auth)";
     const inOnboardingGroup = segments[0] === "(onboarding)";
+    const inTabsGroup = segments[0] === "(tabs)";
 
     if (!user) {
+      // 1. Not Logged In: Only allow (auth)
       if (!inAuthGroup) {
         router.replace("/(auth)/login");
       }
     } else {
-      // Check if user has finished setup
-      const hasFinishedSetup = user.studyPreferences.subjects.length > 0;
+      // 2. Logged In: Determine if Onboarding is complete
+      // Best Practice: Use a dedicated boolean flag from Firestore
+      const hasFinishedSetup =
+        user.hasFinishedSetup || user.studyPreferences.subjects.length > 0;
 
       if (!hasFinishedSetup) {
+        // Force onboarding if not finished
         if (!inOnboardingGroup) {
           router.replace("/(onboarding)/goals");
         }
       } else {
-        // If finished, and currently in auth or onboarding, go to main app
-        if (inAuthGroup || inOnboardingGroup) {
+        // 3. Fully Logged In & Setup: Only allow (tabs)
+        if (inAuthGroup || inOnboardingGroup || !inTabsGroup) {
           router.replace("/(tabs)");
         }
       }
-    } // <--- Added the missing closing brace for 'else' here!
+    }
   }, [user, isLoading, segments, fontsLoaded]);
 
   return (
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="(tabs)" />
+        {/* Defining the screens here helps with gesture handling and transitions */}
+        <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+        <Stack.Screen
+          name="(onboarding)"
+          options={{ gestureEnabled: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
       </Stack>
     </>
   );
