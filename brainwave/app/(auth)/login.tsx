@@ -25,27 +25,41 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const params = useLocalSearchParams();
+  const { theme } = useTheme();
+  const { login, signup, isLoading: authLoading } = useAuth();
+
+  // --- States ---
   const [isLogin, setIsLogin] = useState(params.mode !== "signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const { login, signup, updateUser, isLoading } = useAuth();
-  const { theme } = useTheme();
+  const isLoading = authLoading || isProcessing;
+
+  // --- FIX: Clear fields when switching between Login and Signup ---
+  useEffect(() => {
+    setEmail("");
+    setPassword("");
+    setName("");
+    setShowPassword(false);
+  }, [isLogin]);
 
   // --- Google Auth Configuration ---
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_WEB_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_ANDROID_CLIENT_ID,
     redirectUri: AuthSession.makeRedirectUri({
-      native: "com.username0.brainwave:/oauth2redirect/google",
+      scheme: "com.username0.brainwave",
+      path: "/oauth2redirect/google",
     }),
   });
 
-  // Handle Google Auth Response
+  // --- Handle Google Auth Response ---
   useEffect(() => {
     if (response?.type === "success") {
+      setIsProcessing(true);
       const { id_token } = response.params;
       const credential = GoogleAuthProvider.credential(id_token);
 
@@ -54,40 +68,38 @@ export default function LoginScreen() {
           const userCredential = await signInWithCredential(auth, credential);
           const firebaseUser = userCredential.user;
 
-          // Check if this Google user already has a Firestore profile
           const userDocRef = doc(firestore, "users", firebaseUser.uid);
           const userSnap = await getDoc(userDocRef);
 
           if (!userSnap.exists()) {
-            // New Google User: Create their profile
             const newProfile = {
               id: firebaseUser.uid,
               name: firebaseUser.displayName || "User",
               email: firebaseUser.email || "",
-              university: "Tech University",
               hasFinishedSetup: false,
               studyPreferences: {
                 isMorningPerson: true,
-                preferredSessionLength: "medium" as const, // <--- Add 'as const' here
+                preferredSessionLength: "medium" as const,
                 subjects: [],
               },
               createdAt: new Date().toISOString(),
             };
             await setDoc(userDocRef, newProfile);
-            updateUser(newProfile);
-          } else {
-            // Existing User: Update local context with Firestore data
-            updateUser(userSnap.data());
           }
+          // Note: Root Layout NavigationHandler handles the redirect from here
         } catch (err: any) {
+          setIsProcessing(false);
           Alert.alert("Google Sync Error", err.message);
         }
       };
 
       handleGoogleFirebaseSync();
+    } else if (response?.type === "cancel" || response?.type === "error") {
+      setIsProcessing(false);
     }
   }, [response]);
 
+  // --- Helper Functions ---
   const validatePassword = (pass: string) => {
     return (
       pass.length >= 6 &&
@@ -112,16 +124,39 @@ export default function LoginScreen() {
       if (isLogin) {
         await login(email, password);
       } else {
-        // 1. Firebase Auth Signup
         await signup({ name, email, password });
-
-        // Note: AuthContext handles the onAuthStateChanged which usually
-        // triggers the navigation to Onboarding because hasFinishedSetup is false.
       }
     } catch (error: any) {
       Alert.alert("Authentication Error", error.message);
     }
   };
+
+  // --- STANDALONE LOADING VIEW ---
+  if (isLoading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.colors.background,
+            justifyContent: "center",
+            alignItems: "center",
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text
+          style={{
+            marginTop: 16,
+            color: theme.colors.text.secondary,
+            fontSize: 16,
+          }}
+        >
+          Authenticating...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -196,15 +231,10 @@ export default function LoginScreen() {
         <TouchableOpacity
           style={[styles.button, { backgroundColor: theme.colors.primary }]}
           onPress={handleAuth}
-          disabled={isLoading}
         >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>
-              {isLogin ? "Sign In" : "Sign Up"}
-            </Text>
-          )}
+          <Text style={styles.buttonText}>
+            {isLogin ? "Sign In" : "Sign Up"}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.dividerContainer}>
@@ -223,8 +253,11 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={[styles.googleButton, { borderColor: theme.colors.primary }]}
-          onPress={() => promptAsync()}
-          disabled={!request || isLoading}
+          onPress={() => {
+            setIsProcessing(true);
+            promptAsync();
+          }}
+          disabled={!request}
         >
           <FontAwesome5
             name="google"

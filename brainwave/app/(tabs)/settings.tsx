@@ -82,9 +82,6 @@ export default function Profile() {
                 <Text style={styles.profileName}>
                   {user?.name?.toLowerCase() || "Alex johnson"}
                 </Text>
-                <Text style={styles.profileSubtitle}>
-                  {user?.university?.toLowerCase() || "Computer science major"}
-                </Text>
               </View>
               <FontAwesome
                 name="chevron-right"

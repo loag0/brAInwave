@@ -46,34 +46,34 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, [fontsLoaded, isLoading]);
 
   useEffect(() => {
-    // Wait for everything to load
+    // 1. Wait until everything is ready
     if (isLoading || !fontsLoaded) return;
 
-    const inAuthGroup = segments[0] === "(auth)";
-    const inOnboardingGroup = segments[0] === "(onboarding)";
-    const inTabsGroup = segments[0] === "(tabs)";
+    // 2. Identify current location
+    const currentGroup = segments[0];
+    const isRedirecting = currentGroup === "oauth2redirect";
 
-    if (!user) {
-      // 1. Not Logged In: Only allow (auth)
-      if (!inAuthGroup) {
-        router.replace("/(auth)/login");
-      }
-    } else {
-      // 2. Logged In: Determine if Onboarding is complete
-      // Best Practice: Use a dedicated boolean flag from Firestore
-      const hasFinishedSetup =
-        user.hasFinishedSetup || user.studyPreferences.subjects.length > 0;
-
-      if (!hasFinishedSetup) {
-        // Force onboarding if not finished
-        if (!inOnboardingGroup) {
+    // 3. Navigation Logic
+    if (user) {
+      if (!user.hasFinishedSetup) {
+        // If logged in but setup not done, force to onboarding
+        if (currentGroup !== "(onboarding)" && !isRedirecting) {
           router.replace("/(onboarding)/goals");
         }
       } else {
-        // 3. Fully Logged In & Setup: Only allow (tabs)
-        if (inAuthGroup || inOnboardingGroup || !inTabsGroup) {
+        // If setup IS done, and they are in auth/onboarding/redirect, send to tabs
+        if (
+          currentGroup === "(auth)" ||
+          currentGroup === "(onboarding)" ||
+          isRedirecting
+        ) {
           router.replace("/(tabs)");
         }
+      }
+    } else {
+      // If NOT logged in, and not already in auth or redirect, send to login
+      if (currentGroup !== "(auth)" && !isRedirecting) {
+        router.replace("/(auth)/login");
       }
     }
   }, [user, isLoading, segments, fontsLoaded]);
@@ -82,13 +82,8 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Defining the screens here helps with gesture handling and transitions */}
-        <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-        <Stack.Screen
-          name="(onboarding)"
-          options={{ gestureEnabled: false, animation: "slide_from_right" }}
-        />
-        <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+        {/* Remove the Stack.Screen declarations completely */}
+        {/* Expo Router will automatically handle routes based on file structure */}
       </Stack>
     </>
   );
