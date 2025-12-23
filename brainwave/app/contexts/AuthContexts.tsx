@@ -12,7 +12,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db as firestore } from "../../firebaseConfig";
 import { User, AuthContextType, SignupData } from "../types";
 
@@ -43,7 +43,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
               id: firebaseUser.uid,
               name: firebaseUser.displayName || data.name || "User",
               email: firebaseUser.email || "",
-              university: data.university || "Tech University",
               studyPreferences: data.studyPreferences,
               hasFinishedSetup: data.hasFinishedSetup ?? false,
             });
@@ -53,7 +52,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
               id: firebaseUser.uid,
               name: firebaseUser.displayName || "User",
               email: firebaseUser.email || "",
-              university: "Tech University",
               studyPreferences: {
                 isMorningPerson: true,
                 preferredSessionLength: "medium",
@@ -93,6 +91,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         userData.password
       );
       await updateProfile(userCredential.user, { displayName: userData.name });
+
+      // CREATE THE FIRESTORE DOCUMENT
+      const newProfile = {
+        id: userCredential.user.uid,
+        name: userData.name,
+        email: userData.email,
+        hasFinishedSetup: false,
+        studyPreferences: {
+          isMorningPerson: true,
+          preferredSessionLength: "medium" as const,
+          subjects: [],
+        },
+        createdAt: new Date().toISOString(),
+      };
+
+      await setDoc(
+        doc(firestore, "users", userCredential.user.uid),
+        newProfile
+      );
     } finally {
       setIsLoading(false);
     }

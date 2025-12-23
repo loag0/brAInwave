@@ -2,7 +2,6 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  university?: string;
   studyPreferences: {
     isMorningPerson: boolean | null;
     preferredSessionLength: "short" | "medium" | "long";
@@ -25,7 +24,6 @@ export interface SignupData {
   name: string;
   email: string;
   password: string;
-  university?: string;
 }
 
 export interface Theme {
