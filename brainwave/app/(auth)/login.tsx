@@ -11,6 +11,7 @@ import {
   Platform,
 } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
+import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { auth } from "../../firebaseConfig"; // Adjust path
@@ -26,7 +27,8 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const validatePassword = (pass: string) =>{
+
+  const validatePassword = (pass: string) => {
     const minLength = pass.length >= 6;
     const hasUpper = /[A-Z]/.test(pass);
     const hasLower = /[a-z]/.test(pass);
@@ -44,6 +46,9 @@ export default function LoginScreen() {
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_WEB_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_ANDROID_CLIENT_ID,
+    redirectUri: AuthSession.makeRedirectUri({
+      native: "com.username0.brainwave:/oauth2redirect/google",
+    }),
   });
 
   useEffect(() => {
@@ -77,20 +82,22 @@ export default function LoginScreen() {
   }, [params.mode]);
 
   const handleAuth = async () => {
-    if(!isLogin && !validatePassword(password)){
-      alert("Password must be at least 6 characters long and include uppercase, lowercase, number, and special character.");
+    if (!isLogin && !validatePassword(password)) {
+      alert(
+        "Password must be at least 6 characters long and include uppercase, lowercase, number, and special character."
+      );
       return;
     }
 
-    try{
+    try {
       if (isLogin) {
         await login(email, password);
       } else {
-        if(!name){
+        if (!name) {
           alert("Please enter your name");
           return;
         }
-      await signup({ name, email, password });
+        await signup({ name, email, password });
       }
     } catch (error: any) {
       alert("Authentication error: " + error.message);
