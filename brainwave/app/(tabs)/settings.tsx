@@ -13,10 +13,12 @@ import { useTheme } from "../contexts/ThemeContexts";
 import { useAuth } from "../contexts/AuthContexts";
 import { Theme } from "../types";
 import { FontAwesome } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 export default function Profile() {
   const { theme, isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   const [notifications, setNotifications] = useState({
     studyReminders: true,
@@ -73,14 +75,17 @@ export default function Profile() {
 
         <View style={styles.content}>
           {/* Profile Card */}
-          <TouchableOpacity style={styles.card}>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => router.push("/(account)/profile")}
+          >
             <View style={styles.profileContainer}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
               </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>
-                  {user?.name?.toLowerCase() || "Alex johnson"}
+                  {user?.name || "Alex johnson"}
                 </Text>
               </View>
               <FontAwesome
@@ -452,9 +457,10 @@ const createStyles = (theme: Theme) =>
       alignItems: "center",
     },
     avatarText: {
-      fontSize: 20,
+      fontSize: 18,
       fontFamily: theme.fonts.semiBold,
       color: theme.colors.text.primary,
+      textTransform: "uppercase",
     },
     profileInfo: {
       flex: 1,
