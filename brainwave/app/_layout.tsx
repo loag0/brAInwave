@@ -13,6 +13,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { AuthProvider, useAuth } from "./contexts/AuthContexts";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContexts";
+import { useKeepAwake } from "expo-keep-awake";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,10 +35,11 @@ export default function RootLayout() {
 }
 
 function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
+  useKeepAwake();
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const { isDark } = useTheme();
+  const { isDark, theme } = useTheme();
 
   useEffect(() => {
     if (fontsLoaded && !isLoading) {
@@ -46,32 +48,31 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, [fontsLoaded, isLoading]);
 
   useEffect(() => {
-    // 1. Wait until everything is ready
     if (isLoading || !fontsLoaded) return;
 
-    // 2. Identify current location
     const currentGroup = segments[0];
     const isRedirecting = currentGroup === "oauth2redirect";
 
-    // 3. Navigation Logic
     if (user) {
       if (!user.hasFinishedSetup) {
-        // If logged in but setup not done, force to onboarding
+        // Force to onboarding
         if (currentGroup !== "(onboarding)" && !isRedirecting) {
           router.replace("/(onboarding)/goals");
         }
       } else {
-        // If setup IS done, and they are in auth/onboarding/redirect, send to tabs
+        // If they are in Auth or Onboarding, move to Tabs
+        // We explicitly ALLOW (tabs) and (account) here
         if (
           currentGroup === "(auth)" ||
           currentGroup === "(onboarding)" ||
-          isRedirecting
+          isRedirecting ||
+          !currentGroup // Handles the root index reload
         ) {
           router.replace("/(tabs)");
         }
       }
     } else {
-      // If NOT logged in, and not already in auth or redirect, send to login
+      // Not logged in: only allow (auth) and redirect
       if (currentGroup !== "(auth)" && !isRedirecting) {
         router.replace("/(auth)/login");
       }
@@ -82,8 +83,27 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Remove the Stack.Screen declarations completely */}
-        {/* Expo Router will automatically handle routes based on file structure */}
+        {/* We list these to define animations/presentations, NOT to 'create' the routes */}
+        <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+        <Stack.Screen
+          name="(onboarding)"
+          options={{ gestureEnabled: false, animation: "slide_from_right" }}
+        />
+        <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+        <Stack.Screen
+          name="(account)"
+          options={{
+            headerShown: true, // Show header for the back button
+            headerTitle: "Account Details",
+            headerStyle: { backgroundColor: theme.colors.background },
+            headerTintColor: theme.colors.text.primary,
+            headerShadowVisible: false,
+            presentation: "card",
+            animation: "slide_from_right",
+          }}
+        />
+        {/* Keep this hidden as it's just a logic handler */}
+        <Stack.Screen name="oauth2redirect/google" options={{ headerShown: false }} />
       </Stack>
     </>
   );
