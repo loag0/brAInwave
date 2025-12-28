@@ -103,7 +103,6 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <StatusBar style={isDark ? "light" : "dark"} />
 
       <ScrollView
         style={styles.scrollView}

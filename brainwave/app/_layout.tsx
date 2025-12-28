@@ -39,13 +39,13 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const { isDark, theme } = useTheme();
+  const { isDark, isThemeLoading } = useTheme();
 
   useEffect(() => {
-    if (fontsLoaded && !isLoading) {
+    if (fontsLoaded && !isLoading && !isThemeLoading) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, isLoading]);
+  }, [fontsLoaded, isLoading, isThemeLoading]);
 
   useEffect(() => {
     if (isLoading || !fontsLoaded) return;
@@ -60,8 +60,6 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           router.replace("/(onboarding)/goals");
         }
       } else {
-        // If they are in Auth or Onboarding, move to Tabs
-        // We explicitly ALLOW (tabs) and (account) here
         if (
           currentGroup === "(auth)" ||
           currentGroup === "(onboarding)" ||
