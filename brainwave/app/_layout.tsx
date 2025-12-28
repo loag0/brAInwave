@@ -93,11 +93,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen
           name="(account)"
           options={{
-            headerShown: true, // Show header for the back button
-            headerTitle: "Account Details",
-            headerStyle: { backgroundColor: theme.colors.background },
-            headerTintColor: theme.colors.text.primary,
-            headerShadowVisible: false,
+            headerShown: false,
             presentation: "card",
             animation: "slide_from_right",
           }}

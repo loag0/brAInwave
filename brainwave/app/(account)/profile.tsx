@@ -74,7 +74,7 @@ export default function ProfileScreen() {
         {/* 2FA Menu Item (No Toggle) */}
         <TouchableOpacity
           style={styles.row}
-          onPress={() => router.push("/(account)/mfa-setup")}
+          onPress={() => router.push("/mfa-setup")}
         >
           <View style={styles.rowLeft}>
             <Ionicons

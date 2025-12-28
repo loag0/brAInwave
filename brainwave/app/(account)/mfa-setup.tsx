@@ -11,11 +11,11 @@ import {
   ScrollView,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import * as Haptics from "expo-haptics"; // Added Haptics
+import * as Haptics from "expo-haptics";
 import { useTheme } from "../contexts/ThemeContexts";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function MFASetupScreen() {
+export default function MFASetup() {
   const { theme } = useTheme();
   const [code, setCode] = useState("");
 
@@ -151,7 +151,7 @@ export default function MFASetupScreen() {
             value={code}
             onChangeText={(text) => {
               setCode(text);
-              if (text.length === 6) Haptics.selectionAsync(); // Light tap when full
+              if (text.length === 6) Haptics.selectionAsync();
             }}
             placeholder="000 000"
             placeholderTextColor={theme.colors.text.secondary}
@@ -234,6 +234,7 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#eee",
     marginVertical: 25,
+    marginTop: 5,
   },
   inputLabel: {
     alignSelf: "center",
