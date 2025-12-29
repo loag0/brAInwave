@@ -1,0 +1,25 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# virtual environments
+venv/
+.env/
+.env.*
+
+# sqlite
+*.db
+*.sqlite
+*.sqlite3
+
+# model / cache stuff
+models/
+.cache/
+.huggingface/
+
+# logs
+*.log
+
+# os
+.DS_Store
