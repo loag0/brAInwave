@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome5 } from "@expo/vector-icons"; // Correct for Native
 import { useRouter } from "expo-router";
-import { useTheme } from "../contexts/ThemeContexts";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function Welcome() {
   const router = useRouter();
@@ -70,7 +70,12 @@ export default function Welcome() {
         {/* Buttons Section */}
         <View style={styles.footer}>
           <TouchableOpacity
-            onPress={() => router.push({ pathname: "/(auth)/login", params: { mode: "signup" } })}
+            onPress={() =>
+              router.push({
+                pathname: "/(auth)/login",
+                params: { mode: "signup" },
+              })
+            }
             style={[
               styles.primaryBtn,
               { backgroundColor: theme.colors.primary },
@@ -80,7 +85,12 @@ export default function Welcome() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => router.push({ pathname: "/(auth)/login", params: { mode: "signin" } })}
+            onPress={() =>
+              router.push({
+                pathname: "/(auth)/login",
+                params: { mode: "signin" },
+              })
+            }
             style={styles.secondaryBtn}
           >
             <Text
@@ -134,7 +144,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
     marginBottom: 12,
-    paddingHorizontal: 12
+    paddingHorizontal: 12,
   },
   subtitle: {
     fontSize: 15,
@@ -157,15 +167,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 2,
   },
-  featureDesc: { fontSize: 13},
+  featureDesc: { fontSize: 13 },
   footer: { gap: 12 },
   primaryBtn: { padding: 16, borderRadius: 12, alignItems: "center" },
   primaryBtnText: {
     color: "#FFF",
     fontWeight: "bold",
     fontSize: 18,
-    paddingHorizontal: 20
+    paddingHorizontal: 20,
   },
   secondaryBtn: { padding: 12, alignItems: "center" },
-  secondaryBtnText: { fontWeight: "500", paddingHorizontal: 20 }
+  secondaryBtnText: { fontWeight: "500", paddingHorizontal: 20 },
 });

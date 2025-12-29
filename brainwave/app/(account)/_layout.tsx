@@ -1,8 +1,8 @@
 import { Stack } from "expo-router";
-import { useTheme } from "../contexts/ThemeContexts";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function AccountLayout() {
-    const { theme } = useTheme();
+  const { theme } = useTheme();
 
   return (
     <Stack
@@ -15,7 +15,10 @@ export default function AccountLayout() {
       }}
     >
       <Stack.Screen name="profile" options={{ title: "Account Details" }} />
-      <Stack.Screen name="mfa-setup" options={{ title: "2FA Authentication" }} />
+      <Stack.Screen
+        name="mfa-setup"
+        options={{ title: "2FA Authentication" }}
+      />
     </Stack>
   );
 }

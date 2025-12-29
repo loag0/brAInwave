@@ -6,8 +6,8 @@ import {
   StyleSheet,
   //FlatList,
 } from "react-native";
-import { useAuth } from "../contexts/AuthContexts";
-import { useTheme } from "../contexts/ThemeContexts";
+import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 const SUBJECT_OPTIONS = [

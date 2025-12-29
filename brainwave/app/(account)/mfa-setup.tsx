@@ -12,12 +12,14 @@ import {
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import { useTheme } from "../contexts/ThemeContexts";
+import { useTheme } from "../contexts/ThemeContext";
+import { useAlert } from "../contexts/AlertContext";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function MFASetup() {
   const { theme } = useTheme();
   const [code, setCode] = useState("");
+  const { showAlert } = useAlert();
 
   // Realistically, you'd fetch this unique key from your backend
   const secretKey = "JBSW Y3DP EHPK 3PXP";
@@ -26,17 +28,16 @@ export default function MFASetup() {
     // Heavy impact for the "Copy" action
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     await Clipboard.setStringAsync(secretKey);
-    Alert.alert(
-      "Copied",
-      "Secret key copied! Paste this into your Authenticator app."
-    );
   };
 
   const handleVerify = () => {
     if (code.length !== 6) {
       // Error haptic
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Invalid Code", "Please enter the 6-digit code.");
+      showAlert({
+        title: "Invalid code",
+        message: "Please enter a valid 6-digit code.",
+      });
       return;
     }
 

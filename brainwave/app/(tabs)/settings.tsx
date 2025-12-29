@@ -6,11 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../contexts/ThemeContexts";
-import { useAuth } from "../contexts/AuthContexts";
+import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
+import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
 import { FontAwesome } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -19,6 +19,7 @@ export default function Profile() {
   const { theme, isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const router = useRouter();
+  const { showAlert } = useAlert();
 
   const [notifications, setNotifications] = useState({
     studyReminders: true,
@@ -30,21 +31,13 @@ export default function Profile() {
   const styles = createStyles(theme);
 
   const handleLogout = () => {
-    Alert.alert("Log out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log out",
-        style: "destructive",
-        onPress: async () => {
-          try{
-            await logout();
-          } catch(error) {
-            console.error("Logout error:", error);
-            Alert.alert("Error logging out. Please try again.");
-          }
-        },
-      },
-    ]);
+    showAlert({
+      title: "Logout",
+      message: "Are you sure you want to sign out of BrAInwave?",
+      showCancel: true,
+      confirmText: "Log out",
+      onConfirm: () => logout(),
+    });
   };
 
   const getInitials = (name: string | undefined) => {
@@ -182,6 +175,8 @@ export default function Profile() {
                 />
               </TouchableOpacity>
 
+              <Separator theme={theme} />
+
               <TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
                   <FontAwesome
@@ -202,6 +197,8 @@ export default function Profile() {
                   color={theme.colors.text.secondary}
                 />
               </TouchableOpacity>
+
+              <Separator theme={theme} />
 
               <TouchableOpacity style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
@@ -494,8 +491,7 @@ const createStyles = (theme: Theme) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      padding: theme.spacing.sm,
-      backgroundColor: theme.colors.background,
+      padding: theme.spacing.xs,
       borderRadius: 12,
       marginBottom: theme.spacing.xs,
     },

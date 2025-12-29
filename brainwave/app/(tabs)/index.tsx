@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,24 +6,25 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Modal,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../contexts/ThemeContexts";
-import { useAuth } from "../contexts/AuthContexts";
+import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
+import { useAlert } from "../contexts/AlertContext";
+import { useTimer } from "../contexts/TimerContext";
 import { Theme } from "../types";
-import { FontAwesome } from "@expo/vector-icons";
+import { FontAwesome, Ionicons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 
 export default function Home() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
-  const [showPomodoro, setShowPomodoro] = useState(false);
+  const { setIsModalVisible } = useTimer();
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
 
-  // sample data
   const upcomingClasses = [
     {
       id: 1,
@@ -47,6 +48,7 @@ export default function Home() {
       color: "#6a6a6a",
     },
   ];
+
   const assignments = [
     {
       id: 1,
@@ -70,6 +72,7 @@ export default function Home() {
       priority: "low",
     },
   ];
+
   const studySessions = [
     {
       id: 1,
@@ -103,7 +106,6 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -133,12 +135,13 @@ export default function Home() {
         <View style={styles.content}>
           <TouchableOpacity
             style={styles.pomodoroButton}
-            onPress={() => setShowPomodoro(true)}
+            onPress={() => setIsModalVisible(true)}
           >
             <FontAwesome name="clock-o" size={20} color="#fff" />
             <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
           </TouchableOpacity>
 
+          {/* Classes Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
@@ -252,7 +255,7 @@ export default function Home() {
             </View>
           </View>
 
-          {/* AI Suggested Sessions Card */}
+          {/* AI Suggested Sessions */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View>
@@ -306,6 +309,7 @@ export default function Home() {
         </View>
       </ScrollView>
 
+      {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => setShowUploadMenu(true)}
@@ -314,130 +318,112 @@ export default function Home() {
         <FontAwesome name="plus" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {showPomodoro && (
-        <PomodoroTimer theme={theme} onClose={() => setShowPomodoro(false)} />
-      )}
-
       {showUploadMenu && (
         <UploadMenu
           theme={theme}
           onClose={() => setShowUploadMenu(false)}
-          onSelectOption={(opt) => console.log("selected:", opt)}
+          onSelectOption={(opt: string) => console.log("selected:", opt)}
         />
       )}
     </SafeAreaView>
   );
 }
 
-/* ---------- PomodoroTimer ---------- */
-const PomodoroTimer = ({
-  theme,
-  onClose,
-}: {
-  theme: Theme;
-  onClose: () => void;
-}) => {
-  const [minutes, setMinutes] = useState(25);
-  const [seconds, setSeconds] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+export const PomodoroTimer = () => {
+  const { theme } = useTheme();
+  const { showAlert } = useAlert();
+  const {
+    minutes,
+    seconds,
+    isRunning,
+    toggleTimer,
+    resetTimer,
+    isModalVisible,
+    setIsModalVisible,
+  } = useTimer();
 
-  useEffect(() => {
+  if (!isModalVisible) return null;
+
+  const handleDismiss = () => {
     if (isRunning) {
-      intervalRef.current = setInterval(() => {
-        setSeconds((prev) => {
-          if (prev === 0) {
-            setMinutes((m) => {
-              if (m === 0) {
-                setIsRunning(false);
-                return 0;
-              }
-              return m - 1;
-            });
-            return 59;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+      showAlert({
+        title: "Wait, don't leave!",
+        message:
+          "Closing this will stop your flow. Are you sure you want to quit focusing?",
+        showCancel: true,
+        confirmText: "I'm giving up",
+        cancelText: "Keep going",
+        onConfirm: () => {
+          resetTimer();
+          setIsModalVisible(false);
+        },
+      });
+    } else {
+      setIsModalVisible(false);
     }
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [isRunning]);
+  };
 
   return (
-    <View style={pomoStyles.overlay}>
-      <View
-        style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
-      >
-        <TouchableOpacity style={pomoStyles.close} onPress={onClose}>
-          <FontAwesome
-            name="close"
-            size={24}
-            color={theme.colors.text.secondary}
-          />
-        </TouchableOpacity>
-        <Text style={[pomoStyles.title, { color: theme.colors.text.primary }]}>
-          pomodoro timer
-        </Text>
-        <Text style={[pomoStyles.timer, { color: theme.colors.primary }]}>
-          {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
-        </Text>
-        <View style={pomoStyles.buttonBar}>
-          <TouchableOpacity
-            style={[
-              pomoStyles.button,
-              { backgroundColor: theme.colors.primary },
-            ]}
-            onPress={() => setIsRunning(!isRunning)}
-          >
-            <Text style={pomoStyles.buttonText}>
-              {isRunning ? "pause" : "start"}
-            </Text>
+    <Modal
+      transparent
+      animationType="slide"
+      visible={isModalVisible}
+      onRequestClose={handleDismiss}
+    >
+      <View style={pomoStyles.overlay}>
+        <View
+          style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
+        >
+          <TouchableOpacity style={pomoStyles.close} onPress={handleDismiss}>
+            <Ionicons
+              name="close"
+              size={28}
+              color={theme.colors.text.secondary}
+            />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              pomoStyles.button,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.primary,
-                borderWidth: 2,
-              },
-            ]}
-            onPress={() => {
-              setMinutes(25);
-              setSeconds(0);
-              setIsRunning(false);
-            }}
+
+          <Text
+            style={[pomoStyles.title, { color: theme.colors.text.primary }]}
           >
-            <Text
-              style={[pomoStyles.buttonText, { color: theme.colors.primary }]}
+            Focus Mode
+          </Text>
+
+          <Text style={[pomoStyles.timer, { color: theme.colors.primary }]}>
+            {String(minutes).padStart(2, "0")}:
+            {String(seconds).padStart(2, "0")}
+          </Text>
+
+          <View style={pomoStyles.buttonBar}>
+            <TouchableOpacity
+              style={[
+                pomoStyles.button,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={toggleTimer}
             >
-              reset
-            </Text>
-          </TouchableOpacity>
+              <Text style={pomoStyles.buttonText}>
+                {isRunning ? "Pause" : "Resume"}
+              </Text>
+            </TouchableOpacity>
+
+            {isRunning && (
+              <TouchableOpacity
+                style={[pomoStyles.button, { marginTop: 10 }]}
+                onPress={handleDismiss}
+              >
+                <Text style={{ color: theme.colors.error, fontWeight: "600" }}>
+                  End Session
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
-    </View>
+    </Modal>
   );
 };
 
-/* ---------- UploadMenu ---------- */
-const UploadMenu = ({
-  theme,
-  onClose,
-  onSelectOption,
-}: {
-  theme: Theme;
-  onClose: () => void;
-  onSelectOption: (opt: string) => void;
-}) => {
+const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
   const uploadOptions = [
     {
       id: "schedule",
@@ -488,7 +474,6 @@ const UploadMenu = ({
             />
           </TouchableOpacity>
         </View>
-
         {uploadOptions.map((opt) => (
           <TouchableOpacity
             key={opt.id}
@@ -546,7 +531,6 @@ const UploadMenu = ({
   );
 };
 
-/* ---------- styles ---------- */
 const createStyles = (theme: Theme, isDark: boolean) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
@@ -618,8 +602,8 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       justifyContent: "center",
       alignItems: "center",
       backgroundColor: theme.colors.primary,
-      paddingVertical: 10,
-      borderRadius: 10,
+      paddingVertical: 12,
+      borderRadius: 12,
       marginBottom: 24,
     },
     pomodoroText: {
@@ -635,11 +619,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: 24,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 6,
-      elevation: 1,
     },
     cardHeader: {
       flexDirection: "row",
@@ -652,7 +631,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 18,
       fontFamily: theme.fonts.semiBold,
       color: theme.colors.text.primary,
-      marginLeft: 8,
     },
     viewAllText: {
       fontSize: 14,
@@ -661,9 +639,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     },
     aiSubtitle: {
       fontSize: 12,
-      fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
-      marginTop: 2,
       marginLeft: 28,
     },
     cardContent: { gap: 8 },
@@ -681,20 +657,11 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 16,
       fontFamily: theme.fonts.medium,
       color: theme.colors.text.primary,
-      marginBottom: 2,
     },
     classDetails: { flexDirection: "row", alignItems: "center", gap: 6 },
-    classTime: {
-      fontSize: 12,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-    },
-    classSeparator: { fontSize: 12, color: theme.colors.text.secondary },
-    classRoom: {
-      fontSize: 12,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-    },
+    classTime: { fontSize: 12, color: theme.colors.text.secondary },
+    classSeparator: { color: theme.colors.text.secondary },
+    classRoom: { fontSize: 12, color: theme.colors.text.secondary },
     assignmentItem: {
       flexDirection: "row",
       padding: 10,
@@ -704,37 +671,31 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       gap: 10,
     },
     checkbox: {
-      width: 20,
-      height: 20,
-      borderRadius: 4,
+      width: 22,
+      height: 22,
+      borderRadius: 6,
       borderWidth: 2,
       borderColor: theme.colors.border,
       justifyContent: "center",
       alignItems: "center",
-      marginTop: 2,
     },
     assignmentInfo: { flex: 1 },
     assignmentTitle: {
       fontSize: 16,
       fontFamily: theme.fonts.medium,
       color: theme.colors.text.primary,
-      marginBottom: 3,
     },
     assignmentTitleChecked: {
       textDecorationLine: "line-through",
       opacity: 0.5,
     },
-    assignmentSubject: {
-      fontSize: 12,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-      marginBottom: 5,
-    },
+    assignmentSubject: { fontSize: 12, color: theme.colors.text.secondary },
     badge: {
       alignSelf: "flex-start",
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 6,
+      marginTop: 4,
     },
     badgeText: { fontSize: 11, fontFamily: theme.fonts.medium },
     sessionItem: {
@@ -750,37 +711,22 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 16,
       fontFamily: theme.fonts.medium,
       color: theme.colors.text.primary,
-      marginBottom: 2,
     },
     sessionDetails: { flexDirection: "row", alignItems: "center", gap: 6 },
-    sessionTime: {
-      fontSize: 12,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-    },
-    sessionSeparator: { fontSize: 12, color: theme.colors.text.secondary },
-    sessionDuration: {
-      fontSize: 12,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-    },
+    sessionTime: { fontSize: 12, color: theme.colors.text.secondary },
+    sessionSeparator: { color: theme.colors.text.secondary },
+    sessionDuration: { fontSize: 12, color: theme.colors.text.secondary },
     sessionBadge: {
       paddingHorizontal: 12,
       paddingVertical: 6,
       backgroundColor: theme.colors.border + "40",
       borderRadius: 8,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
     },
-    sessionBadgeText: {
-      fontSize: 12,
-      fontFamily: theme.fonts.medium,
-      color: theme.colors.text.secondary,
-    },
+    sessionBadgeText: { fontSize: 12, color: theme.colors.text.secondary },
     startSessionButton: {
       borderRadius: 10,
       alignItems: "center",
-      paddingVertical: 10,
+      paddingVertical: 12,
       backgroundColor: theme.colors.primary,
       marginTop: 8,
     },
@@ -794,55 +740,57 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       position: "absolute",
       bottom: 30,
       right: 20,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: theme.colors.primary,
+      elevation: 5,
     },
   });
 
 const pomoStyles = StyleSheet.create({
   overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.65)",
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 1000,
   },
   modal: {
-    borderRadius: 18,
+    borderRadius: 28,
     padding: 32,
-    width: width - 54,
+    width: width - 40,
     alignItems: "center",
   },
-  close: { position: "absolute", top: 15, right: 15 },
-  title: { fontSize: 24, fontFamily: "bold", marginBottom: 28 },
-  timer: { fontSize: 68, fontFamily: "bold", marginVertical: 32 },
-  buttonBar: { flexDirection: "row", gap: 18, marginTop: 20 },
-  button: { paddingHorizontal: 30, paddingVertical: 14, borderRadius: 9 },
-  buttonText: { color: "#fff", fontFamily: "600", fontSize: 16 },
+  close: { position: "absolute", top: 20, right: 20 },
+  title: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  timer: {
+    fontSize: 84,
+    marginVertical: 30,
+    fontWeight: "bold",
+    fontVariant: ["tabular-nums"],
+  },
+  buttonBar: { width: "100%" },
+  button: { paddingVertical: 18, borderRadius: 16, alignItems: "center" },
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 18 },
 });
 
 const menuStyles = StyleSheet.create({
   overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
-    zIndex: 1000,
   },
   modal: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: 24,
     paddingBottom: 40,
   },
@@ -852,23 +800,23 @@ const menuStyles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  title: { fontSize: 24, fontFamily: "bold" },
+  title: { fontSize: 22, fontWeight: "bold" },
   option: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    borderRadius: 15,
+    borderRadius: 18,
     marginBottom: 12,
-    gap: 14,
+    borderWidth: 1,
   },
   iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
   },
-  optionText: { flex: 1 },
-  optionLabel: { fontSize: 16, fontFamily: "600", marginBottom: 2 },
-  optionDescription: { fontSize: 13 },
+  optionText: { flex: 1, marginLeft: 16 },
+  optionLabel: { fontSize: 16, fontWeight: "600" },
+  optionDescription: { fontSize: 13, marginTop: 2 },
 });

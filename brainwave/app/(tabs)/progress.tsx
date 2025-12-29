@@ -1,15 +1,9 @@
 // app/(tabs)/progress.tsx - Progress Tracker Page
 import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-} from "react-native";
+import { View, Text, StyleSheet, ScrollView, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useTheme } from "../contexts/ThemeContexts";
+import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -96,16 +90,17 @@ export default function Progress() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View
-          style={styles.headerGradient}
-        >
+        <View style={styles.headerGradient}>
           <Text
             style={[styles.headerTitle, { color: isDark ? "#fff" : "#000" }]}
           >
             Your progress
           </Text>
           <Text
-            style={[styles.headerSubtitle, { color: isDark ? "#f5f5f5" : "#2c2c2c" }]}
+            style={[
+              styles.headerSubtitle,
+              { color: isDark ? "#f5f5f5" : "#2c2c2c" },
+            ]}
           >
             Track your study journey
           </Text>
@@ -311,7 +306,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       backgroundColor: isDark ? "#2d2d2d" : "#f5f5f5",
       padding: theme.spacing.lg,
       paddingTop: theme.spacing.xl,
-      paddingBottom: 48
+      paddingBottom: 48,
     },
     headerTitle: {
       fontSize: 28,

@@ -1,7 +1,10 @@
 import { useEffect } from "react";
-import { Stack, 
-  //Slot, 
-  useRouter, useSegments } from "expo-router";
+import {
+  Stack,
+  //Slot,
+  useRouter,
+  useSegments,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import {
@@ -11,9 +14,13 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
-import { AuthProvider, useAuth } from "./contexts/AuthContexts";
-import { ThemeProvider, useTheme } from "./contexts/ThemeContexts";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { useKeepAwake } from "expo-keep-awake";
+import Toast from "react-native-toast-message";
+import { AlertProvider } from "./contexts/AlertContext";
+import { TimerProvider } from "./contexts/TimerContext";
+import { PomodoroModal } from "@/components/PomodoroModal";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,9 +34,15 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <NavigationHandler fontsLoaded={fontsLoaded} />
-      </AuthProvider>
+      <AlertProvider>
+        <TimerProvider>
+          <AuthProvider>
+            <NavigationHandler fontsLoaded={fontsLoaded} />
+            <PomodoroModal/>
+            <Toast />
+          </AuthProvider>
+        </TimerProvider>
+      </AlertProvider>
     </ThemeProvider>
   );
 }
@@ -97,7 +110,10 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           }}
         />
         {/* Keep this hidden as it's just a logic handler */}
-        <Stack.Screen name="oauth2redirect/google" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="oauth2redirect/google"
+          options={{ headerShown: false }}
+        />
       </Stack>
     </>
   );
