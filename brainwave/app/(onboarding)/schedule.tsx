@@ -7,8 +7,8 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useTheme } from "../contexts/ThemeContexts";
-import { useAuth } from "../contexts/AuthContexts";
+import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";

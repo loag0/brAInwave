@@ -17,8 +17,8 @@ import * as WebBrowser from "expo-web-browser";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db as firestore } from "../../firebaseConfig";
-import { useAuth } from "../contexts/AuthContexts";
-import { useTheme } from "../contexts/ThemeContexts";
+import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import { FontAwesome5 } from "@expo/vector-icons";
 
 WebBrowser.maybeCompleteAuthSession();

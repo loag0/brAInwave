@@ -1,7 +1,7 @@
 //import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 //import { useAuth } from "../contexts/AuthContexts"; // Corrected path
-import { useTheme } from "../contexts/ThemeContexts";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function GoogleOAuthRedirect() {
   const { theme } = useTheme();
