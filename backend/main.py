@@ -1,22 +1,13 @@
-from fastapi import FastAPI, Depends
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
-
-DATABASE_URL = "sqlite:///./brainwave.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    email = Column(String, unique=True, index=True)
-
-Base.metadata.create_all(bind=engine)
+from fastapi import FastAPI, Depends, UploadFile, File
+from sqlalchemy.orm import Session
+from .database import SessionLocal, init_db, User, StudyMaterial
+import httpx
+import os
 
 app = FastAPI()
+init_db()
 
+# Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -24,14 +15,28 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/users/")
-def create_user(name: str, email: str, db: Session = Depends(get_db)):
-    user = User(name=name, email=email)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-@app.get("/users/")
-def read_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
+@app.post("/upload-syllabus")
+async def process_syllabus(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # 1. Read the file
+    content = await file.read()
+    text = content.decode("utf-8")
+    
+    # 2. Call Hugging Face (Planning)
+    async with httpx.AsyncClient() as client:
+        hf_resp = await client.post(
+            "https://api-inference.huggingface.co/models/google/flan-t5-base",
+            headers={"Authorization": f"Bearer {HF_TOKEN}"},
+            json={"inputs": f"Create a study schedule for this: {text[:500]}"}
+        )
+        plan = hf_resp.json()[0].get("generated_text", "No plan generated")
+
+    # 3. Save to SQLite
+    material = StudyMaterial(title=file.filename, raw_content=text, ai_plan=plan)
+    db.add(material)
+    db.commit()
+    
+    return {"status": "success", "plan": plan}
+
+# Keep your user routes below...
