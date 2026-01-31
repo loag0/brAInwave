@@ -4,8 +4,7 @@ dist/
 expo-env.d.ts
 build/
 
-android/
-ios/
+/android
 
 .env
 .env.local
