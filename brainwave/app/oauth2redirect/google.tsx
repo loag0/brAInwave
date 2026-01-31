@@ -1,14 +1,8 @@
-//import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
-//import { useAuth } from "../contexts/AuthContexts"; // Corrected path
 import { useTheme } from "../contexts/ThemeContext";
 
 export default function GoogleOAuthRedirect() {
   const { theme } = useTheme();
-
-  // We don't actually need to call router.replace here because
-  // the RootLayout NavigationHandler is watching segments[0] === "oauth2redirect"
-  // and it will auto-redirect based on the user object.
 
   return (
     <View

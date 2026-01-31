@@ -38,9 +38,6 @@ export default function GoalsScreen() {
 
     // TODO: Save selectedSubjects to Firestore here!
 
-    // For now, since we haven't built the Firestore update,
-    // we'll just navigate. Note: The index.tsx check will still
-    // trigger until the user object actually has subjects.
     router.push({
       pathname: "/(onboarding)/schedule",
       params: { subjects: selectedSubjects.join(",") },

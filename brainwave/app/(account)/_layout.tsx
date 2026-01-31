@@ -7,7 +7,7 @@ export default function AccountLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: true, // Show it here instead
+        headerShown: true,
         headerStyle: { backgroundColor: theme.colors.background },
         headerTintColor: theme.colors.text.primary,
         headerTitleStyle: { fontWeight: "bold" },

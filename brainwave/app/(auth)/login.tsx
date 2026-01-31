@@ -38,7 +38,6 @@ export default function LoginScreen() {
 
   const isLoading = authLoading || isProcessing;
 
-  // --- FIX: Clear fields when switching between Login and Signup ---
   useEffect(() => {
     setEmail("");
     setPassword("");
