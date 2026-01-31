@@ -2,6 +2,7 @@ node_modules/
 .expo/
 dist/
 expo-env.d.ts
+build/
 
 android/
 ios/
