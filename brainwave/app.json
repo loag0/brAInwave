@@ -8,9 +8,6 @@
     "scheme": "brainwave",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true
-    },
     "android": {
       "package": "com.username0.brainwave",
       "intentFilters": [
@@ -36,6 +33,10 @@
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
+    },
+    "ios": {
+      "bundleIdentifier": "com.username0.brainwave",
+      "supportsTablet": true
     },
     "plugins": [
       "expo-router",

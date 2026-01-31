@@ -37,7 +37,6 @@ export default function Schedule() {
     try {
       const userRef = doc(firestore, "users", user.id);
 
-      // Normalize subjects: handle string (comma-separated), array, or undefined
       let subjectsArray: string[] = [];
       if (typeof subjects === "string") {
         subjectsArray = subjects.split(",").filter((s) => s.trim() !== "");

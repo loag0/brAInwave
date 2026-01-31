@@ -21,7 +21,7 @@ export default function MFASetup() {
   const [code, setCode] = useState("");
   const { showAlert } = useAlert();
 
-  // Realistically, you'd fetch this unique key from your backend
+  // Fake secret key for demonstration purposes
   const secretKey = "JBSW Y3DP EHPK 3PXP";
 
   const copyToClipboard = async () => {
