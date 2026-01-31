@@ -15,8 +15,14 @@ import { useAlert } from "../contexts/AlertContext";
 import { useTimer } from "../contexts/TimerContext";
 import { Theme } from "../types";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import Svg, { Path } from "react-native-svg";
 
 const { width } = Dimensions.get("window");
+
+interface IconProps {
+  size: number;
+  color: string;
+}
 
 export default function Home() {
   const { theme, isDark } = useTheme();
@@ -24,6 +30,66 @@ export default function Home() {
   const { setIsModalVisible } = useTimer();
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
+
+  const AddIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const PomodoroIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path 
+      d="M360-840v-80h240v80H360Zm80 440h80v-240h-80v240Zm40 320q-74 0-139.5-28.5T226-186q-49-49-77.5-114.5T120-440q0-74 28.5-139.5T226-694q49-49 114.5-77.5T480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80Zm0-80q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Zm0-280Z"
+      fill={color}
+      />
+      </Svg>
+  );
+
+  const TodayIcon: React.FC<IconProps> = ({ size, color}) => (
+    <Svg width = {size} height = {size} viewBox = "0 -960 960 960" fill={color}>
+      <Path 
+        d="M360-300q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Z"
+        fill={color} />
+    </Svg>
+  );
+
+  const AssignmentIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0, -960, 960, 960" fill={color}>
+      <Path
+        d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h168q13-36 43.5-58t68.5-22q38 0 68.5 22t43.5 58h168q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm80-80h280v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Zm200-190q13 0 21.5-8.5T510-820q0-13-8.5-21.5T480-850q-13 0-21.5 8.5T450-820q0 13 8.5 21.5T480-790ZM200-200v-560 560Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const AISessionsIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M852-212 732-332l56-56 120 120-56 56ZM708-692l-56-56 120-120 56 56-120 120Zm-456 0L132-812l56-56 120 120-56 56ZM108-212l-56-56 120-120 56 56-120 120Zm246-75 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Zm247-361Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const CheckIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z" fill={color} />
+    </Svg>
+  );
+
+  const ScheduleIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"
+        fill={color}
+      />
+    </Svg>
+  );
 
   const upcomingClasses = [
     {
@@ -113,7 +179,7 @@ export default function Home() {
         <View style={styles.headerBg}>
           <View style={styles.headerContent}>
             <Text style={styles.welcomeText}>
-              Welcome back, {user?.name?.split(" ")[0] || "alex"}!
+              Welcome back, {user?.name?.split(" ")[0] || "Kirk"}!
             </Text>
             <Text style={styles.dateText}>Thursday, October 17, 2025</Text>
           </View>
@@ -137,7 +203,7 @@ export default function Home() {
             style={styles.pomodoroButton}
             onPress={() => setIsModalVisible(true)}
           >
-            <FontAwesome name="clock-o" size={20} color="#fff" />
+            <PomodoroIcon color={theme.colors.secondary} size={24} />
             <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
           </TouchableOpacity>
 
@@ -145,11 +211,7 @@ export default function Home() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <FontAwesome
-                  name="calendar-check-o"
-                  size={20}
-                  color={theme.colors.text.primary}
-                />
+                <TodayIcon size={24} color={theme.colors.text.secondary} />
                 <Text style={styles.cardTitle}>Today's Classes</Text>
               </View>
               <Text style={styles.viewAllText}>View All</Text>
@@ -172,11 +234,7 @@ export default function Home() {
                   <View style={styles.classInfo}>
                     <Text style={styles.className}>{cls.name}</Text>
                     <View style={styles.classDetails}>
-                      <FontAwesome
-                        name="clock-o"
-                        size={12}
-                        color={theme.colors.text.secondary}
-                      />
+                      <ScheduleIcon size={10} color={theme.colors.text.secondary} />
                       <Text style={styles.classTime}>{cls.time}</Text>
                       <Text style={styles.classSeparator}>•</Text>
                       <Text style={styles.classRoom}>{cls.room}</Text>
@@ -191,11 +249,7 @@ export default function Home() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <FontAwesome
-                  name="book"
-                  size={20}
-                  color={theme.colors.text.primary}
-                />
+                <AssignmentIcon color={theme.colors.text.secondary} size={24}/>
                 <Text style={styles.cardTitle}>Assignments</Text>
               </View>
               <Text style={styles.viewAllText}>View All</Text>
@@ -214,11 +268,7 @@ export default function Home() {
                     onPress={() => toggleAssignment(a.id)}
                   >
                     {checkedAssignments.includes(a.id) && (
-                      <FontAwesome
-                        name="check"
-                        size={16}
-                        color={theme.colors.primary}
-                      />
+                      <CheckIcon size={18} color={theme.colors.primary} />
                     )}
                   </TouchableOpacity>
                   <View style={styles.assignmentInfo}>
@@ -260,11 +310,7 @@ export default function Home() {
             <View style={styles.cardHeader}>
               <View>
                 <View style={styles.cardTitleContainer}>
-                  <FontAwesome
-                    name="star"
-                    size={20}
-                    color={theme.colors.text.primary}
-                  />
+                  <AISessionsIcon color={theme.colors.text.secondary} size={24} />
                   <Text style={styles.cardTitle}>AI Suggested Sessions</Text>
                 </View>
                 <Text style={styles.aiSubtitle}>
@@ -284,11 +330,7 @@ export default function Home() {
                   <View style={styles.sessionInfo}>
                     <Text style={styles.sessionSubject}>{session.subject}</Text>
                     <View style={styles.sessionDetails}>
-                      <FontAwesome
-                        name="clock-o"
-                        size={12}
-                        color={theme.colors.text.secondary}
-                      />
+                      <ScheduleIcon size={12} color={theme.colors.text.secondary} />
                       <Text style={styles.sessionTime}>{session.time}</Text>
                       <Text style={styles.sessionSeparator}>•</Text>
                       <Text style={styles.sessionDuration}>
@@ -315,7 +357,7 @@ export default function Home() {
         onPress={() => setShowUploadMenu(true)}
         activeOpacity={0.8}
       >
-        <FontAwesome name="plus" size={28} color="#fff" />
+        <AddIcon color={theme.colors.secondary} size={36} />
       </TouchableOpacity>
 
       {showUploadMenu && (
@@ -424,6 +466,34 @@ export const PomodoroTimer = () => {
 };
 
 const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
+  
+  const CloseIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const CalendarIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Zm280 240q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-160 0q-17 0-28.5-11.5T280-440q0-17 11.5-28.5T320-480q17 0 28.5 11.5T360-440q0 17-11.5 28.5T320-400Zm320 0q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-160 0q-17 0-28.5-11.5T280-280q0-17 11.5-28.5T320-320q17 0 28.5 11.5T360-280q0 17-11.5 28.5T320-240Zm320 0q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const ChevronRightIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
   const uploadOptions = [
     {
       id: "schedule",
@@ -467,11 +537,7 @@ const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
             Upload content
           </Text>
           <TouchableOpacity onPress={onClose}>
-            <FontAwesome
-              name="close"
-              size={24}
-              color={theme.colors.text.secondary}
-            />
+            <CloseIcon size={32} color={theme.colors.secondary} />
           </TouchableOpacity>
         </View>
         {uploadOptions.map((opt) => (
@@ -519,11 +585,7 @@ const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
                 {opt.description}
               </Text>
             </View>
-            <FontAwesome
-              name="chevron-right"
-              size={20}
-              color={theme.colors.text.secondary}
-            />
+            <ChevronRightIcon size={36} color={theme.colors.text.secondary} />
           </TouchableOpacity>
         ))}
       </View>
@@ -640,7 +702,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     aiSubtitle: {
       fontSize: 12,
       color: theme.colors.text.secondary,
-      marginLeft: 28,
+      marginLeft: 32,
     },
     cardContent: { gap: 8 },
     classItem: {
