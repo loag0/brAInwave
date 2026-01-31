@@ -8,7 +8,6 @@
     "scheme": "brainwave",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "nodeModulesPath": "..",
     "ios": {
       "supportsTablet": true
     },
