@@ -14,7 +14,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useAlert } from "../contexts/AlertContext";
 import { useTimer } from "../contexts/TimerContext";
 import { Theme } from "../types";
-import { FontAwesome, Ionicons } from "@expo/vector-icons";
+import { FontAwesome } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 const { width } = Dimensions.get("window");
@@ -23,6 +23,15 @@ interface IconProps {
   size: number;
   color: string;
 }
+
+const CloseIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
+        fill={color}
+      />
+    </Svg>
+  );
 
 export default function Home() {
   const { theme, isDark } = useTheme();
@@ -417,10 +426,7 @@ export const PomodoroTimer = () => {
           style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
         >
           <TouchableOpacity style={pomoStyles.close} onPress={handleDismiss}>
-            <Ionicons
-              name="close"
-              size={28}
-              color={theme.colors.text.secondary}
+            <CloseIcon size={24} color={theme.colors.text.secondary}
             />
           </TouchableOpacity>
 
@@ -466,16 +472,8 @@ export const PomodoroTimer = () => {
 };
 
 const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
-  
-  const CloseIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
-        fill={color}
-      />
-    </Svg>
-  );
 
+  //this is for the upload menu modal. still havent gotten to mapping the different icons yet
   const CalendarIcon: React.FC<IconProps> = ({ size, color }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
@@ -537,7 +535,7 @@ const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
             Upload content
           </Text>
           <TouchableOpacity onPress={onClose}>
-            <CloseIcon size={32} color={theme.colors.secondary} />
+            <CloseIcon size={32} color={theme.colors.text.secondary} />
           </TouchableOpacity>
         </View>
         {uploadOptions.map((opt) => (
