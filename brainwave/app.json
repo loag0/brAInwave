@@ -36,7 +36,21 @@
     },
     "ios": {
       "bundleIdentifier": "com.username0.brainwave",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)com.username0.brainwave",
+          "com.apple.security.application-groups.com.username0.brainwave"
+        ]
+      },
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["com.googleusercontent.apps.1012156637414-h386fgte8eq3jupp8g3og7pql71kt4p0"]
+          }
+        ]
+      }
     },
     "plugins": [
       "expo-router",
