@@ -33,7 +33,7 @@ export default function Profile() {
   const handleLogout = () => {
     showAlert({
       title: "Logout",
-      message: "Are you sure you want to sign out of BrAInwave?",
+      message: "Are you sure you want to sign out of brAInwave?",
       showCancel: true,
       confirmText: "Log out",
       onConfirm: () => logout(),

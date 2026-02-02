@@ -49,6 +49,7 @@ export default function LoginScreen() {
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_WEB_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_ANDROID_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_IOS_CLIENT_ID,
     redirectUri: AuthSession.makeRedirectUri({
       scheme: "com.username0.brainwave",
       path: "/oauth2redirect/google",
