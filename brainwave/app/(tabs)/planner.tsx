@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Path } from "react-native-svg";
 
 interface WeekDay {
   id: string;
@@ -27,6 +28,27 @@ interface PlanItem {
   completed: boolean;
   difficulty: "easy" | "medium" | "hard";
 }
+
+interface IconProps {
+  color: string;
+  size: number;
+}
+
+const BulbIcon: React.FC<IconProps> = ({ color, size }) => (
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path d="M480-80q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM320-200v-80h320v80H320Zm10-120q-69-41-109.5-110T180-580q0-125 87.5-212.5T480-880q125 0 212.5 87.5T780-580q0 81-40.5 150T630-320H330Zm24-80h252q45-32 69.5-79T700-580q0-92-64-156t-156-64q-92 0-156 64t-64 156q0 54 24.5 101t69.5 79Zm126 0Z" 
+    fill={color} />
+  </Svg>
+);
+
+const ScheduleIcon: React.FC<IconProps> = ({ color, size }) => (
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"
+      fill={color}
+    />
+  </Svg>
+);
 
 export default function Schedule() {
   const { theme } = useTheme();
@@ -143,7 +165,7 @@ export default function Schedule() {
         <View style={styles.insightContainer}>
           <View style={styles.insightCard}>
             <View style={styles.insightIcon}>
-              <Ionicons name="bulb" size={20} color={theme.colors.surface} />
+              <BulbIcon color={theme.colors.surface} size={28} />
             </View>
             <View style={styles.insightText}>
               <Text style={styles.insightTitle}>AI insight</Text>
@@ -219,7 +241,7 @@ export default function Schedule() {
                   size={24}
                   color={
                     item.completed
-                      ? theme.colors.text.primary
+                      ? theme.colors.primary
                       : theme.colors.border
                   }
                 />
@@ -228,11 +250,7 @@ export default function Schedule() {
               <View style={styles.planContent}>
                 <View style={styles.planTimeContainer}>
                   <View style={styles.timeRow}>
-                    <Ionicons
-                      name="time-outline"
-                      size={14}
-                      color={theme.colors.text.secondary}
-                    />
+                    <ScheduleIcon color={theme.colors.text.secondary} size={12} />
                     <Text style={styles.timeText}>{item.time}</Text>
                     <View style={styles.durationBadge}>
                       <Text style={styles.durationText}>{item.duration}</Text>
