@@ -19,7 +19,10 @@
               "scheme": "com.username0.brainwave"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "edgeToEdgeEnabled": true,
@@ -48,7 +51,9 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["com.googleusercontent.apps.1012156637414-h386fgte8eq3jupp8g3og7pql71kt4p0"]
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.1012156637414-h386fgte8eq3jupp8g3og7pql71kt4p0"
+            ]
           }
         ]
       }
@@ -73,7 +78,8 @@
             "ndkVersion": "27.1.12297006"
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,16 +1,32 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useTimer } from "../contexts/TimerContext";
-import { useTheme } from "../contexts/ThemeContext"; // Assuming you have this
+import { useTheme } from "../contexts/ThemeContext";
 import { useKeepAwake } from "expo-keep-awake";
+import * as Notifications from "expo-notifications";
+import { SchedulableTriggerInputTypes } from "expo-notifications";
+import { useAlert } from "../contexts/AlertContext";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function FocusScreen() {
   const { theme } = useTheme();
+  const { showAlert } = useAlert();
+  const [notificationId, setNotificationId] = useState<string | null>(null);
+
   const {
     minutes,
     seconds,
     isRunning,
-    toggleTimer,
+    setIsRunning, // Ensure your context exports this
     resetTimer,
     isKeepAwake,
     setIsKeepAwake,
@@ -18,12 +34,64 @@ export default function FocusScreen() {
 
   useKeepAwake();
 
+  const requestPermissions = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") {
+      showAlert({
+        title: "Error!",
+        message: "Enable notifications to hear the timer while in other apps",
+      });
+    }
+  };
+
+  useEffect(() => {
+    requestPermissions();
+  });
+
+  const toggleTimer = async () => {
+    try {
+      if (!isRunning) {
+        const totalSeconds = minutes * 60 + seconds;
+
+        // Don't schedule if time is already zero
+        if (totalSeconds > 0) {
+          const identifier = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: "Focus Session Complete! 🧠",
+              body: "Time for a well-deserved break",
+              sound: true,
+            },
+            trigger: { 
+              type: SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: totalSeconds },
+          });
+          setNotificationId(identifier);
+        }
+      } else {
+        if (notificationId) {
+          await Notifications.cancelScheduledNotificationAsync(notificationId);
+          setNotificationId(null);
+        }
+      }
+      setIsRunning(!isRunning);
+    } catch (error) {
+      console.error("Notification Error:", error);
+    }
+  };
+
+  const handleStop = async () => {
+    resetTimer();
+    if (notificationId) {
+      await Notifications.cancelScheduledNotificationAsync(notificationId);
+      setNotificationId(null);
+    }
+    // Safety clear all
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  };
+
   const formatNumber = (num: number) => num.toString().padStart(2, "0");
 
-  //check if timer is at the starting point
   const isAtStart = !isRunning && minutes === 25 && seconds === 0;
-  const showLabel = !isRunning; // Only shows text when the timer isnt running
-  const labelText = !isAtStart ? "Deep Work Session" : "Paused";
 
   return (
     <View
@@ -53,23 +121,28 @@ export default function FocusScreen() {
           {formatNumber(minutes)}:{formatNumber(seconds)}
         </Text>
 
-      {/* Conditional Status Text */}
-      <View style={{ height: 30 }}> 
-        {!isRunning && !isAtStart ? (
-          <Text style={[styles.statusLabel, { color: theme.colors.warning }]}>
-            Paused
-          </Text>
-        ) : isAtStart ? (
-          <Text style={[styles.statusLabel, { color: theme.colors.text.secondary }]}>
-            Deep Work Session
-          </Text>
-        ) : null }
-      </View>
+        {/* Conditional Status Text */}
+        <View style={{ height: 30 }}>
+          {!isRunning && !isAtStart ? (
+            <Text style={[styles.statusLabel, { color: theme.colors.warning }]}>
+              Paused
+            </Text>
+          ) : isAtStart ? (
+            <Text
+              style={[
+                styles.statusLabel,
+                { color: theme.colors.text.secondary },
+              ]}
+            >
+              Deep Work Session
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       {/* Controls */}
       <View style={styles.controlsRow}>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={resetTimer}>
+        <TouchableOpacity style={styles.secondaryBtn} onPress={handleStop}>
           <Text style={{ color: theme.colors.text.secondary, fontSize: 18 }}>
             Stop
           </Text>
@@ -109,9 +182,13 @@ const styles = StyleSheet.create({
   },
   keepAwakeText: { fontSize: 14, fontWeight: "600" },
   timerContainer: { alignItems: "center", marginBottom: 60 },
-  timerText: { fontSize: 90, fontWeight: "200", letterSpacing: -2 }, // Thin weight like TickTick
-  statusLabel: { fontSize: 20, marginTop: 10, fontWeight: '400', textAlign: 'center' },
-  taskLabel: { fontSize: 18, marginTop: 10, fontWeight: "400" },
+  timerText: { fontSize: 90, fontWeight: "200", letterSpacing: -2 },
+  statusLabel: {
+    fontSize: 20,
+    marginTop: 10,
+    fontWeight: "400",
+    textAlign: "center",
+  },
   controlsRow: {
     flexDirection: "row",
     alignItems: "center",
