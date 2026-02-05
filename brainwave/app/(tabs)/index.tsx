@@ -91,7 +91,6 @@ const HomeSkeleton = ({ styles, theme }: any) => (
 export default function Home() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
-  const { setIsModalVisible } = useTimer();
   const [classes, setClasses] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [suggestedSessions, setSuggestedSessions] = useState<any[]>([]);
@@ -111,7 +110,12 @@ export default function Home() {
       (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setClasses(data.classes || []);
+
+          const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+          const todayName = days[new Date().getDay()];
+
+          const todaysClasses = data.weekly_template?.[todayName] || [];
+          setClasses(todaysClasses);
           setAssignments(data.assignments || []);
         }
         //when data arrives, kill the skelly
@@ -172,12 +176,24 @@ export default function Home() {
 
       if (!user?.id) return;
 
+      const weeklyData = {
+        monday: response.classes.filter(
+          (c: { day: string }) => c.day === "Monday",
+        ),
+        tuesday: response.classes.filter((c: { day: string }) => c.day === "Tuesday"),
+        wednesday: response.classes.filter((c: { day: string }) => c.day === "Wednesday"),
+        thursday: response.classes.filter((c: { day: string }) => c.day === "Thursday"),
+        friday: response.classes.filter((c: { day: string }) => c.day === "Friday"),
+        saturday: response.classes.filter((c: { day: string }) => c.day === "Saturday"),
+        sunday: response.classes.filter((c: { day: string }) => c.day === "Sunday"),
+      };
+
       // Save the response data to Firestore
       // Assuming response contains { classes: [], assignments: [] }
       await setDoc(
         doc(firestore, "users", user.id, "data", "timetable"),
         {
-          classes: response.classes || [],
+          weekly_template: weeklyData || [],
           assignments: response.assignments || [],
           uploadedAt: serverTimestamp(),
         },
@@ -211,15 +227,6 @@ export default function Home() {
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
         d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const PomodoroIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M360-840v-80h240v80H360Zm80 440h80v-240h-80v240Zm40 320q-74 0-139.5-28.5T226-186q-49-49-77.5-114.5T120-440q0-74 28.5-139.5T226-694q49-49 114.5-77.5T480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80Zm0-80q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Zm0-280Z"
         fill={color}
       />
     </Svg>
@@ -309,14 +316,6 @@ export default function Home() {
         </View>
 
         <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.pomodoroButton}
-            onPress={() => setIsModalVisible(true)}
-          >
-            <PomodoroIcon color={theme.colors.secondary} size={24} />
-            <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
-          </TouchableOpacity>
-
           {/* Classes Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>

@@ -140,8 +140,10 @@ async def uploadTimetable(user_id: str, file: UploadFile = File(...)):
     prompt = """
         You are brAInwave, a smart study planning assistant for college students.
         Extract the class schedule from this document.
-        Return a JSON object with a key 'classes' containing a list of class entries.
-        Each object must have: 'subject', 'time', 'room', and 'days'
+        Return a JSON object with a key 'weekly_template'.
+        'weekly_template' must be an object where keys are 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'.
+        Each day contains a list of classes with: 'subject', 'time', 'room'.
+        If a day has no classes, return an empty list for that day
     """
     
     response = client.models.generate_content(
@@ -160,18 +162,18 @@ async def uploadTimetable(user_id: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Failed to generate timetable data.")
     
     timetableData = json.loads(response.text)
-    extractedClasses = timetableData.get("classes", [])
+    weeklyTemplate = timetableData.get("weekly_template", {})
     
     docRef = db.collection("users").document(user_id).collection("data").document("timetable")
     docRef.set({
-        "classes": extractedClasses,
+        "weekly_template": weeklyTemplate,
         "updatedAt": datetime.now(timezone.utc).isoformat()
-    })
+    }, merge = True)
     
     return {
         "user_id": user_id,
         "date": datetime.now().strftime("%Y-%m-%d"),
-        "classes": extractedClasses, 
+        "weekly_template": weeklyTemplate, 
     }
 
 #This gets the day name
@@ -183,39 +185,37 @@ def getDayName(date_str: str):
 async def generateDailyPlan(request: PlanRequest):
     try:
         
-        customTaskList = [t.model_dump() for t in request.customTasks] if request.customTasks else []
+        userDataRef = db.collection("users").document(request.user_id).collection("data").document("timetable")
+        userData = userDataRef.get()
         
-        if request.classes and len(request.classes) > 0:
-            print("Using classes from request body...")
-            classes = [c.model_dump() for c in request.classes]
-            assignments = []
-        else:
-            print("Checking Firestore...")
-            userDataRef = db.collection("users").document(request.user_id).collection("data").document("timetable")
-            userData = userDataRef.get()
-            
-            if not userData.exists:
-                raise HTTPException(status_code = 404, detail = "No timetable found in Firestore or Request body")
-            
-            data = userData.to_dict()
-            classes = data.get("classes", [])
-            assignments = data.get("assignments", [])
+        if not userData.exists:
+            raise HTTPException(status_code=404, detail = "Please upload a timetable first")
+        
+        data = userData.to_dict()
+        weeklyTemplate = data.get("weekly_template", {})
+        assignments = data.get("assignments", [])
+        
+        #Gets the specific day name
+        dayOfWeek = getDayName(request.date).lower()
+        
+        #Only get classes for the ts (THIS) day
+        todaysClasses = weeklyTemplate.get(dayOfWeek, [])
+        
+        customTaskList = [t.model_dump() for t in request.customTasks] if request.customTasks else []
             #if there are classes passed in the request, it uses those
             
         dayOfWeek = getDayName(request.date)     
         
         #AI optimization for proper scheduling   
-        generatedItems = await aiOptimization(classes, assignments, request.date, dayOfWeek, customTasks = customTaskList)
+        generatedItems = await aiOptimization(todaysClasses, assignments, request.date, dayOfWeek.capitalize(), customTasks = customTaskList)
         print(f"Gemini returned {len(generatedItems)} items.")
         
         planRef = db.collection("users").document(request.user_id).collection("plans").document(request.date)
-        planData = {
+        planRef.set({
             "items": generatedItems,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "customTasksCount": len(customTaskList)
-        }
+        })
         
-        planRef.set(planData)
         print("SUCCESS: Firestore document created/updated.")
         
         return {
