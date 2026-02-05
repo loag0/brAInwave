@@ -6,6 +6,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Modal,
+  TextInput,
+  TouchableWithoutFeedback
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,6 +20,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
 import brainwaveApi from "@/api/brAInwaveApi";
 import { useAlert } from "../contexts/AlertContext";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 interface IconProps {
   color: string;
@@ -66,6 +70,10 @@ export default function Schedule() {
   const { showAlert } = useAlert();
   const [weeklyTemplate, setWeeklyTemplate] = useState<Record<string, any[]>>({});
   const [localCustomTasks, setLocalCustomTasks] = useState<any[]>([]);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [newTask, setNewTask] = useState({ task: '', time: '12:00 PM' });
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [timeValue, setTimeValue] =useState(new Date());
 
   const styles = createStyles(theme);
 
@@ -235,6 +243,34 @@ export default function Schedule() {
     }
   };
 
+  const onTimeChange = (event: any, selectedDate?: Date) => {
+    setShowTimePicker(false);
+
+    if(selectedDate){
+      setTimeValue(selectedDate);
+      const formattedTime = selectedDate.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      setNewTask({ ...newTask, time: formattedTime });
+    }
+  };
+
+  const handleAddTask = () => {
+    if(!newTask.task.trim()){
+      showAlert({
+        title: "Hold Up!",
+        message: "What's the name of the task homeblud?"
+      })
+      return;
+    }
+    setLocalCustomTasks([...localCustomTasks, newTask]);
+    setNewTask({ task: "", time: "12:00 PM" });
+    setModalVisible(false);
+  }
+
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -308,18 +344,28 @@ export default function Schedule() {
         <View style={styles.planContainer}>
           <View style={styles.planHeader}>
             <Text style={styles.planTitle}>
-              {planItems.some(item => item.isTemplate) ? "Class Schedule" : "Daily Plan"}
+              {planItems.some((item) => item.isTemplate)
+                ? "Class Schedule"
+                : "Daily Plan"}
             </Text>
-            {planItems.length > 0 && (
-              <TouchableOpacity onPress={handleRegenerate}>
-                <Text style={[styles.regenerateButton, {color: theme.colors.primary}]}>
-                  {planItems.some(item => item.isTemplate) ? "Optimize with AI" : "Regenerate"}
-                  </Text>
+            {(planItems.length > 0 || localCustomTasks.length > 0) && (
+              <TouchableOpacity onPress={handleRegenerate} disabled={isLoading}>
+                <Text
+                  style={[
+                    styles.regenerateButton,
+                    { color: theme.colors.primary },
+                  ]}
+                >
+                  {planItems.some((item) => item.isTemplate) ||
+                  localCustomTasks.length > 0
+                    ? "Optimize with AI"
+                    : "Regenerate"}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {planItems.length === 0 ? (
+          {planItems.length === 0 && localCustomTasks.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
                 <AISessionsIcon size={48} color={theme.colors.text.secondary} />
@@ -333,83 +379,202 @@ export default function Schedule() {
               </TouchableOpacity>
             </View>
           ) : (
-            planItems.map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.planCard,
-                  item.completed && styles.planCardCompleted,
-                  index !== planItems.length - 1 && styles.planCardMargin,
-                ]}
-              >
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => toggleTaskCompletion(item.id)}
+            <>
+              {/* 1. Main Plan Items (AI Generated or Template Fallback) */}
+              {planItems.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.planCard,
+                    item.completed && styles.planCardCompleted,
+                    styles.planCardMargin,
+                  ]}
                 >
-                  <Ionicons
-                    name={
-                      item.completed ? "checkmark-circle" : "ellipse-outline"
-                    }
-                    size={24}
-                    color={
-                      item.completed
-                        ? theme.colors.primary
-                        : theme.colors.border
-                    }
-                  />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.checkboxContainer}
+                    onPress={() => toggleTaskCompletion(item.id)}
+                  >
+                    <Ionicons
+                      name={
+                        item.completed ? "checkmark-circle" : "ellipse-outline"
+                      }
+                      size={24}
+                      color={
+                        item.completed
+                          ? theme.colors.primary
+                          : theme.colors.border
+                      }
+                    />
+                  </TouchableOpacity>
 
-                <View style={styles.planContent}>
-                  <View style={styles.planTimeContainer}>
-                    <View style={styles.timeRow}>
-                      <ScheduleIcon
-                        color={theme.colors.text.secondary}
-                        size={12}
-                      />
-                      <Text style={styles.timeText}>{item.time}</Text>
-                      <View style={styles.durationBadge}>
-                        <Text style={styles.durationText}>{item.duration}</Text>
+                  <View style={styles.planContent}>
+                    <View style={styles.planTimeContainer}>
+                      <View style={styles.timeRow}>
+                        <ScheduleIcon
+                          color={theme.colors.text.secondary}
+                          size={12}
+                        />
+                        <Text style={styles.timeText}>{item.time}</Text>
+                        <View style={styles.durationBadge}>
+                          <Text style={styles.durationText}>
+                            {item.duration || "60 min"}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-
-                  <Text
-                    style={[
-                      styles.taskTitle,
-                      item.completed && styles.taskTitleCompleted,
-                    ]}
-                  >
-                    {item.task}
-                  </Text>
-                  <Text style={styles.subjectText}>{item.subject}</Text>
-
-                  <View
-                    style={[
-                      styles.difficultyBadge,
-                      { backgroundColor: getDifficultyColor(item.difficulty) },
-                    ]}
-                  >
                     <Text
                       style={[
-                        styles.difficultyText,
-                        { color: getDifficultyTextColor(item.difficulty) },
+                        styles.taskTitle,
+                        item.completed && styles.taskTitleCompleted,
                       ]}
                     >
-                      {item.difficulty}
+                      {item.task}
                     </Text>
+                    <Text style={styles.subjectText}>{item.subject}</Text>
+                    <View
+                      style={[
+                        styles.difficultyBadge,
+                        {
+                          backgroundColor: getDifficultyColor(item.difficulty),
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.difficultyText,
+                          { color: getDifficultyTextColor(item.difficulty) },
+                        ]}
+                      >
+                        {item.difficulty}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))
+              ))}
+
+              {/* 2. Locally Added Tasks (Pending AI Optimization) */}
+              {localCustomTasks.map((task, index) => (
+                <View
+                  key={`local-${index}`}
+                  style={[
+                    styles.planCard,
+                    {
+                      borderColor: theme.colors.primary,
+                      borderStyle: "dashed",
+                      borderWidth: 1,
+                      marginBottom: 12,
+                    },
+                  ]}
+                >
+                  <View style={styles.checkboxContainer}>
+                    <Ionicons
+                      name="time-outline"
+                      size={24}
+                      color={theme.colors.primary}
+                    />
+                  </View>
+                  <View style={styles.planContent}>
+                    <View style={styles.timeRow}>
+                      <Text style={styles.timeText}>{task.time}</Text>
+                      <View
+                        style={[
+                          styles.durationBadge,
+                          { backgroundColor: theme.colors.primary + "20" },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.durationText,
+                            { color: theme.colors.primary, fontSize: 10 },
+                          ]}
+                        >
+                          PENDING AI
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.taskTitle}>{task.task}</Text>
+                    <Text style={styles.subjectText}>Custom Task</Text>
+                  </View>
+                </View>
+              ))}
+            </>
           )}
         </View>
 
-        {/* Add Custom Task Button */}
+        {/* Add Custom Task Trigger Button */}
         <View style={styles.addTaskContainer}>
-          <TouchableOpacity style={styles.addTaskButton}>
+          <TouchableOpacity
+            style={styles.addTaskButton}
+            onPress={() => setModalVisible(true)}
+          >
             <Text style={styles.addTaskText}>+ Add custom task</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Modal for adding task */}
+        <Modal visible={isModalVisible} animationType="fade" transparent={true}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)} // Closes when tapping outside
+          >
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Add Custom Task</Text>
+
+                <Text style={styles.inputLabel}>Task Name</Text>
+                <TextInput
+                  style={[styles.input, !newTask.task && styles.inputError]}
+                  placeholder="e.g., Gym, Grocery Shopping..."
+                  placeholderTextColor={theme.colors.text.secondary}
+                  value={newTask.task}
+                  onChangeText={(text) =>
+                    setNewTask({ ...newTask, task: text })
+                  }
+                />
+
+                <Text style={styles.inputLabel}>Set Time</Text>
+                <TouchableOpacity
+                  style={styles.timePickerButton}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Ionicons
+                    name="time-outline"
+                    size={20}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.timePickerText}>{newTask.time}</Text>
+                </TouchableOpacity>
+
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={timeValue}
+                    mode="time"
+                    is24Hour={false}
+                    display="spinner" // Use 'default' for Android/iOS specific style
+                    onChange={onTimeChange}
+                  />
+                )}
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.confirmButton]}
+                    onPress={handleAddTask}
+                  >
+                    <Text style={styles.confirmButtonText}>Add Task</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -662,5 +827,78 @@ const createStyles = (theme: Theme) =>
       fontSize: 14,
       fontFamily: theme.fonts.medium,
       color: theme.colors.text.secondary,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      width: "85%",
+      backgroundColor: theme.colors.surface,
+      borderRadius: 20,
+      padding: 20,
+      elevation: 5,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      color: theme.colors.text.primary,
+      marginBottom: 15,
+    },
+    input: {
+      backgroundColor: theme.colors.background,
+      color: theme.colors.text.primary,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    modalButtons: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 10,
+    },
+    modalButton: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 10,
+      alignItems: "center",
+      marginHorizontal: 5,
+    },
+    confirmButton: {
+      backgroundColor: theme.colors.primary,
+    },
+    cancelButton: {
+      backgroundColor: theme.colors.border,
+    },
+    confirmButtonText: { color: "#fff", fontWeight: "bold" },
+    cancelButtonText: { color: theme.colors.text.secondary },
+    inputLabel: {
+      fontSize: 12,
+      color: theme.colors.text.secondary,
+      marginBottom: 5,
+      marginLeft: 4,
+      textTransform: "uppercase",
+    },
+    timePickerButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.colors.background,
+      borderRadius: 10,
+      padding: 15,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    timePickerText: {
+      color: theme.colors.text.primary,
+      marginLeft: 10,
+      fontSize: 16,
+    },
+    inputError: {
+      borderColor: theme.colors.error + "50",
     },
   });

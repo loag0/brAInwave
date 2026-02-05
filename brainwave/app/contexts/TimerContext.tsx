@@ -24,6 +24,17 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
   const progress = timeLeftInSeconds / totalSeconds;
 
   useEffect(() => {
+    const handleFinish = () => {
+      setIsRunning(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert({
+        title: "Session Complete! 🏆",
+        message: "You earned 25 XP. Take a 5-minute break.",
+        confirmText: "LFG!",
+      });
+      resetTimer();
+    };
+
     if (isRunning) {
       intervalRef.current = setInterval(() => {
         setSeconds((prev) => {
@@ -42,18 +53,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
       clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
-  }, [isRunning, minutes]);
-
-  const handleFinish = () => {
-    setIsRunning(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showAlert({
-      title: "Session Complete! 🏆",
-      message: "You earned 25 XP. Take a 5-minute break.",
-      confirmText: "LFG!",
-    });
-    resetTimer();
-  };
+  }, [showAlert, isRunning, minutes]);
 
   const resetTimer = () => {
     setIsRunning(false);
@@ -74,6 +74,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
         seconds,
         progress, // Shared with Nav Bar
         isRunning,
+        setIsRunning,
         isKeepAwake,
         setIsKeepAwake,
         toggleTimer,
