@@ -595,5 +595,6 @@ const createStyles = (theme: Theme) =>
       color: theme.colors.text.secondary,
       textAlign: "center",
       paddingVertical: theme.spacing.lg,
+      marginBottom: -67
     },
   });

@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState } from "react";
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useTheme } from "./ThemeContext";
+import Svg, { Path } from "react-native-svg"
 
 interface AlertOptions {
   title: string;
   message: string;
+  iconPath?: string,
+  iconColor?: string,
   onConfirm?: () => void;
   onCancel?: () => void; // Added cancel
   confirmText?: string;
@@ -42,63 +45,74 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
           <View
             style={[styles.alertBox, { backgroundColor: theme.colors.surface }]}
           >
-            <Text style={[styles.title, { color: theme.colors.text.primary }]}>
+            {/* Render Icon if path exists */}
+            {config.iconPath && (
+              <View style={styles.iconContainer}>
+                <Svg width="32" height="32" viewBox="0 0 24 24">
+                  <Path
+                    d={config.iconPath}
+                    fill={config.iconColor || theme.colors.primary}
+                  />
+                </Svg>
+              </View>
+            )}
+
+            <Text
+              style={[
+                styles.title,
+                {
+                  color: theme.colors.text.primary,
+                  textAlign: config.iconPath ? "center" : "left", // Center if there's an icon
+                },
+              ]}
+            >
               {config.title}
             </Text>
+
             <Text
-              style={[styles.message, { color: theme.colors.text.secondary }]}
+              style={[
+                styles.message,
+                {
+                  color: theme.colors.text.secondary,
+                  textAlign: config.iconPath ? "center" : "left",
+                },
+              ]}
             >
               {config.message}
             </Text>
 
-            {/* Buttons Container now INSIDE alertBox */}
-            <View
-              style={[
-                styles.buttonContainer,
-                { flexDirection: config.showCancel ? "row" : "column" },
-              ]}
-            >
+            <View style={styles.buttonContainer}>
               {config.showCancel && (
                 <TouchableOpacity
-                  style={[
-                    styles.button,
-                    styles.cancelButton,
-                    {
-                      borderColor: theme.colors.border,
-                      marginRight: 10,
-                      flex: 1,
-                    },
-                  ]}
+                  style={styles.textButton}
                   onPress={() => {
-                    if (config.onCancel) config.onCancel();
+                    config.onCancel?.();
                     hideAlert();
                   }}
                 >
                   <Text
                     style={[
-                      styles.buttonText,
-                      { color: theme.colors.text.secondary },
+                      styles.buttonLabel,
+                      { color: theme.colors.primary },
                     ]}
                   >
                     {config.cancelText || "Cancel"}
                   </Text>
                 </TouchableOpacity>
               )}
-
               <TouchableOpacity
-                style={[
-                  styles.button,
-                  {
-                    backgroundColor: theme.colors.primary,
-                    flex: config.showCancel ? 1 : 0,
-                  },
-                ]}
+                style={styles.textButton}
                 onPress={() => {
-                  if (config.onConfirm) config.onConfirm();
+                  config.onConfirm?.();
                   hideAlert();
                 }}
               >
-                <Text style={styles.buttonText}>
+                <Text
+                  style={[
+                    styles.buttonLabel,
+                    { color: theme.colors.primary, fontWeight: "700" },
+                  ]}
+                >
                   {config.confirmText || "OK"}
                 </Text>
               </TouchableOpacity>
@@ -115,37 +129,46 @@ export const useAlert = () => useContext(AlertContext);
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.5)", // Slightly lighter overlay is more modern
     justifyContent: "center",
     alignItems: "center",
   },
   alertBox: {
-    width: "85%",
+    width: "80%", // Material standard
     padding: 24,
-    borderRadius: 20,
-    alignItems: "center",
-    elevation: 10,
+    borderRadius: 28, // Material 3 uses larger border radii
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 12 },
+  iconContainer: { marginBottom: 16, alignItems: "center" },
+  title: {
+    fontSize: 24, // M3 Headline Small
+    fontWeight: "400",
+    marginBottom: 16,
+    textAlign: "left", // Left align for Material
+  },
   message: {
-    textAlign: "center",
-    fontSize: 16,
+    fontSize: 14, // M3 Body Medium
     marginBottom: 24,
-    lineHeight: 22,
+    lineHeight: 20,
+    textAlign: "left",
   },
   buttonContainer: {
+    flexDirection: "row",
+    justifyContent: "flex-end", // Standard Material button placement
     width: "100%",
-    justifyContent: "space-between",
   },
-  button: {
-    width: "100%",
-    padding: 15,
-    borderRadius: 12,
-    alignItems: "center",
+  textButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginLeft: 8,
   },
-  cancelButton: {
-    borderWidth: 1,
-    backgroundColor: "transparent",
+  buttonLabel: {
+    fontSize: 14,
+    textTransform: "uppercase", // Optional: classic material look
+    letterSpacing: 0.5,
   },
-  buttonText: { color: "white", fontWeight: "bold", fontSize: 16 },
 });
