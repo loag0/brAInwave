@@ -35,13 +35,26 @@ export default function FocusScreen() {
   useKeepAwake();
 
   const requestPermissions = async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== "granted") {
+
+    //checking if we don't already have permission
+    const { status:existingStatus } = await Notifications.requestPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    //if not, ask
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+
+      finalStatus = status;
+    }
+
+    if(finalStatus !== "granted"){
       showAlert({
-        title: "Error!",
+        title: "Notifications Disabled!",
         message: "Enable notifications to hear the timer while in other apps",
       });
+      return false;
     }
+    return true;
   };
 
   useEffect(() => {
