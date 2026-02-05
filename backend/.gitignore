@@ -16,6 +16,8 @@ venv/
 *.sqlite
 *.sqlite3
 
+serviceAccountKey.json
+
 # model / cache stuff
 models/
 .cache/

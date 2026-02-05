@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { useTheme } from "../contexts/ThemeContext";
 import Svg, { Path } from "react-native-svg";
+import { PomoTabIcon } from "@/components/PomoTabIcon";
 
 export default function TabsLayout() {
   const { theme } = useTheme(); // 'light', 'dark', or null
@@ -75,6 +76,15 @@ export default function TabsLayout() {
             tabBarIcon: ({ color, size }) => (
               <PlannerIcon color={color} size={size} />
             ),
+          }}
+        />
+        <Tabs.Screen 
+          name="focus"
+          options={{
+            title: "Focus",
+            tabBarIcon: ({ color, focused }) => (
+              <PomoTabIcon color = {color} focused = {focused} />
+            )
           }}
         />
         <Tabs.Screen

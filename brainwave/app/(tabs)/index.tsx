@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   Modal,
+  ActivityIndicator,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -14,8 +16,13 @@ import { useAuth } from "../contexts/AuthContext";
 import { useAlert } from "../contexts/AlertContext";
 import { useTimer } from "../contexts/TimerContext";
 import { Theme } from "../types";
-import { FontAwesome } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
+import { doc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { db as firestore } from "@/firebaseConfig";
+import * as DocumentPicker from "expo-document-picker";
+import brainwaveApi from "@/api/brAInwaveApi";
+import { router } from "expo-router";
+import Skeleton from "@/components/HomeSkeleton"
 
 const { width } = Dimensions.get("window");
 
@@ -25,20 +32,196 @@ interface IconProps {
 }
 
 const CloseIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
-        fill={color}
-      />
-    </Svg>
-  );
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
+      fill={color}
+    />
+  </Svg>
+);
+
+const HomeSkeleton = ({ styles, theme }: any) => (
+  <View style={styles.container}>
+    <ScrollView style={styles.scrollView}>
+      {/* Header Skeleton */}
+      <View style={styles.headerBg}>
+        <View style={styles.headerContent}>
+          <Skeleton width={180} height={28} style={{ marginBottom: 8 }} />
+          <Skeleton width={140} height={18} />
+        </View>
+        <View
+          style={[
+            styles.progressCard,
+            { height: 120, justifyContent: "center" },
+          ]}
+        >
+          <Skeleton width="60%" height={20} style={{ marginBottom: 15 }} />
+          <Skeleton
+            width="90%"
+            height={10}
+            borderRadius={5}
+            style={{ marginBottom: 15 }}
+          />
+          <Skeleton width="40%" height={14} />
+        </View>
+      </View>
+
+      <View style={styles.content}>
+        {/* Card Skeletons */}
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={[styles.card, { padding: 20 }]}>
+            <View style={{ flexDirection: "row", marginBottom: 20 }}>
+              <Skeleton width={30} height={30} borderRadius={15} />
+              <Skeleton width={120} height={24} style={{ marginLeft: 10 }} />
+            </View>
+            <Skeleton
+              width="100%"
+              height={60}
+              borderRadius={12}
+              style={{ marginBottom: 10 }}
+            />
+            <Skeleton width="100%" height={60} borderRadius={12} />
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  </View>
+);
 
 export default function Home() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
-  const { setIsModalVisible } = useTimer();
+  const [classes, setClasses] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [suggestedSessions, setSuggestedSessions] = useState<any[]>([]);
+  const [ isLoading, setIsLoading ] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
+
+  const styles = createStyles(theme, isDark);
+  // 1. LISTEN TO FIRESTORE ON MOUNT
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Listen to Timetable (Classes + Assignments)
+    const unsubSchedules = onSnapshot(
+      doc(firestore, "users", user.id, "data", "timetable"),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+
+          const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+          const todayName = days[new Date().getDay()];
+
+          const todaysClasses = data.weekly_template?.[todayName] || [];
+          setClasses(todaysClasses);
+          setAssignments(data.assignments || []);
+        }
+        //when data arrives, kill the skelly
+        setIsInitialLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        setIsInitialLoading(false); //if there's an error, cancel the loading skelly
+      }
+    );
+
+    // Listen to AI Suggested Sessions
+    const unsubSessions = onSnapshot(
+      doc(firestore, "users", user.id, "data", "ai_suggestions"),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setSuggestedSessions(docSnap.data().sessions || []);
+        }
+      },
+    );
+
+    const fallbackTimer = setTimeout(() => {
+      setIsInitialLoading(false);
+    }, 5000);
+
+    return () => {
+      unsubSchedules();
+      unsubSessions();
+      clearTimeout(fallbackTimer);
+    };
+  }, [user?.id]);
+
+  if (isInitialLoading){
+    return <HomeSkeleton styles = {styles} theme = {theme} />
+  }
+
+  const handleUploadSchedule = async () => {
+    try {
+      setIsLoading(true);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets) {
+        setIsLoading(false);
+        return;
+      }
+
+      const fileAsset = result.assets[0];
+
+      // Fixed: Passing separate arguments to match your BrAInwaveAPI class
+      const response = await brainwaveApi.uploadTimetable(
+        fileAsset.uri,
+        fileAsset.name,
+        fileAsset.mimeType || "application/octet-stream",
+      );
+
+      if (!user?.id) return;
+
+      const weeklyData = {
+        monday: response.classes.filter(
+          (c: { day: string }) => c.day === "Monday",
+        ),
+        tuesday: response.classes.filter((c: { day: string }) => c.day === "Tuesday"),
+        wednesday: response.classes.filter((c: { day: string }) => c.day === "Wednesday"),
+        thursday: response.classes.filter((c: { day: string }) => c.day === "Thursday"),
+        friday: response.classes.filter((c: { day: string }) => c.day === "Friday"),
+        saturday: response.classes.filter((c: { day: string }) => c.day === "Saturday"),
+        sunday: response.classes.filter((c: { day: string }) => c.day === "Sunday"),
+      };
+
+      // Save the response data to Firestore
+      // Assuming response contains { classes: [], assignments: [] }
+      await setDoc(
+        doc(firestore, "users", user.id, "data", "timetable"),
+        {
+          weekly_template: weeklyData || [],
+          assignments: response.assignments || [],
+          uploadedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      alert("File has been successfully uploaded and processed!");
+      setShowUploadMenu(false);
+    } catch (error) {
+      console.error("Upload Error:", error);
+      Alert.alert("Error", "Failed to upload. Check your connection.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  function toggleAssignment(id: number) {
+    setCheckedAssignments((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  }
+
+  function getPriorityColor(priority: string) {
+    const p = priority?.toLowerCase();
+    if (p === "high") return theme.colors.error;
+    if (p === "medium") return theme.colors.warning;
+    return theme.colors.text.secondary;
+  }
 
   const AddIcon: React.FC<IconProps> = ({ size, color }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
@@ -49,20 +232,12 @@ export default function Home() {
     </Svg>
   );
 
-  const PomodoroIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path 
-      d="M360-840v-80h240v80H360Zm80 440h80v-240h-80v240Zm40 320q-74 0-139.5-28.5T226-186q-49-49-77.5-114.5T120-440q0-74 28.5-139.5T226-694q49-49 114.5-77.5T480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80Zm0-80q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Zm0-280Z"
-      fill={color}
-      />
-      </Svg>
-  );
-
-  const TodayIcon: React.FC<IconProps> = ({ size, color}) => (
-    <Svg width = {size} height = {size} viewBox = "0 -960 960 960" fill={color}>
-      <Path 
+  const TodayIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill={color}>
+      <Path
         d="M360-300q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Z"
-        fill={color} />
+        fill={color}
+      />
     </Svg>
   );
 
@@ -87,7 +262,9 @@ export default function Home() {
   const CheckIcon: React.FC<IconProps> = ({ size, color }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
-        d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z" fill={color} />
+        d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"
+        fill={color}
+      />
     </Svg>
   );
 
@@ -100,95 +277,26 @@ export default function Home() {
     </Svg>
   );
 
-  const upcomingClasses = [
-    {
-      id: 1,
-      name: "Data Structures",
-      time: "10:00 AM",
-      room: "CS-201",
-      color: theme.colors.primary,
-    },
-    {
-      id: 2,
-      name: "Calculus II",
-      time: "2:00 PM",
-      room: "MATH-105",
-      color: "#4a4a4a",
-    },
-    {
-      id: 3,
-      name: "English Literature",
-      time: "4:30 PM",
-      room: "ENG-302",
-      color: "#6a6a6a",
-    },
-  ];
-
-  const assignments = [
-    {
-      id: 1,
-      title: "Algorithm Analysis Essay",
-      subject: "Data Structures",
-      due: "Tomorrow",
-      priority: "high",
-    },
-    {
-      id: 2,
-      title: "Chapter 5 Practice Problems",
-      subject: "Calculus II",
-      due: "3 days",
-      priority: "medium",
-    },
-    {
-      id: 3,
-      title: "Book Report Draft",
-      subject: "English Literature",
-      due: "1 week",
-      priority: "low",
-    },
-  ];
-
-  const studySessions = [
-    {
-      id: 1,
-      subject: "Data Structures",
-      duration: "45 min",
-      time: "8:00 PM",
-      type: "Review",
-    },
-    {
-      id: 2,
-      subject: "Calculus II",
-      duration: "60 min",
-      time: "9:00 PM",
-      type: "Practice",
-    },
-  ];
-
-  function toggleAssignment(id: number) {
-    setCheckedAssignments((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  }
-
-  function getPriorityColor(priority: string) {
-    if (priority === "high") return theme.colors.error;
-    if (priority === "medium") return theme.colors.warning;
-    return theme.colors.text.secondary;
-  }
-
-  const styles = createStyles(theme, isDark);
-
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      {isLoading && (
+        <View style={styles.loaderOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.dateText, { marginTop: 10 }]}>
+            brAInwave is analyzing your schedule...
+          </Text>
+        </View>
+      )}
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header Section */}
         <View style={styles.headerBg}>
           <View style={styles.headerContent}>
             <Text style={styles.welcomeText}>
-              Welcome back, {user?.name?.split(" ")[0] || "Kirk"}!
+              Welcome back, {user?.name?.split(" ")[0] || "User"}!
             </Text>
             <Text style={styles.dateText}>Thursday, October 17, 2025</Text>
           </View>
@@ -202,20 +310,12 @@ export default function Home() {
               <View style={styles.progressBarFill} />
             </View>
             <Text style={styles.progressMessage}>
-              Great! You're on track 🎯
+              Great! You're on track to meet your daily study goal.
             </Text>
           </View>
         </View>
 
         <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.pomodoroButton}
-            onPress={() => setIsModalVisible(true)}
-          >
-            <PomodoroIcon color={theme.colors.secondary} size={24} />
-            <Text style={styles.pomodoroText}>Start Pomodoro Session</Text>
-          </TouchableOpacity>
-
           {/* Classes Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -223,34 +323,42 @@ export default function Home() {
                 <TodayIcon size={24} color={theme.colors.text.secondary} />
                 <Text style={styles.cardTitle}>Today's Classes</Text>
               </View>
-              <Text style={styles.viewAllText}>View All</Text>
+              <TouchableOpacity onPress={() => router.push("/planner")}>
+                <Text style={styles.viewAllText}>View All</Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.cardContent}>
-              {upcomingClasses.map((cls, idx) => (
-                <View
-                  key={cls.id}
-                  style={[
-                    styles.classItem,
-                    idx !== upcomingClasses.length - 1 && styles.itemMargin,
-                  ]}
-                >
+              {classes.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  No classes scheduled yet. Upload your timetable!
+                </Text>
+              ) : (
+                classes.slice(0, 3).map((cls, idx) => (
                   <View
-                    style={[
-                      styles.classIndicator,
-                      { backgroundColor: cls.color },
-                    ]}
-                  />
-                  <View style={styles.classInfo}>
-                    <Text style={styles.className}>{cls.name}</Text>
-                    <View style={styles.classDetails}>
-                      <ScheduleIcon size={10} color={theme.colors.text.secondary} />
-                      <Text style={styles.classTime}>{cls.time}</Text>
-                      <Text style={styles.classSeparator}>•</Text>
-                      <Text style={styles.classRoom}>{cls.room}</Text>
+                    key={idx}
+                    style={[styles.classItem, idx !== 2 && styles.itemMargin]}
+                  >
+                    <View
+                      style={[
+                        styles.classIndicator,
+                        { backgroundColor: theme.colors.primary },
+                      ]}
+                    />
+                    <View style={styles.classInfo}>
+                      <Text style={styles.className}>{cls.subject}</Text>
+                      <View style={styles.classDetails}>
+                        <ScheduleIcon
+                          size={10}
+                          color={theme.colors.text.secondary}
+                        />
+                        <Text style={styles.classTime}>{cls.time}</Text>
+                        <Text style={styles.classSeparator}>•</Text>
+                        <Text style={styles.classRoom}>{cls.room}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                ))
+              )}
             </View>
           </View>
 
@@ -258,68 +366,76 @@ export default function Home() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
-                <AssignmentIcon color={theme.colors.text.secondary} size={24}/>
+                <AssignmentIcon color={theme.colors.text.secondary} size={24} />
                 <Text style={styles.cardTitle}>Assignments</Text>
               </View>
               <Text style={styles.viewAllText}>View All</Text>
             </View>
             <View style={styles.cardContent}>
-              {assignments.map((a, idx) => (
-                <View
-                  key={a.id}
-                  style={[
-                    styles.assignmentItem,
-                    idx !== assignments.length - 1 && styles.itemMargin,
-                  ]}
-                >
-                  <TouchableOpacity
-                    style={styles.checkbox}
-                    onPress={() => toggleAssignment(a.id)}
+              {assignments.length === 0 ? (
+                <Text style={styles.emptyText}>No upcoming assignments.</Text>
+              ) : (
+                assignments.map((a, idx) => (
+                  <View
+                    key={a.id || idx}
+                    style={[
+                      styles.assignmentItem,
+                      idx !== assignments.length - 1 && styles.itemMargin,
+                    ]}
                   >
-                    {checkedAssignments.includes(a.id) && (
-                      <CheckIcon size={18} color={theme.colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                  <View style={styles.assignmentInfo}>
-                    <Text
-                      style={[
-                        styles.assignmentTitle,
-                        checkedAssignments.includes(a.id) &&
-                          styles.assignmentTitleChecked,
-                      ]}
+                    <TouchableOpacity
+                      style={styles.checkbox}
+                      onPress={() => toggleAssignment(a.id)}
                     >
-                      {a.title}
-                    </Text>
-                    <Text style={styles.assignmentSubject}>{a.subject}</Text>
-                    <View
-                      style={[
-                        styles.badge,
-                        {
-                          backgroundColor: getPriorityColor(a.priority) + "20",
-                        },
-                      ]}
-                    >
+                      {checkedAssignments.includes(a.id) && (
+                        <CheckIcon size={18} color={theme.colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                    <View style={styles.assignmentInfo}>
                       <Text
                         style={[
-                          styles.badgeText,
-                          { color: getPriorityColor(a.priority) },
+                          styles.assignmentTitle,
+                          checkedAssignments.includes(a.id) &&
+                            styles.assignmentTitleChecked,
                         ]}
                       >
-                        Due {a.due}
+                        {a.title}
                       </Text>
+                      <Text style={styles.assignmentSubject}>{a.subject}</Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          {
+                            backgroundColor:
+                              getPriorityColor(a.priority) + "20",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgeText,
+                            { color: getPriorityColor(a.priority) },
+                          ]}
+                        >
+                          Due {a.due}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                ))
+              )}
             </View>
           </View>
 
-          {/* AI Suggested Sessions */}
+          {/* AI Suggested Sessions Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View>
                 <View style={styles.cardTitleContainer}>
-                  <AISessionsIcon color={theme.colors.text.secondary} size={24} />
+                  <AISessionsIcon
+                    color={theme.colors.text.secondary}
+                    size={24}
+                  />
                   <Text style={styles.cardTitle}>AI Suggested Sessions</Text>
                 </View>
                 <Text style={styles.aiSubtitle}>
@@ -328,30 +444,43 @@ export default function Home() {
               </View>
             </View>
             <View style={styles.cardContent}>
-              {studySessions.map((session, idx) => (
-                <View
-                  key={session.id}
-                  style={[
-                    styles.sessionItem,
-                    idx !== studySessions.length - 1 && styles.itemMargin,
-                  ]}
-                >
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionSubject}>{session.subject}</Text>
-                    <View style={styles.sessionDetails}>
-                      <ScheduleIcon size={12} color={theme.colors.text.secondary} />
-                      <Text style={styles.sessionTime}>{session.time}</Text>
-                      <Text style={styles.sessionSeparator}>•</Text>
-                      <Text style={styles.sessionDuration}>
-                        {session.duration}
+              {suggestedSessions.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  Upload a schedule to get AI sessions.
+                </Text>
+              ) : (
+                suggestedSessions.map((session, idx) => (
+                  <View
+                    key={session.id || idx}
+                    style={[
+                      styles.sessionItem,
+                      idx !== suggestedSessions.length - 1 && styles.itemMargin,
+                    ]}
+                  >
+                    <View style={styles.sessionInfo}>
+                      <Text style={styles.sessionSubject}>
+                        {session.subject}
+                      </Text>
+                      <View style={styles.sessionDetails}>
+                        <ScheduleIcon
+                          size={12}
+                          color={theme.colors.text.secondary}
+                        />
+                        <Text style={styles.sessionTime}>{session.time}</Text>
+                        <Text style={styles.sessionSeparator}>•</Text>
+                        <Text style={styles.sessionDuration}>
+                          {session.duration}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.sessionBadge}>
+                      <Text style={styles.sessionBadgeText}>
+                        {session.type}
                       </Text>
                     </View>
                   </View>
-                  <View style={styles.sessionBadge}>
-                    <Text style={styles.sessionBadgeText}>{session.type}</Text>
-                  </View>
-                </View>
-              ))}
+                ))
+              )}
               <TouchableOpacity style={styles.startSessionButton}>
                 <Text style={styles.startSessionText}>Start Study Session</Text>
               </TouchableOpacity>
@@ -373,13 +502,16 @@ export default function Home() {
         <UploadMenu
           theme={theme}
           onClose={() => setShowUploadMenu(false)}
-          onSelectOption={(opt: string) => console.log("selected:", opt)}
+          onSelectOption={(opt: string) => {
+            if (opt === "schedule") handleUploadSchedule();
+          }}
         />
       )}
     </SafeAreaView>
   );
 }
 
+// POMODORO MODAL COMPONENT
 export const PomodoroTimer = () => {
   const { theme } = useTheme();
   const { showAlert } = useAlert();
@@ -422,12 +554,10 @@ export const PomodoroTimer = () => {
       onRequestClose={handleDismiss}
     >
       <View style={pomoStyles.overlay}>
-        <View
-          style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
+        <View style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
         >
           <TouchableOpacity style={pomoStyles.close} onPress={handleDismiss}>
-            <CloseIcon size={24} color={theme.colors.text.secondary}
-            />
+            <CloseIcon size={24} color={theme.colors.text.secondary} />
           </TouchableOpacity>
 
           <Text
@@ -471,13 +601,39 @@ export const PomodoroTimer = () => {
   );
 };
 
+// UPLOAD MENU COMPONENT
 const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
-
-  //this is for the upload menu modal. still havent gotten to mapping the different icons yet
   const CalendarIcon: React.FC<IconProps> = ({ size, color }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
         d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Zm280 240q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-160 0q-17 0-28.5-11.5T280-440q0-17 11.5-28.5T320-480q17 0 28.5 11.5T360-440q0 17-11.5 28.5T320-400Zm320 0q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-160 0q-17 0-28.5-11.5T280-280q0-17 11.5-28.5T320-320q17 0 28.5 11.5T360-280q0 17-11.5 28.5T320-240Zm320 0q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const UploadSyllabusIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M320-440h320v-80H320v80Zm0 120h320v-80H320v80Zm0 120h200v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const AddAssignmentIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v268q-19-9-39-15.5t-41-9.5v-243H200v560h242q3 22 9.5 42t15.5 38H200Zm0-120v40-560 243-3 280Zm80-40h163q3-21 9.5-41t14.5-39H280v80Zm0-160h244q32-30 71.5-50t84.5-27v-3H280v80Zm0-160h400v-80H280v80ZM720-40q-83 0-141.5-58.5T520-240q0-83 58.5-141.5T720-440q83 0 141.5 58.5T920-240q0 83-58.5 141.5T720-40Zm-20-80h40v-100h100v-40H740v-100h-40v100H600v40h100v100Z"
+        fill={color}
+      />
+    </Svg>
+  );
+
+  const UploadNotesIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d="M440-240h80v-120h120v-80H520v-120h-80v120H320v80h120v120ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"
         fill={color}
       />
     </Svg>
@@ -495,25 +651,25 @@ const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
   const uploadOptions = [
     {
       id: "schedule",
-      icon: "calendar",
+      Icon: CalendarIcon,
       label: "Upload schedule",
       description: "Add your class timetable",
     },
     {
       id: "syllabus",
-      icon: "file-text",
+      Icon: UploadSyllabusIcon,
       label: "Upload syllabus",
       description: "Import course syllabus",
     },
     {
       id: "assignment",
-      icon: "clipboard",
+      Icon: AddAssignmentIcon,
       label: "Add assignment",
       description: "Create a new task",
     },
     {
       id: "notes",
-      icon: "sticky-note",
+      Icon: UploadNotesIcon,
       label: "Upload notes",
       description: "Add study materials",
     },
@@ -538,54 +694,56 @@ const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
             <CloseIcon size={32} color={theme.colors.text.secondary} />
           </TouchableOpacity>
         </View>
-        {uploadOptions.map((opt) => (
-          <TouchableOpacity
-            key={opt.id}
-            style={[
-              menuStyles.option,
-              {
-                backgroundColor: theme.colors.background,
-                borderColor: theme.colors.border,
-              },
-            ]}
-            onPress={() => {
-              onSelectOption(opt.id);
-              onClose();
-            }}
-          >
-            <View
+
+        {uploadOptions.map((opt) => {
+          const Icon = opt.Icon;
+
+          return (
+            <TouchableOpacity
+              key={opt.id}
               style={[
-                menuStyles.iconContainer,
-                { backgroundColor: theme.colors.primary + "22" },
+                menuStyles.option,
+                {
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.border,
+                },
               ]}
+              onPress={() => {
+                onSelectOption(opt.id);
+                onClose();
+              }}
             >
-              <FontAwesome
-                name={opt.icon as any}
-                size={24}
-                color={theme.colors.primary}
-              />
-            </View>
-            <View style={menuStyles.optionText}>
-              <Text
+              <View
                 style={[
-                  menuStyles.optionLabel,
-                  { color: theme.colors.text.primary },
+                  menuStyles.iconContainer,
+                  { backgroundColor: theme.colors.primary + "22" },
                 ]}
               >
-                {opt.label}
-              </Text>
-              <Text
-                style={[
-                  menuStyles.optionDescription,
-                  { color: theme.colors.text.secondary },
-                ]}
-              >
-                {opt.description}
-              </Text>
-            </View>
-            <ChevronRightIcon size={36} color={theme.colors.text.secondary} />
-          </TouchableOpacity>
-        ))}
+                <Icon size={24} color={theme.colors.primary} />
+              </View>
+
+              <View style={menuStyles.optionText}>
+                <Text
+                  style={[
+                    menuStyles.optionLabel,
+                    { color: theme.colors.text.primary },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+                <Text
+                  style={[
+                    menuStyles.optionDescription,
+                    { color: theme.colors.text.secondary },
+                  ]}
+                >
+                  {opt.description}
+                </Text>
+              </View>
+              <ChevronRightIcon size={36} color={theme.colors.text.secondary} />
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </TouchableOpacity>
   );
@@ -600,6 +758,13 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       paddingTop: 20,
       paddingBottom: 40,
       backgroundColor: isDark ? "#2d2d2d" : "#f9f9f9",
+    },
+    loaderOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: "rgba(0,0,0,0.7)",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 999,
     },
     headerContent: {
       paddingLeft: theme.spacing.lg,
@@ -655,6 +820,12 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       color: theme.colors.text.secondary,
       fontFamily: theme.fonts.regular,
       fontSize: 12,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: theme.colors.text.secondary,
+      textAlign: "center",
+      paddingVertical: 10,
     },
     content: { padding: 24, paddingBottom: 120 },
     pomodoroButton: {
