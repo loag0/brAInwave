@@ -75,14 +75,15 @@ class BrAInwaveAPI {
         }
     }
 
-    async generateDailyPlan(userId, date){
+    async generateDailyPlan(userId, date, customTasks = []){
         try{
             const response = await axios.post(`${API_BASE_URL}/generate-plan/`, {
                 user_id: userId,
-                date: date
+                date: date,
+                customTasks: customTasks
             }, {
                 headers: {
-                    "Content-Type": "applications/json"
+                    "Content-Type": "application/json"
                 },
                 timeout: 30000
             });

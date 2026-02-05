@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -65,6 +64,8 @@ export default function Schedule() {
   const [ planItems, setPlanItems ] = useState<any[]>([]);
   const [ isLoading, setLoading ] = useState(true);
   const { showAlert } = useAlert();
+  const [weeklyTemplate, setWeeklyTemplate] = useState<Record<string, any[]>>({});
+  const [localCustomTasks, setLocalCustomTasks] = useState<any[]>([]);
 
   const styles = createStyles(theme);
 
@@ -100,11 +101,11 @@ export default function Schedule() {
 
     setLoading(true);
 
-    const unsub = onSnapshot(
-      doc(firestore, "users", user.id, "plans", selectedDay),
+    const unsubTemplate = onSnapshot(
+      doc(firestore, "users", user.id, "plans", "timetable"),
       (docSnap) => {
         if (docSnap.exists()) {
-          setPlanItems(docSnap.data().items || []);
+          setWeeklyTemplate(docSnap.data().weekly_template || {});
         }
         setLoading(false);
       },
@@ -114,8 +115,45 @@ export default function Schedule() {
       },
     );
 
-    return () => unsub();
-  }, [user?.id, selectedDay]);
+    return () => unsubTemplate();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if(!user?.id) return;
+    setLoading(true);
+
+    const unsubPlan = onSnapshot(
+      doc(firestore, "users", user.id, "plans", selectedDay),
+      (docSnap) => {
+        if(docSnap.exists()){
+          //if there is a generated plan, show that
+          setPlanItems(docSnap.data().items || [])
+        } else{
+
+          //FALLBACK: if there is no plan, then just show classes from the template
+          const dateObj = new Date(selectedDay);
+          const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long'}).toLowerCase();
+
+          const templateClasses = weeklyTemplate?.[dayName] || [];
+
+          const formattedItems = templateClasses.map((cls: any, index: number) => ({
+            id: `temp-${index}`,
+            time: cls.time,
+            subject: cls.subject,
+            task: "Class Lecture",
+            duration: "1 hour",
+            completed: false,
+            difficulty: "medium",
+            isTemplate: true,
+          }));
+
+          setPlanItems(formattedItems);
+        }
+        setLoading(false);
+      }
+    );
+    return () => unsubPlan();
+  }, [user?.id, selectedDay, weeklyTemplate]);
 
   const toggleTaskCompletion = (id: number) => {
     setPlanItems((items) =>
@@ -157,7 +195,10 @@ export default function Schedule() {
     
     try {
       if (!user?.id) {
-        Alert.alert("Error", "User information is not available.");
+        showAlert({
+          title: "Error",
+          message: "User info is not available"
+        });
         return;
       }
 
@@ -166,17 +207,16 @@ export default function Schedule() {
       const response = await brainwaveApi.generateDailyPlan(
         user.id,
         selectedDay,
+        localCustomTasks
       );
 
-      await brainwaveApi.generateDailyPlan(user.id, selectedDay)
-
       if (response.success) {
+        setLocalCustomTasks([]);
         showAlert({
           title: "Schedule Optimized",
-          message: `brAInwave has successfully reorganized your classes and study blocks for ${selectedDay}`,
+          message: "brAInwave has successfully integrated your classes, assignments, and custom tasks!",
           iconPath: ICONS.SUCCESS,
-          iconColor: "#4CAF50",
-          confirmText: "View Plan",
+          confirmText: "Ok",
         })
       }
     } catch (error) {
@@ -267,10 +307,14 @@ export default function Schedule() {
         {/* Study Plan */}
         <View style={styles.planContainer}>
           <View style={styles.planHeader}>
-            <Text style={styles.planTitle}>Today's schedule</Text>
+            <Text style={styles.planTitle}>
+              {planItems.some(item => item.isTemplate) ? "Class Schedule" : "Daily Plan"}
+            </Text>
             {planItems.length > 0 && (
               <TouchableOpacity onPress={handleRegenerate}>
-                <Text style={styles.regenerateButton}>Regenerate</Text>
+                <Text style={[styles.regenerateButton, {color: theme.colors.primary}]}>
+                  {planItems.some(item => item.isTemplate) ? "Optimize with AI" : "Regenerate"}
+                  </Text>
               </TouchableOpacity>
             )}
           </View>

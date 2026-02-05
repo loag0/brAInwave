@@ -14,9 +14,14 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
   const { showAlert } = useAlert();
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
+  const [totalSeconds, setTotalSeconds] = useState(25 * 60); // Total duration
   const [isRunning, setIsRunning] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isKeepAwake, setIsKeepAwake] = useState(false); // Screen always on
   const intervalRef = useRef<any>(null);
+
+  // Derived value for the progress ring: (Current Seconds / Total Seconds)
+  const timeLeftInSeconds = minutes * 60 + seconds;
+  const progress = timeLeftInSeconds / totalSeconds;
 
   useEffect(() => {
     if (isRunning) {
@@ -54,6 +59,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
     setIsRunning(false);
     setMinutes(25);
     setSeconds(0);
+    setTotalSeconds(25 * 60);
   };
 
   const toggleTimer = () => {
@@ -66,11 +72,12 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
       value={{
         minutes,
         seconds,
+        progress, // Shared with Nav Bar
         isRunning,
+        isKeepAwake,
+        setIsKeepAwake,
         toggleTimer,
         resetTimer,
-        isModalVisible,
-        setIsModalVisible,
       }}
     >
       {children}
