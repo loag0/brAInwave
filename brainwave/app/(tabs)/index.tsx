@@ -8,6 +8,7 @@ import {
   Dimensions,
   Modal,
   ActivityIndicator,
+  Alert
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -17,9 +18,11 @@ import { useTimer } from "../contexts/TimerContext";
 import { Theme } from "../types";
 import Svg, { Path } from "react-native-svg";
 import { doc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
-import { db as firestore } from "../../firebaseConfig";
-import DocumentPicker from "react-native-document-picker";
-import brainwaveApi from "../../api/brAInwaveApi";
+import { db as firestore } from "@/firebaseConfig";
+import * as DocumentPicker from "expo-document-picker";
+import brainwaveApi from "@/api/brAInwaveApi";
+import { router } from "expo-router";
+import Skeleton from "@/components/HomeSkeleton"
 
 const { width } = Dimensions.get("window");
 
@@ -37,21 +40,72 @@ const CloseIcon: React.FC<IconProps> = ({ size, color }) => (
   </Svg>
 );
 
+const HomeSkeleton = ({ styles, theme }: any) => (
+  <View style={styles.container}>
+    <ScrollView style={styles.scrollView}>
+      {/* Header Skeleton */}
+      <View style={styles.headerBg}>
+        <View style={styles.headerContent}>
+          <Skeleton width={180} height={28} style={{ marginBottom: 8 }} />
+          <Skeleton width={140} height={18} />
+        </View>
+        <View
+          style={[
+            styles.progressCard,
+            { height: 120, justifyContent: "center" },
+          ]}
+        >
+          <Skeleton width="60%" height={20} style={{ marginBottom: 15 }} />
+          <Skeleton
+            width="90%"
+            height={10}
+            borderRadius={5}
+            style={{ marginBottom: 15 }}
+          />
+          <Skeleton width="40%" height={14} />
+        </View>
+      </View>
+
+      <View style={styles.content}>
+        {/* Card Skeletons */}
+        {[1, 2, 3].map((i) => (
+          <View key={i} style={[styles.card, { padding: 20 }]}>
+            <View style={{ flexDirection: "row", marginBottom: 20 }}>
+              <Skeleton width={30} height={30} borderRadius={15} />
+              <Skeleton width={120} height={24} style={{ marginLeft: 10 }} />
+            </View>
+            <Skeleton
+              width="100%"
+              height={60}
+              borderRadius={12}
+              style={{ marginBottom: 10 }}
+            />
+            <Skeleton width="100%" height={60} borderRadius={12} />
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  </View>
+);
+
 export default function Home() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
   const { setIsModalVisible } = useTimer();
   const [classes, setClasses] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [suggestedSessions, setSuggestedSessions] = useState<any[]>([]);
+  const [ isLoading, setIsLoading ] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
 
+  const styles = createStyles(theme, isDark);
   // 1. LISTEN TO FIRESTORE ON MOUNT
   useEffect(() => {
     if (!user?.id) return;
 
-    // Listen to the schedules document
+    // Listen to Timetable (Classes + Assignments)
     const unsubSchedules = onSnapshot(
       doc(firestore, "users", user.id, "data", "timetable"),
       (docSnap) => {
@@ -60,11 +114,98 @@ export default function Home() {
           setClasses(data.classes || []);
           setAssignments(data.assignments || []);
         }
+        //when data arrives, kill the skelly
+        setIsInitialLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        setIsInitialLoading(false); //if there's an error, cancel the loading skelly
+      }
+    );
+
+    // Listen to AI Suggested Sessions
+    const unsubSessions = onSnapshot(
+      doc(firestore, "users", user.id, "data", "ai_suggestions"),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setSuggestedSessions(docSnap.data().sessions || []);
+        }
       },
     );
 
-    return () => unsubSchedules();
+    const fallbackTimer = setTimeout(() => {
+      setIsInitialLoading(false);
+    }, 5000);
+
+    return () => {
+      unsubSchedules();
+      unsubSessions();
+      clearTimeout(fallbackTimer);
+    };
   }, [user?.id]);
+
+  if (isInitialLoading){
+    return <HomeSkeleton styles = {styles} theme = {theme} />
+  }
+
+  const handleUploadSchedule = async () => {
+    try {
+      setIsLoading(true);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets) {
+        setIsLoading(false);
+        return;
+      }
+
+      const fileAsset = result.assets[0];
+
+      // Fixed: Passing separate arguments to match your BrAInwaveAPI class
+      const response = await brainwaveApi.uploadTimetable(
+        fileAsset.uri,
+        fileAsset.name,
+        fileAsset.mimeType || "application/octet-stream",
+      );
+
+      if (!user?.id) return;
+
+      // Save the response data to Firestore
+      // Assuming response contains { classes: [], assignments: [] }
+      await setDoc(
+        doc(firestore, "users", user.id, "data", "timetable"),
+        {
+          classes: response.classes || [],
+          assignments: response.assignments || [],
+          uploadedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      alert("File has been successfully uploaded and processed!");
+      setShowUploadMenu(false);
+    } catch (error) {
+      console.error("Upload Error:", error);
+      Alert.alert("Error", "Failed to upload. Check your connection.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  function toggleAssignment(id: number) {
+    setCheckedAssignments((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  }
+
+  function getPriorityColor(priority: string) {
+    const p = priority?.toLowerCase();
+    if (p === "high") return theme.colors.error;
+    if (p === "medium") return theme.colors.warning;
+    return theme.colors.text.secondary;
+  }
 
   const AddIcon: React.FC<IconProps> = ({ size, color }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
@@ -129,83 +270,13 @@ export default function Home() {
     </Svg>
   );
 
-  const handleUploadSchedule = async () => {
-    try {
-      const res = await DocumentPicker.pickSingle({
-        type: [DocumentPicker.types.pdf, DocumentPicker.types.images],
-      });
-
-      setIsLoading(true);
-
-      const result = await brainwaveApi.uploadTimetable(
-        res.uri,
-        res.name || "timetable.pdf",
-        res.type || "application/pdf",
-      );
-
-      // 2. SAVE TO FIRESTORE
-      if (user?.id && result.status === "success") {
-        const scheduleData = {
-          classes: result.schedule.classes || [],
-          assignments: result.schedule.assignments || [],
-          updatedAt: serverTimestamp(),
-        };
-
-        await setDoc(
-          doc(firestore, "users", user.id, "data", "timetable"),
-          scheduleData,
-        );
-
-        // Local state updates automatically via the useEffect onSnapshot listener
-      }
-    } catch (err) {
-      if (!DocumentPicker.isCancel(err)) {
-        console.error("Upload error: ", err);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const studySessions = [
-    {
-      id: 1,
-      subject: "Data Structures",
-      duration: "45 min",
-      time: "8:00 PM",
-      type: "Review",
-    },
-    {
-      id: 2,
-      subject: "Calculus II",
-      duration: "60 min",
-      time: "9:00 PM",
-      type: "Practice",
-    },
-  ];
-
-  function toggleAssignment(id: number) {
-    setCheckedAssignments((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  }
-
-  function getPriorityColor(priority: string) {
-    const p = priority?.toLowerCase();
-    if (p === "high") return theme.colors.error;
-    if (p === "medium") return theme.colors.warning;
-    return theme.colors.text.secondary;
-  }
-
-  const styles = createStyles(theme, isDark);
-
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {isLoading && (
         <View style={styles.loaderOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={[styles.dateText, { marginTop: 10 }]}>
-            Processing your schedule...
+            brAInwave is analyzing your schedule...
           </Text>
         </View>
       )}
@@ -214,6 +285,7 @@ export default function Home() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header Section */}
         <View style={styles.headerBg}>
           <View style={styles.headerContent}>
             <Text style={styles.welcomeText}>
@@ -252,7 +324,9 @@ export default function Home() {
                 <TodayIcon size={24} color={theme.colors.text.secondary} />
                 <Text style={styles.cardTitle}>Today's Classes</Text>
               </View>
-              <Text style={styles.viewAllText}>View All</Text>
+              <TouchableOpacity onPress={() => router.push("/planner")}>
+                <Text style={styles.viewAllText}>View All</Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.cardContent}>
               {classes.length === 0 ? (
@@ -354,7 +428,7 @@ export default function Home() {
             </View>
           </View>
 
-          {/* AI Suggested Sessions */}
+          {/* AI Suggested Sessions Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View>
@@ -371,33 +445,43 @@ export default function Home() {
               </View>
             </View>
             <View style={styles.cardContent}>
-              {studySessions.map((session, idx) => (
-                <View
-                  key={session.id}
-                  style={[
-                    styles.sessionItem,
-                    idx !== studySessions.length - 1 && styles.itemMargin,
-                  ]}
-                >
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionSubject}>{session.subject}</Text>
-                    <View style={styles.sessionDetails}>
-                      <ScheduleIcon
-                        size={12}
-                        color={theme.colors.text.secondary}
-                      />
-                      <Text style={styles.sessionTime}>{session.time}</Text>
-                      <Text style={styles.sessionSeparator}>•</Text>
-                      <Text style={styles.sessionDuration}>
-                        {session.duration}
+              {suggestedSessions.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  Upload a schedule to get AI sessions.
+                </Text>
+              ) : (
+                suggestedSessions.map((session, idx) => (
+                  <View
+                    key={session.id || idx}
+                    style={[
+                      styles.sessionItem,
+                      idx !== suggestedSessions.length - 1 && styles.itemMargin,
+                    ]}
+                  >
+                    <View style={styles.sessionInfo}>
+                      <Text style={styles.sessionSubject}>
+                        {session.subject}
+                      </Text>
+                      <View style={styles.sessionDetails}>
+                        <ScheduleIcon
+                          size={12}
+                          color={theme.colors.text.secondary}
+                        />
+                        <Text style={styles.sessionTime}>{session.time}</Text>
+                        <Text style={styles.sessionSeparator}>•</Text>
+                        <Text style={styles.sessionDuration}>
+                          {session.duration}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.sessionBadge}>
+                      <Text style={styles.sessionBadgeText}>
+                        {session.type}
                       </Text>
                     </View>
                   </View>
-                  <View style={styles.sessionBadge}>
-                    <Text style={styles.sessionBadgeText}>{session.type}</Text>
-                  </View>
-                </View>
-              ))}
+                ))
+              )}
               <TouchableOpacity style={styles.startSessionButton}>
                 <Text style={styles.startSessionText}>Start Study Session</Text>
               </TouchableOpacity>
