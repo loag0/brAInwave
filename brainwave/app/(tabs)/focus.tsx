@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useTimer } from "../contexts/TimerContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useKeepAwake } from "expo-keep-awake";
@@ -34,23 +34,35 @@ export default function FocusScreen() {
 
   useKeepAwake();
 
-  const requestPermissions = async () => {
+  const setupNotifications = async () => {
+    
+    //Android channel so the OS knows what to do with the alert
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "Timer Alerts",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: theme.colors.primary,
+      });
+    }
 
-    //checking if we don't already have permission
-    const { status:existingStatus } = await Notifications.requestPermissionsAsync();
+    // 2. Check existing status first
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
-    //if not, ask
+    // 3. Only ask if we don't have it yet
     if (existingStatus !== "granted") {
       const { status } = await Notifications.requestPermissionsAsync();
-
       finalStatus = status;
     }
 
-    if(finalStatus !== "granted"){
+    // 4. Final check
+    if (finalStatus !== "granted") {
       showAlert({
         title: "Notifications Disabled!",
-        message: "Enable notifications to hear the timer while in other apps",
+        message:
+          "Enable notifications in settings to hear the timer while in other apps.",
       });
       return false;
     }
@@ -58,8 +70,8 @@ export default function FocusScreen() {
   };
 
   useEffect(() => {
-    requestPermissions();
-  });
+    setupNotifications();
+  }, []); // Added the empty dependency array here!
 
   const toggleTimer = async () => {
     try {
@@ -74,9 +86,10 @@ export default function FocusScreen() {
               body: "Time for a well-deserved break",
               sound: true,
             },
-            trigger: { 
+            trigger: {
               type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-              seconds: totalSeconds },
+              seconds: totalSeconds,
+            },
           });
           setNotificationId(identifier);
         }
