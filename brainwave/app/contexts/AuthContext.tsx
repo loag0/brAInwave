@@ -12,7 +12,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db as firestore } from "../../firebaseConfig";
 import { User, AuthContextType, SignupData } from "../types";
 
@@ -130,14 +130,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     );
   };
 
+  const updateProfileData = async (updates: Partial<User>) => {
+    if(!user?.id) return;
+
+    setIsLoading(true);
+
+    try{
+      
+      const userRef = doc(firestore, "users", user.id);
+      await updateDoc(userRef, updates);
+
+      setUser(prev => prev ? { ...prev, ...updates } : null);
+    } catch(error){
+      console.error("Error updating profile: ", error);
+    } finally{
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, token, login, signup, updateUser, logout }}
-    >
+      value={{ user, isLoading, token, login, signup, updateUser, updateProfileData, logout }}>
       {children}
     </AuthContext.Provider>
   );

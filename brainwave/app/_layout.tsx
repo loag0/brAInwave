@@ -114,6 +114,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           name="oauth2redirect/google"
           options={{ headerShown: false }}
         />
+        <Stack.Screen name="priorities" options={{ headerShown: false }} />
       </Stack>
     </>
   );
