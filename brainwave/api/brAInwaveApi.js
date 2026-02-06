@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL = "5.4.13.210:8000"; // Adjust the URL as needed
+const API_BASE_URL =
+  "https://fosteringly-unhypocritical-karlene.ngrok-free.dev"; // Adjust the URL as needed
 
 class BrAInwaveAPI {
 
