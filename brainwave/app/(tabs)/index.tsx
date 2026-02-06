@@ -6,23 +6,26 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Modal,
   ActivityIndicator,
-  Alert
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
-import { useAlert } from "../contexts/AlertContext";
-import { useTimer } from "../contexts/TimerContext";
 import { Theme } from "../types";
 import Svg, { Path } from "react-native-svg";
-import { doc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp,
+} from "firebase/firestore";
 import { db as firestore } from "@/firebaseConfig";
 import * as DocumentPicker from "expo-document-picker";
 import brainwaveApi from "@/api/brAInwaveApi";
 import { router } from "expo-router";
-import Skeleton from "@/components/HomeSkeleton"
+import Skeleton from "@/components/HomeSkeleton";
 
 const { width } = Dimensions.get("window");
 
@@ -35,6 +38,15 @@ const CloseIcon: React.FC<IconProps> = ({ size, color }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
+      fill={color}
+    />
+  </Svg>
+);
+
+const SunIcon: React.FC<IconProps> = ({ size, color }) => (
+  <Svg width={size} height={size} viewBox="0, -960, 960, 960" fill="none">
+    <Path
+      d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm283-100q-100 0-170-70t-70-170q0-100 70-170t170-70q100 0 170 70t70 170q0 100-70 170t-170 70Zm0-80q66 0 113-47t47-113q0-66-47-113t-113-47q-66 0-113 47t-47 113q0 66 47 113t113 47Zm0-160Z"
       fill={color}
     />
   </Svg>
@@ -92,43 +104,81 @@ export default function Home() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
+  const [weeklyTemplate, setWeeklyTemplate] = useState<any>({});
   const [assignments, setAssignments] = useState<any[]>([]);
   const [suggestedSessions, setSuggestedSessions] = useState<any[]>([]);
-  const [ isLoading, setIsLoading ] = useState(false)
+  const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
+  const hasTimetable = Object.keys(weeklyTemplate || {}).length > 0;
 
   const styles = createStyles(theme, isDark);
   // 1. LISTEN TO FIRESTORE ON MOUNT
   useEffect(() => {
     if (!user?.id) return;
 
-    // Listen to Timetable (Classes + Assignments)
-    const unsubSchedules = onSnapshot(
+    const todayId = new Date().toISOString().split("T")[0];
+    const days = [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday",
+    ];
+    const todayName = days[new Date().getDay()];
+
+    const unsubTimetable = onSnapshot(
       doc(firestore, "users", user.id, "data", "timetable"),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-
-          const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-          const todayName = days[new Date().getDay()];
-
-          const todaysClasses = data.weekly_template?.[todayName] || [];
-          setClasses(todaysClasses);
+      (timeSnap) => {
+        if (timeSnap.exists()) {
+          const data = timeSnap.data();
+          setWeeklyTemplate(data.weekly_template || {});
           setAssignments(data.assignments || []);
         }
-        //when data arrives, kill the skelly
-        setIsInitialLoading(false);
       },
-      (error) => {
-        console.error(error);
-        setIsInitialLoading(false); //if there's an error, cancel the loading skelly
-      }
     );
 
+    // Listen to AI optimized plan
+    const unsubDailyPlan = onSnapshot(
+      doc(firestore, "users", user.id, "plans", todayId),
+      (planSnap) => {
+        if (planSnap.exists()) {
+          const planData = planSnap.data().items || [];
+
+          setClasses(
+            planData.map((item: any) => ({
+              ...item,
+              subject: item.task || item.subject,
+              isAiGenerated: true,
+            })),
+          );
+        } else {
+          getDoc(doc(firestore, "users", user.id, "data", "timetable")).then(
+            (s) => {
+              if (s.exists()) {
+                setClasses(s.data().weekly_template?.[todayName] || []);
+              }
+            },
+          );
+        }
+        setIsInitialLoading(false);
+      },
+    );
+    return () => {
+      unsubTimetable();
+      unsubDailyPlan();
+    };
+  }, [user?.id]);
+
+  // 2. LISTEN TO AI SUGGESTED SESSIONS
+  useEffect(() => {
+    if (!user?.id) return;
+
     // Listen to AI Suggested Sessions
-    const unsubSessions = onSnapshot(
+    const unsubSuggestions = onSnapshot(
       doc(firestore, "users", user.id, "data", "ai_suggestions"),
       (docSnap) => {
         if (docSnap.exists()) {
@@ -142,14 +192,13 @@ export default function Home() {
     }, 5000);
 
     return () => {
-      unsubSchedules();
-      unsubSessions();
+      unsubSuggestions();
       clearTimeout(fallbackTimer);
     };
   }, [user?.id]);
 
-  if (isInitialLoading){
-    return <HomeSkeleton styles = {styles} theme = {theme} />
+  if (isInitialLoading) {
+    return <HomeSkeleton styles={styles} theme={theme} />;
   }
 
   const handleUploadSchedule = async () => {
@@ -180,12 +229,24 @@ export default function Home() {
         monday: response.classes.filter(
           (c: { day: string }) => c.day === "Monday",
         ),
-        tuesday: response.classes.filter((c: { day: string }) => c.day === "Tuesday"),
-        wednesday: response.classes.filter((c: { day: string }) => c.day === "Wednesday"),
-        thursday: response.classes.filter((c: { day: string }) => c.day === "Thursday"),
-        friday: response.classes.filter((c: { day: string }) => c.day === "Friday"),
-        saturday: response.classes.filter((c: { day: string }) => c.day === "Saturday"),
-        sunday: response.classes.filter((c: { day: string }) => c.day === "Sunday"),
+        tuesday: response.classes.filter(
+          (c: { day: string }) => c.day === "Tuesday",
+        ),
+        wednesday: response.classes.filter(
+          (c: { day: string }) => c.day === "Wednesday",
+        ),
+        thursday: response.classes.filter(
+          (c: { day: string }) => c.day === "Thursday",
+        ),
+        friday: response.classes.filter(
+          (c: { day: string }) => c.day === "Friday",
+        ),
+        saturday: response.classes.filter(
+          (c: { day: string }) => c.day === "Saturday",
+        ),
+        sunday: response.classes.filter(
+          (c: { day: string }) => c.day === "Sunday",
+        ),
       };
 
       // Save the response data to Firestore
@@ -279,6 +340,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      {/*LOADING OVERLAY*/}
       {isLoading && (
         <View style={styles.loaderOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -321,43 +383,64 @@ export default function Home() {
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
                 <TodayIcon size={24} color={theme.colors.text.secondary} />
-                <Text style={styles.cardTitle}>Today's Classes</Text>
-              </View>
-              <TouchableOpacity onPress={() => router.push("/planner")}>
-                <Text style={styles.viewAllText}>View All</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.cardContent}>
-              {classes.length === 0 ? (
-                <Text style={styles.emptyText}>
-                  No classes scheduled yet. Upload your timetable!
+                <Text style={styles.cardTitle}>
+                  {/*This is for if there are items in "classes"*/}
+                  {classes.length > 0 ? "Today's Schedule" : "Daily Schedule"}
                 </Text>
-              ) : (
-                classes.slice(0, 3).map((cls, idx) => (
+              </View>
+
+              {/*Only shows the view all button if there is a template OR an optimized plan*/}
+              {(hasTimetable || classes.length > 0) && (
+                <TouchableOpacity onPress={() => router.push("/planner")}>
+                  <Text style={styles.viewAllText}>View All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.cardContent}>
+              {classes.length > 0 ? (
+                // 1. Show whatever is scheduled (classes OR AI tasks)
+                classes.slice(0, 6).map((item, idx) => (
                   <View
                     key={idx}
                     style={[styles.classItem, idx !== 2 && styles.itemMargin]}
                   >
-                    <View
-                      style={[
-                        styles.classIndicator,
-                        { backgroundColor: theme.colors.primary },
-                      ]}
-                    />
+                    <View style={[ styles.classIndicator, {backgroundColor: item.isAiGenerated ? theme.colors.secondary : theme.colors.primary}]}/>
                     <View style={styles.classInfo}>
-                      <Text style={styles.className}>{cls.subject}</Text>
+                      <Text style={styles.className}>{item.subject}</Text>
                       <View style={styles.classDetails}>
-                        <ScheduleIcon
-                          size={10}
-                          color={theme.colors.text.secondary}
-                        />
-                        <Text style={styles.classTime}>{cls.time}</Text>
-                        <Text style={styles.classSeparator}>•</Text>
-                        <Text style={styles.classRoom}>{cls.room}</Text>
+                        <ScheduleIcon size={10} color={theme.colors.text.secondary} />
+                        <Text style={styles.classTime}>{item.time}</Text>
+                        {item.room && (
+                          <>
+                            <Text style={styles.classSeparator}>•</Text>
+                            <Text style={styles.classRoom}>{item.room}</Text>
+                          </>
+                        )}
                       </View>
                     </View>
                   </View>
                 ))
+              ) : (
+                <View style={{ alignItems: "center", paddingVertical: 15 }}>
+                  {!hasTimetable ? (
+                    // 2. No timetable uploaded yet
+                    <Text style={styles.emptyText}>
+                      No timetable yet. Upload one to get started!
+                    </Text>
+                  ) : (
+                    // 3. Timetable exists, but today is empty (Weekend/Free Day)
+                    <>
+                      <SunIcon size={32} color={theme.colors.warning} />
+                      <Text style={[ styles.emptyText, { color: theme.colors.text.primary, fontWeight: "600"}]}>
+                        You're free today!
+                      </Text>
+                      <Text style={[ styles.emptyText, { marginTop: -15, fontSize: 10 }]}>
+                        Enjoy your{" "}{new Date().toLocaleDateString("en-US", {weekday: "long"})}
+                      </Text>
+                    </>
+                  )}
+                </View>
               )}
             </View>
           </View>
@@ -510,96 +593,6 @@ export default function Home() {
     </SafeAreaView>
   );
 }
-
-// POMODORO MODAL COMPONENT
-export const PomodoroTimer = () => {
-  const { theme } = useTheme();
-  const { showAlert } = useAlert();
-  const {
-    minutes,
-    seconds,
-    isRunning,
-    toggleTimer,
-    resetTimer,
-    isModalVisible,
-    setIsModalVisible,
-  } = useTimer();
-
-  if (!isModalVisible) return null;
-
-  const handleDismiss = () => {
-    if (isRunning) {
-      showAlert({
-        title: "Wait, don't leave!",
-        message:
-          "Closing this will stop your flow. Are you sure you want to quit focusing?",
-        showCancel: true,
-        confirmText: "I'm giving up",
-        cancelText: "Keep going",
-        onConfirm: () => {
-          resetTimer();
-          setIsModalVisible(false);
-        },
-      });
-    } else {
-      setIsModalVisible(false);
-    }
-  };
-
-  return (
-    <Modal
-      transparent
-      animationType="slide"
-      visible={isModalVisible}
-      onRequestClose={handleDismiss}
-    >
-      <View style={pomoStyles.overlay}>
-        <View style={[pomoStyles.modal, { backgroundColor: theme.colors.surface }]}
-        >
-          <TouchableOpacity style={pomoStyles.close} onPress={handleDismiss}>
-            <CloseIcon size={24} color={theme.colors.text.secondary} />
-          </TouchableOpacity>
-
-          <Text
-            style={[pomoStyles.title, { color: theme.colors.text.primary }]}
-          >
-            Focus Mode
-          </Text>
-
-          <Text style={[pomoStyles.timer, { color: theme.colors.primary }]}>
-            {String(minutes).padStart(2, "0")}:
-            {String(seconds).padStart(2, "0")}
-          </Text>
-
-          <View style={pomoStyles.buttonBar}>
-            <TouchableOpacity
-              style={[
-                pomoStyles.button,
-                { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={toggleTimer}
-            >
-              <Text style={pomoStyles.buttonText}>
-                {isRunning ? "Pause" : "Resume"}
-              </Text>
-            </TouchableOpacity>
-
-            {isRunning && (
-              <TouchableOpacity
-                style={[pomoStyles.button, { marginTop: 10 }]}
-                onPress={handleDismiss}
-              >
-                <Text style={{ color: theme.colors.error, fontWeight: "600" }}>
-                  End Session
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 // UPLOAD MENU COMPONENT
 const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
@@ -980,38 +973,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       elevation: 5,
     },
   });
-
-const pomoStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modal: {
-    borderRadius: 28,
-    padding: 32,
-    width: width - 40,
-    alignItems: "center",
-  },
-  close: { position: "absolute", top: 20, right: 20 },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 10,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  timer: {
-    fontSize: 84,
-    marginVertical: 30,
-    fontWeight: "bold",
-    fontVariant: ["tabular-nums"],
-  },
-  buttonBar: { width: "100%" },
-  button: { paddingVertical: 18, borderRadius: 16, alignItems: "center" },
-  buttonText: { color: "#fff", fontWeight: "700", fontSize: 18 },
-});
 
 const menuStyles = StyleSheet.create({
   overlay: {

@@ -1,4 +1,4 @@
-// app/(tabs)/schedule.tsx - Study Planner Page
+// app/(tabs)/Planner.tsx - Study Planner Page
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  ActivityIndicator
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,7 +17,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
 import brainwaveApi from "@/api/brAInwaveApi";
 import { useAlert } from "../contexts/AlertContext";
@@ -45,7 +46,7 @@ const BulbIcon: React.FC<IconProps> = ({ color, size }) => (
   </Svg>
 );
 
-const ScheduleIcon: React.FC<IconProps> = ({ color, size }) => (
+const PlannerIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"
@@ -53,27 +54,87 @@ const ScheduleIcon: React.FC<IconProps> = ({ color, size }) => (
     />
   </Svg>
 );
-const AISessionsIcon: React.FC<IconProps> = ({ size, color }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+const SunIcon: React.FC<IconProps> = ({ size, color }) => (
+  <Svg width={size} height={size} viewBox="0, -960, 960, 960" fill="none">
     <Path
-      d="M852-212 732-332l56-56 120 120-56 56ZM708-692l-56-56 120-120 56 56-120 120Zm-456 0L132-812l56-56 120 120-56 56ZM108-212l-56-56 120-120 56 56-120 120Zm246-75 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Zm247-361Z"
+      d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm283-100q-100 0-170-70t-70-170q0-100 70-170t170-70q100 0 170 70t70 170q0 100-70 170t-170 70Zm0-80q66 0 113-47t47-113q0-66-47-113t-113-47q-66 0-113 47t-47 113q0 66 47 113t113 47Zm0-160Z"
       fill={color}
     />
   </Svg>
 );
 
-export default function Schedule() {
+const PlannerSkeleton = ({ theme }: { theme: any }) => {
+  const styles = createStyles(theme);
+  return (
+    <View style={styles.planContainer}>
+      {[1, 2, 3].map((key) => (
+        <View
+          key={key}
+          style={[styles.planCard, { opacity: 0.5, marginBottom: 15 }]}
+        >
+          <View
+            style={[
+              styles.checkboxContainer,
+              {
+                backgroundColor: theme.colors.border,
+                borderRadius: 12,
+                width: 24,
+                height: 24,
+              },
+            ]}
+          />
+          <View style={{ flex: 1, marginLeft: 15 }}>
+            <View
+              style={{
+                width: "40%",
+                height: 10,
+                backgroundColor: theme.colors.border,
+                borderRadius: 4,
+                marginBottom: 8,
+              }}
+            />
+            <View
+              style={{
+                width: "80%",
+                height: 16,
+                backgroundColor: theme.colors.border,
+                borderRadius: 4,
+                marginBottom: 8,
+              }}
+            />
+            <View
+              style={{
+                width: "30%",
+                height: 20,
+                backgroundColor: theme.colors.border,
+                borderRadius: 10,
+              }}
+            />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+export default function Planner() {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const [ planItems, setPlanItems ] = useState<any[]>([]);
-  const [ isLoading, setLoading ] = useState(true);
   const { showAlert } = useAlert();
-  const [weeklyTemplate, setWeeklyTemplate] = useState<Record<string, any[]>>({});
-  const [localCustomTasks, setLocalCustomTasks] = useState<any[]>([]);
+
+  //This is for state management
+  const [planItems, setPlanItems] = useState<any[]>([]);
+  const [isLoading, setLoading] = useState(true);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [weeklyTemplate, setWeeklyTemplate] = useState<Record<string, any[]>>(
+    {},
+  );
+
+  //This is for modal states and for the picker
   const [isModalVisible, setModalVisible] = useState(false);
-  const [newTask, setNewTask] = useState({ task: '', time: '12:00 PM' });
+  const [newTask, setNewTask] = useState({ task: "", time: "12:00 PM" });
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [timeValue, setTimeValue] =useState(new Date());
+  const [timeValue, setTimeValue] = useState(new Date());
 
   const styles = createStyles(theme);
 
@@ -81,7 +142,7 @@ export default function Schedule() {
     const days = [];
     const now = new Date();
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) { // change the 5 to alter how many days the scroller shows
       const date = new Date();
       date.setDate(now.getDate() + i);
 
@@ -94,7 +155,7 @@ export default function Schedule() {
 
       const dayDate = date.toLocaleDateString("en-US", {
         day: "numeric",
-        month: i < 5 ? "short" : undefined,
+        month: i < 5 ? "short" : undefined, //edit if you wanna limit how far it shows the month under the day
       });
 
       days.push({ id, label, date: dayDate });
@@ -104,13 +165,14 @@ export default function Schedule() {
 
   const [selectedDay, setSelectedDay] = useState(weekDays[0].id);
 
+  //Initial fetch from db for timetable
   useEffect(() => {
     if (!user?.id) return;
 
     setLoading(true);
 
     const unsubTemplate = onSnapshot(
-      doc(firestore, "users", user.id, "plans", "timetable"),
+      doc(firestore, "users", user.id, "data", "timetable"),
       (docSnap) => {
         if (docSnap.exists()) {
           setWeeklyTemplate(docSnap.data().weekly_template || {});
@@ -126,44 +188,54 @@ export default function Schedule() {
     return () => unsubTemplate();
   }, [user?.id]);
 
+  //Fetches data for day switching
   useEffect(() => {
-    if(!user?.id) return;
+    if (!user?.id) return;
+
     setLoading(true);
 
     const unsubPlan = onSnapshot(
       doc(firestore, "users", user.id, "plans", selectedDay),
       (docSnap) => {
-        if(docSnap.exists()){
+        if (docSnap.exists()) {
           //if there is a generated plan, show that
-          setPlanItems(docSnap.data().items || [])
-        } else{
+          setPlanItems(docSnap.data().items || []);
 
+        } else {
           //FALLBACK: if there is no plan, then just show classes from the template
           const dateObj = new Date(selectedDay);
-          const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long'}).toLowerCase();
+          const dayName = dateObj
+            .toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })
+            .toLowerCase();
 
           const templateClasses = weeklyTemplate?.[dayName] || [];
 
-          const formattedItems = templateClasses.map((cls: any, index: number) => ({
-            id: `temp-${index}`,
-            time: cls.time,
-            subject: cls.subject,
-            task: "Class Lecture",
-            duration: "1 hour",
-            completed: false,
-            difficulty: "medium",
-            isTemplate: true,
-          }));
+          const formattedItems = templateClasses.map(
+            (cls: any, index: number) => ({
+              id: `temp-${index}`,
+              time: cls.time,
+              subject: cls.subject,
+              task: "Class Lecture",
+              duration: "1 hour",
+              completed: false,
+              difficulty: "medium",
+              isTemplate: true,
+            }),
+          );
 
           setPlanItems(formattedItems);
         }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Plan fetch error: ", error);
         setLoading(false);
       }
     );
     return () => unsubPlan();
   }, [user?.id, selectedDay, weeklyTemplate]);
 
-  const toggleTaskCompletion = (id: number) => {
+  const toggleTaskCompletion = (id: string | number) => {
     setPlanItems((items) =>
       items.map((item) =>
         item.id === id ? { ...item, completed: !item.completed } : item,
@@ -198,34 +270,32 @@ export default function Schedule() {
   };
 
   const handleRegenerate = async () => {
-    
-    setLoading(true);
-    
+    if (!user?.id) return;
+
+    setIsOptimizing(true);
+
     try {
       if (!user?.id) {
         showAlert({
           title: "Error",
-          message: "User info is not available"
+          message: "User info is not available",
         });
         return;
       }
-
       // This calls the API
       // We pass the selectedDay so the AI knows which date to plan for
       const response = await brainwaveApi.generateDailyPlan(
         user.id,
         selectedDay,
-        localCustomTasks
       );
 
       if (response.success) {
-        setLocalCustomTasks([]);
         showAlert({
           title: "Schedule Optimized",
-          message: "brAInwave has successfully integrated your classes, assignments, and custom tasks!",
+          message: "brAInwave has successfully updated your schedule!",
           iconPath: ICONS.SUCCESS,
           confirmText: "Ok",
-        })
+        });
       }
     } catch (error) {
       console.error("Regeneration failed:", error);
@@ -236,43 +306,97 @@ export default function Schedule() {
         iconColor: "#F44336",
         confirmText: "Retry",
         showCancel: true,
-        onConfirm: handleRegenerate
+        onConfirm: handleRegenerate,
       });
     } finally {
-      setLoading(false);
+      setIsOptimizing(false);
     }
   };
 
   const onTimeChange = (event: any, selectedDate?: Date) => {
     setShowTimePicker(false);
 
-    if(selectedDate){
+    if (selectedDate) {
       setTimeValue(selectedDate);
       const formattedTime = selectedDate.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
       });
       setNewTask({ ...newTask, time: formattedTime });
     }
   };
 
-  const handleAddTask = () => {
-    if(!newTask.task.trim()){
+  const handleAddTask = async () => {
+
+    if(!user?.id) return;
+
+    if (!newTask.task.trim()) {
       showAlert({
         title: "Hold Up!",
-        message: "What's the name of the task homeblud?"
-      })
+        message: "What's the name of the task homeblud?",
+      });
       return;
     }
-    setLocalCustomTasks([...localCustomTasks, newTask]);
-    setNewTask({ task: "", time: "12:00 PM" });
-    setModalVisible(false);
-  }
+    const newTaskItem = {
+      id: Date.now().toString(),
+      task: newTask.task,
+      time: newTask.time,
+      subject: "Personal",
+      duration: "1 hour",
+      completed: false,
+      difficulty: "easy",
+      isCustom: true
+    }
 
+    try{
+      const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
+
+      const currentItems = planItems.filter(item => !item.isTemplate);
+
+      await setDoc(planRef, {
+        items: [...currentItems, newTaskItem]
+      }, {merge: true});
+
+      setNewTask({ task: "", time: "12:00 PM" });
+      setModalVisible(false);
+    } catch(e){
+      console.error("Error adding task: ", e);
+      showAlert({ title: "Oooooops!", message: "Gomen. Could not add the task desu" })
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/*OVERLAY FOR AI OPTIMIZATION*/}
+      <Modal transparent visible={isOptimizing} animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.67)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {/*<BlurView intensity = {20} style = {StyleSheet.absoluteFill} />*/}
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text
+            style={{
+              color: "#FFF",
+              marginTop: 20,
+              fontSize: 18,
+              fontWeight: "600",
+              letterSpacing: 0.5,
+            }}
+          >
+            brAInwave is thinking...
+          </Text>
+          <Text style={{ color: "rgba(255, 255, 255, 0.6)", marginTop: 8 }}>
+            Optimizing your peak productivity hours
+          </Text>
+        </View>
+      </Modal>
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -282,7 +406,7 @@ export default function Schedule() {
           <View>
             <Text style={styles.headerTitle}>Study planner</Text>
             <Text style={styles.headerSubtitle}>
-              AI-optimized schedule for your success
+              AI-optimized Planner for your success
             </Text>
           </View>
         </View>
@@ -296,8 +420,8 @@ export default function Schedule() {
             <View style={styles.insightText}>
               <Text style={styles.insightTitle}>AI insight</Text>
               <Text style={styles.insightDescription}>
-                You're most productive in the evening. I've scheduled
-                challenging tasks after 6 pm.
+                You're most productive in the evening. I've Plannerd challenging
+                tasks after 6 pm.
               </Text>
             </View>
           </View>
@@ -348,40 +472,38 @@ export default function Schedule() {
                 ? "Class Schedule"
                 : "Daily Plan"}
             </Text>
-            {(planItems.length > 0 || localCustomTasks.length > 0) && (
-              <TouchableOpacity onPress={handleRegenerate} disabled={isLoading}>
-                <Text
-                  style={[
-                    styles.regenerateButton,
-                    { color: theme.colors.primary },
-                  ]}
+            {!isLoading &&
+              (planItems.length > 0) && (
+                <TouchableOpacity
+                  onPress={handleRegenerate}
+                  disabled={isOptimizing}
+                  style={{ paddingVertical: 4, paddingHorizontal: 8 }} // Better touch area
                 >
-                  {planItems.some((item) => item.isTemplate) ||
-                  localCustomTasks.length > 0
-                    ? "Optimize with AI"
-                    : "Regenerate"}
-                </Text>
-              </TouchableOpacity>
-            )}
+                  <Text
+                    style={[
+                      styles.regenerateButton,
+                      { color: theme.colors.primary },
+                    ]}
+                  >
+                    {planItems.some((item) => item.isTemplate) ? "Optimize with AI" : "Regenerate"}
+                  </Text>
+                </TouchableOpacity>
+              )}
           </View>
 
-          {planItems.length === 0 && localCustomTasks.length === 0 ? (
+          {isLoading ? (
+            <PlannerSkeleton theme={theme} />
+          ) : planItems.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
-                <AISessionsIcon size={48} color={theme.colors.text.secondary} />
+                <SunIcon size={48} color={theme.colors.warning} />
               </View>
               <Text style={styles.emptyText}>No plan for this day</Text>
-              <TouchableOpacity
-                style={styles.generateButton}
-                onPress={handleRegenerate}
-              >
-                <Text style={styles.generateButtonText}>Generate AI Plan</Text>
-              </TouchableOpacity>
             </View>
           ) : (
             <>
               {/* 1. Main Plan Items (AI Generated or Template Fallback) */}
-              {planItems.map((item, index) => (
+              {planItems.map((item) => (
                 <View
                   key={item.id}
                   style={[
@@ -410,7 +532,7 @@ export default function Schedule() {
                   <View style={styles.planContent}>
                     <View style={styles.planTimeContainer}>
                       <View style={styles.timeRow}>
-                        <ScheduleIcon
+                        <PlannerIcon
                           color={theme.colors.text.secondary}
                           size={12}
                         />
@@ -448,52 +570,6 @@ export default function Schedule() {
                         {item.difficulty}
                       </Text>
                     </View>
-                  </View>
-                </View>
-              ))}
-
-              {/* 2. Locally Added Tasks (Pending AI Optimization) */}
-              {localCustomTasks.map((task, index) => (
-                <View
-                  key={`local-${index}`}
-                  style={[
-                    styles.planCard,
-                    {
-                      borderColor: theme.colors.primary,
-                      borderStyle: "dashed",
-                      borderWidth: 1,
-                      marginBottom: 12,
-                    },
-                  ]}
-                >
-                  <View style={styles.checkboxContainer}>
-                    <Ionicons
-                      name="time-outline"
-                      size={24}
-                      color={theme.colors.primary}
-                    />
-                  </View>
-                  <View style={styles.planContent}>
-                    <View style={styles.timeRow}>
-                      <Text style={styles.timeText}>{task.time}</Text>
-                      <View
-                        style={[
-                          styles.durationBadge,
-                          { backgroundColor: theme.colors.primary + "20" },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.durationText,
-                            { color: theme.colors.primary, fontSize: 10 },
-                          ]}
-                        >
-                          PENDING AI
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.taskTitle}>{task.task}</Text>
-                    <Text style={styles.subjectText}>Custom Task</Text>
                   </View>
                 </View>
               ))}
@@ -703,7 +779,7 @@ const createStyles = (theme: Theme) =>
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 60,
+      padding: 40,
       backgroundColor: theme.colors.surface,
       borderRadius: 16,
       marginTop: 20,
@@ -712,8 +788,7 @@ const createStyles = (theme: Theme) =>
       borderStyle: "dashed", // Gives it a "waiting to be filled" look
     },
     emptyIconContainer: {
-      marginBottom: 16,
-      opacity: 0.5,
+      marginBottom: 12,
     },
     emptyText: {
       fontSize: 16,
