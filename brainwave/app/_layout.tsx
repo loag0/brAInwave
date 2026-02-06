@@ -56,7 +56,9 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   useEffect(() => {
     if (fontsLoaded && !isLoading && !isThemeLoading) {
-      SplashScreen.hideAsync();
+      setTimeout(() => {
+        SplashScreen.hideAsync();
+      }, 100);
     }
   }, [fontsLoaded, isLoading, isThemeLoading]);
 
@@ -64,6 +66,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     if (isLoading || !fontsLoaded) return;
 
     const currentGroup = segments[0];
+    const currentScreen = segments[1];
     const isRedirecting = currentGroup === "oauth2redirect";
 
     if (user) {
@@ -82,10 +85,12 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           router.replace("/(tabs)");
         }
       }
+    } else if (!currentScreen || currentScreen === "welcome") {
+      router.replace("/(auth)/welcome");
     } else {
       // Not logged in: only allow (auth) and redirect
       if (currentGroup !== "(auth)" && !isRedirecting) {
-        router.replace("/(auth)/login");
+        router.replace("/(auth)/welcome");
       }
     }
   }, [user, isLoading, segments, fontsLoaded]);
