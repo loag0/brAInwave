@@ -21,7 +21,8 @@ import Toast from "react-native-toast-message";
 import { AlertProvider } from "./contexts/AlertContext";
 import { TimerProvider } from "./contexts/TimerContext";
 import { LocalDB } from "./database/localDb";
-import { useSync } from "./hooks/useSync"
+import { useSync } from "./hooks/useSync";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,16 +35,18 @@ export default function RootLayout() {
   });
 
   return (
-    <ThemeProvider>
-      <AlertProvider>
-        <TimerProvider>
-          <AuthProvider>
-            <NavigationHandler fontsLoaded={fontsLoaded} />
-            <Toast />
-          </AuthProvider>
-        </TimerProvider>
-      </AlertProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView>
+      <ThemeProvider>
+        <AlertProvider>
+          <TimerProvider>
+            <AuthProvider>
+              <NavigationHandler fontsLoaded={fontsLoaded} />
+              <Toast />
+            </AuthProvider>
+          </TimerProvider>
+        </AlertProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -52,7 +55,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const { isDark, isThemeLoading } = useTheme();
+  const { theme, isDark, isThemeLoading } = useTheme();
 
   //this is the sync engine. it runs in the background, watches the network and those dirty flags from localdb and what not
   useSync();
@@ -79,7 +82,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
       if (!user.hasFinishedSetup) {
         // Force to onboarding
         if (currentGroup !== "(onboarding)" && !isRedirecting) {
-          router.replace("/(onboarding)/goals");
+          router.replace("/(onboarding)");
         }
       } else {
         if (
@@ -99,7 +102,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
         router.replace("/(auth)/welcome");
       }
     }
-  }, [user, isLoading, segments, fontsLoaded]);
+  }, [user, isLoading, segments, fontsLoaded, router]);
 
   return (
     <>
@@ -125,7 +128,17 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           name="oauth2redirect/google"
           options={{ headerShown: false }}
         />
-        <Stack.Screen name="priorities" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="priorities"
+          options={{
+            headerShown: true,
+            headerStyle: { backgroundColor: theme.colors.background },
+            headerTintColor: theme.colors.text.primary,
+            headerTitleStyle: { fontWeight: "bold" },
+            headerShadowVisible: false,
+            title: "AI Priorities",
+          }}
+        />
       </Stack>
     </>
   );

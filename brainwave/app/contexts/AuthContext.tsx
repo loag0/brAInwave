@@ -68,10 +68,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     return unsubscribe;
   }, []);
 
-  const login = async (email: string, password: string) => {
-    setIsLoading(true); // Still needed for login as we need a real token
+  const signup = async ({ name, email, password }: SignupData) => {
+    setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+      await updateProfile(userCredential.user, { displayName: name });
+
+      // create Firestore doc
+      const userRef = doc(firestore, "users", userCredential.user.uid);
+      await setDoc(userRef, {
+        id: userCredential.user.uid,
+        name,
+        email,
+        hasFinishedSetup: false,
+        studyPreferences: {},
+        createdAt: new Date().toISOString(),
+      });
+
+      return userCredential;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return userCredential;
     } finally {
       setIsLoading(false);
     }
@@ -115,7 +143,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         isLoading,
         token,
         login,
-        signup: async () => {},
+        signup,
         updateUser: () => {},
         updateProfileData,
         logout,

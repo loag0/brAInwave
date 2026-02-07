@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
 import * as AuthSession from "expo-auth-session";
@@ -19,20 +18,22 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db as firestore } from "../../firebaseConfig";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAlert } from "../contexts/AlertContext";
 import { FontAwesome5 } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 
 WebBrowser.maybeCompleteAuthSession();
 
 interface IconProps {
-  size: number,
-  color: string
+  size: number;
+  color: string;
 }
 
 export default function LoginScreen() {
   const params = useLocalSearchParams();
   const { theme } = useTheme();
-  const { user, login, signup, isLoading: authLoading } = useAuth();
+  const { showAlert } = useAlert();
+  const { login, signup, isLoading: authLoading } = useAuth();
 
   // --- States ---
   const [isLogin, setIsLogin] = useState(params.mode !== "signup");
@@ -99,7 +100,6 @@ export default function LoginScreen() {
               studyPreferences: {
                 isMorningPerson: true,
                 preferredSessionLength: "medium" as const,
-                subjects: [],
               },
               createdAt: new Date().toISOString(),
             };
@@ -108,7 +108,10 @@ export default function LoginScreen() {
           // Note: Root Layout NavigationHandler handles the redirect from here
         } catch (err: any) {
           setIsProcessing(false);
-          Alert.alert("Google Sync Error", err.message);
+          showAlert({
+            title: "Google Sync Error",
+            message: err.message,
+          });
         }
       };
 
@@ -116,7 +119,7 @@ export default function LoginScreen() {
     } else if (response?.type === "cancel" || response?.type === "error") {
       setIsProcessing(false);
     }
-  }, [response]);
+  }, [response, showAlert]);
 
   // --- Helper Functions ---
   const validatePassword = (pass: string) => {
@@ -131,25 +134,29 @@ export default function LoginScreen() {
   const handleAuth = async () => {
     setIsProcessing(true);
 
-    if (!isLogin) {
-      if (!name) return Alert.alert("Error", "Please enter your name");
-      if (!validatePassword(password)) {
-        return Alert.alert(
-          "Weak Password",
-          "Password needs 6+ chars, uppercase, lowercase, and a number."
-        );
-      }
+    if (!isLogin && !name)
+      return showAlert({ title: "Error", message: "Please enter your name" });
+
+    if (!isLogin && !validatePassword(password)) {
+      return showAlert({
+        title: "Weak Password",
+        message: "Password needs 6+ chars, uppercase, lowercase, and a number.",
+      });
     }
 
     try {
-      if (isLogin) {
+      if(isLogin){
         await login(email, password);
-      } else {
-        await signup({ name, email, password });
+      }else{
+        await signup({name, email, password});
       }
+
     } catch (error: any) {
       setIsProcessing(false);
-      Alert.alert("Authentication Error", error.message);
+      showAlert({
+        title: "Authentication Error!",
+        message: error.message,
+      });
     }
   };
 
@@ -167,7 +174,13 @@ export default function LoginScreen() {
         ]}
       >
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={{ marginTop: 16, color: theme.colors.text.secondary, fontSize: 16}}>
+        <Text
+          style={{
+            marginTop: 16,
+            color: theme.colors.text.secondary,
+            fontSize: 16,
+          }}
+        >
           Authenticating...
         </Text>
       </View>
@@ -241,10 +254,7 @@ export default function LoginScreen() {
             style={styles.eyeIcon}
             onPress={() => setShowPassword(!showPassword)}
           >
-            <VisibiltyIcon
-              size={22}
-              color={theme.colors.text.secondary}
-            />
+            <VisibiltyIcon size={22} color={theme.colors.text.secondary} />
           </TouchableOpacity>
         </View>
 

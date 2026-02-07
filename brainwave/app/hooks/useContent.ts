@@ -32,6 +32,7 @@ export const useContent = () => {
         try {
           if (item.uri) {
             const fileName = item.uri.split("/").pop();
+            console.log("Attempting sync for:", item.title, "URI:", item.uri);
             const result = await BrainwaveAPI.uploadSyllabus(
               user.id,
               item.uri,
@@ -41,7 +42,12 @@ export const useContent = () => {
             LocalDB.markMaterialSynced(item.id, result.id);
           }
         } catch (e: any) {
-          console.error("Failed to sync material:", item.title, e.message);
+          console.error(
+            `Failed to sync material on ${item.title}:`,
+            e.response?.data,
+          );
+
+          setError(`Server could not read the timetable "${item.title}".`);
         }
       }
 
@@ -64,88 +70,110 @@ export const useContent = () => {
       }
 
       // Update local state with the newly "cleaned" (is_dirty=0) rows
-      setMaterials(LocalDB.getAllMaterials(user.id));
-      setTimetables(LocalDB.getAllTimetables(user.id));
+      setMaterials(await LocalDB.getAllMaterials(user.id));
+      setTimetables(await LocalDB.getAllTimetables(user.id));
     },
     [user?.id],
   );
 
   // 2. FETCH DATA: Instant load from SQLite + Background Cloud Refresh
-  const fetchData = useCallback(async () => {
-    if (!user?.id) return;
+  const fetchData = useCallback(
+    async (force = false) => {
+      if (!user?.id) return;
 
-    //const targetDate = new Date().toISOString().split("T")[0];
+      // 1. load local immediately
+      const localMaterials = await LocalDB.getAllMaterials(user.id);
+      const localTimetables = await LocalDB.getAllTimetables(user.id);
+      const localPlans = await LocalDB.getAllPlans(user.id);
 
-    // Load SQLite immediately for speed
-    const localMaterials = LocalDB.getAllMaterials(user.id);
-    const localTimetables = LocalDB.getAllTimetables(user.id);
-    const localPlans = LocalDB.getAllPlans(user.id);
+      setMaterials(await localMaterials);
+      setTimetables(await localTimetables);
+      setPlans(await localPlans);
 
-    setMaterials(localMaterials);
-    setTimetables(localTimetables);
-    setPlans(localPlans);
+      setIsLoading(true);
+      setError(null);
 
-    setIsLoading(true);
-    setError(null);
+      try {
+        // 2. sync dirty records in background
+        await syncDirtyRecords(localMaterials, localTimetables);
 
-    try {
-      // Step A: Sync any local changes first
-      await syncDirtyRecords(localMaterials, localTimetables);
+        // 3. pull from backend if forced or timer expired
+        const lastSync = await AsyncStorage.getItem("lastPlansSync");
+        const TWELVE_HOURS = 1000 * 60 * 60 * 12;
 
-      // Step B: Check if we have an AI plan for today.
-      // If we don't have one in localPlans, ask the API.
-      const lastSync = await AsyncStorage.getItem("lastPlansSync");
-      const TWELVE_HOURS = 1000 * 60 * 60 * 12;
-
-      if(!lastSync || Date.now() - Number(lastSync) > TWELVE_HOURS){
-        const remotePlans = await BrainwaveAPI.listDailyPlans(user.id);
-
-        if(remotePlans?.plans?.length){
-          LocalDB.syncPlansFromServer(user.id, remotePlans.plans);
-          await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
+        if (
+          force ||
+          !lastSync ||
+          Date.now() - Number(lastSync) > TWELVE_HOURS
+        ) {
+          const remotePlans = await BrainwaveAPI.listDailyPlans(user.id);
+          if (remotePlans?.plans) {
+            LocalDB.syncPlansFromServer(user.id, remotePlans.plans);
+            await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
+          }
         }
+
+        // 4. update app state after full sync
+        setMaterials(await LocalDB.getAllMaterials(user.id));
+        setTimetables(await LocalDB.getAllTimetables(user.id));
+        setPlans(await LocalDB.getAllPlans(user.id));
+      } catch (err: any) {
+        console.log("Fetch Error: ", err.message);
+        setError("Failed to sync with cloud.");
+      } finally {
+        setIsLoading(false);
       }
+    },
+    [user?.id, syncDirtyRecords],
+  );
 
-      // Step D: Final state refresh from LocalDB (The "Single Source of Truth")
-      setMaterials(LocalDB.getAllMaterials(user.id));
-      setPlans(LocalDB.getAllPlans(user.id));
-    } catch (err: any) {
-      console.log("Fetch Error: ", err.message);
-      setError("Failed to sync with cloud. Using offline data.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.id, syncDirtyRecords]);
+  const generatePlanForDate = async (
+    date: string,
+    preferences?: any,
+    customTasks?: any[],
+  ) => {
+    if (!user?.id) return [];
 
-  const generatePlanForDate = async (date: string) => {
-    if (!user?.id) return;
-
-    //GUARD: Checks for local existence instead of using AI all the time
-    const existing = LocalDB.getPlanByDate(user.id, date);
-    if(existing){
-      console.log("Plan already exists, skipping AI");
-      return existing.tasks
+    // check local first
+    const existing = await LocalDB.getPlanByDate(user.id, date);
+    if (existing) {
+      console.log("Plan already exists locally, skipping AI");
+      return existing.tasks;
     }
 
     setIsLoading(true);
     setError(null);
-    try {
 
-      const dailyPlan = await BrainwaveAPI.generateDailyPlan(user.id, date);
+    try {
+      // generate from AI
+      const dailyPlan = await BrainwaveAPI.generateDailyPlan(
+        user.id,
+        date,
+        preferences || {},
+        customTasks || [],
+      );
 
       if (dailyPlan?.items) {
-        LocalDB.syncPlansFromServer(user.id, [
+        // sync to local DB
+        await LocalDB.syncPlansFromServer(user.id, [
           { date, items: dailyPlan.items },
         ]);
-        setPlans(LocalDB.getAllPlans(user.id));
+
+        // update state
+        const updatedPlans = await LocalDB.getAllPlans(user.id);
+        setPlans(updatedPlans);
+
         return dailyPlan.items;
       }
-    } catch (err: any) {        
+
+      return [];
+    } catch (err: any) {
       setError(
-        err.message.includes("429")
-          ? "AI quota hit. Slow down brochacho ✌️✌️✌️"
+        err.message?.includes("429")
+          ? "AI quota hit. Slow down brochacho ✌️"
           : "Failed to generate plan",
       );
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -164,14 +192,14 @@ export const useContent = () => {
   ) => {
     if (!user?.id) return null;
 
-    const localId = LocalDB.createMaterialLocally(
+    const localId = await LocalDB.createMaterialLocally(
       user.id,
       title,
       rawContent,
       uri,
       type,
     );
-    const updatedLocal = LocalDB.getAllMaterials(user.id);
+    const updatedLocal = await LocalDB.getAllMaterials(user.id);
     setMaterials(updatedLocal);
 
     // Sync in background
@@ -189,4 +217,4 @@ export const useContent = () => {
     generatePlanForDate,
     createMaterial,
   };
-};;
+};

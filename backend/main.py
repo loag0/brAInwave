@@ -75,6 +75,12 @@ class CustomTask(BaseModel):
 class PlanRequest(BaseModel):
     user_id: str
     date: str
+    # Preferences
+    isMorningPerson: bool
+    preferredSessionLength: str
+    mode: str
+    subjectPriorities: List[str]
+    # Tasks
     classes: Optional[List[ClassItem]] = None
     customTasks: Optional[List[CustomTask]] = None
 
@@ -207,8 +213,10 @@ async def syncStudyMaterials(data: StudyMaterialSync, db: Session = Depends(get_
     return {"id": material.id, "status": "synced"}
 
 @app.post("/generate-plan")
+@app.post("/generate-plan")
 async def generateDailyPlan(request: PlanRequest):
     try:
+        # 1. Fetch data from Firestore
         userDataRef = fs_db.collection("users").document(request.user_id).collection("data").document("timetable")
         userData = userDataRef.get()
         
@@ -217,14 +225,32 @@ async def generateDailyPlan(request: PlanRequest):
         
         data = userData.to_dict()
         weeklyTemplate = data.get("weekly_template", {})
-        assignments = data.get("assignments", []) # Assumes assignments might exist in Firestore
+        assignments = data.get("assignments", []) 
         
+        # 2. Prepare context
         dayOfWeekName = datetime.strptime(request.date, "%Y-%m-%d").strftime("%A")
         todaysClasses = weeklyTemplate.get(dayOfWeekName.lower(), [])
         customTaskList = [t.model_dump() for t in request.customTasks] if request.customTasks else []
         
-        generatedItems = await aiOptimization(todaysClasses, assignments, request.date, dayOfWeekName.capitalize(), customTasks=customTaskList)
+        # 3. Bundle preferences for the AI
+        prefs = {
+            "isMorningPerson": request.isMorningPerson,
+            "sessionLength": request.preferredSessionLength,
+            "mode": request.mode,
+            "subjectPriorities": request.subjectPriorities
+        }
         
+        # 4. Run AI Optimization
+        generatedItems = await aiOptimization(
+            classes=todaysClasses, 
+            assignments=assignments, 
+            date=request.date, 
+            dayOfWeek=dayOfWeekName.capitalize(), 
+            prefs=prefs, 
+            customTasks=customTaskList
+        )
+        
+        # 5. Save the generated plan back to Firestore
         planRef = fs_db.collection("users").document(request.user_id).collection("plans").document(request.date)
         planRef.set({
             "items": generatedItems,
@@ -232,40 +258,63 @@ async def generateDailyPlan(request: PlanRequest):
         })
         
         return {"success": True, "items": generatedItems}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def aiOptimization(classes, assignments, date, dayOfWeek, customTasks=None):
-    customContext = json.dumps(customTasks) if customTasks else "None"
-    prompt = f"""
-        You are brAInwave, an AI study architect.
-        Create a daily schedule for {dayOfWeek}, {date}.
         
-        USER DATA:
+    except Exception as e:
+        print(f"Error generating plan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTasks=None):
+    customContext = json.dumps(customTasks) if customTasks else "None"
+    
+    lengthMap = {"short": "25-45", "medium": "45-75", "long": "90-120"}
+    targetRange = lengthMap.get(prefs['sessionLength'], "45-75")
+    
+    priorityList = prefs.get('subjectPriorites', [])
+    priorityContext = ", ".join(priorityList) if priorityList else "Balanced"
+        
+    prompt = f"""
+        You are brAInwave, a professional AI Study Architect. Your goal is to build a high-performance daily schedule tailored to a student's specific cognitive profile and academic load.
+
+        SCHEDULE DATE: {dayOfWeek}, {date}
+
+        --- USER COGNITIVE PROFILE ---
+        - Energy Peak: {"MORNING (Prioritize high-intensity 'Hard' tasks before 12:00 PM)" if prefs.get('isMorningPerson') else "EVENING (Prioritize high-intensity 'Hard' tasks after 4:00 PM)"}
+        - Preferred Study Block: {targetRange} minutes
+        - Goal Mode: {prefs.get('mode', 'stay_consistent').replace('_', ' ')}
+        - Subject Priorities (Ranked Hardest to Easiest): {priorityContext}
+
+        --- DATA INPUTS ---
         - Weekly Classes: {json.dumps(classes)}
         - Pending Assignments: {json.dumps(assignments)}
-        - USER'S CUSTOM FIXED TASKS: {customContext}
+        - USER'S FIXED CUSTOM TASKS: {customContext}
+
+        --- ARCHITECTURAL INSTRUCTIONS ---
+        1. CLASS FILTERING: Only include classes from 'Weekly Classes' that occur on {dayOfWeek}.
+        2. FIXED CONSTRAINTS: All 'USER'S FIXED CUSTOM TASKS' are non-negotiable. Place them exactly at their specified times.
+        3. GAP ANALYSIS: Identify available time gaps between classes and fixed tasks.
+        4. STUDY ALLOCATION (The 3 Pillar Rule):
+            - PILLAR 1 (Difficulty): Subjects at the TOP of 'Subject Priorities' get the longest blocks ({targetRange}m) and are placed during the user's 'Energy Peak'.
+            - PILLAR 2 (Urgency): Any 'Pending Assignment' due within 48 hours overrides priority ranks and must be scheduled.
+            - PILLAR 3 (Goal Mode): 
+                - 'Exam Prep': Allocate 70% of gaps to active recall/practice exams.
+                - 'Catch Up': Focus on one subject for multiple back-to-back blocks.
+                - 'Stay Consistent': Rotate through 2-3 different subjects to maintain variety.
+        5. LOGIC & HEALTH: 
+            - No study sessions between 11:00 PM and 7:00 AM unless the user isn't a morning person (even then, prioritize sleep).
+            - Include 15-minute 'Brain Breaks' between study blocks.
         
-        INSTRUCTIONS:
-        1. Filter the 'Weekly Classes' to ONLY include classes where 'days' matches '{dayOfWeek}'
-        2. MANDATORY: Include all 'USER'S CUSTOM FIXED TASKS' at their specified times. These are non-negotiable.
-        3. OPTIMIZATION: Identify the remaining free gaps in the day.
-        4. FILL GAPS: Insert study sessions for 'Pending Assignments' into those gaps.
-        5. If an assignment is due soon, prioritize it.
-        6. Structure the day logically (e.g., don't put a 3-hour study block at 2:00 AM )
-        7. Return a JSON array of objects called 'items'.
-        8. Each item MUST follow this schema:
-            {{
-                "id": "unique_string",
-                "time": "e.g. 08:00 am",
-                "subject": "Subject Name",
-                "task": "Specify activity (e.g. 'Class Lecture' or 'Solve Calculus Ch.2')",
-                "duration": "e.g. 90 min",
-                "completed": false,
-                "difficulty": "easy" | "medium" | "hard"
-            }}
+        --- OUTPUT FORMAT ---
+        Return a JSON object with a single key 'items' containing an array of objects.
+        Each item MUST follow this schema:
+        {{
+            "id": "unique_uuid",
+            "time": "hh:mm am/pm",
+            "subject": "Name of subject or task",
+            "task": "Specific actionable instruction (e.g., 'Draft Intro for History Paper')",
+            "duration": "X min",
+            "completed": false,
+            "difficulty": "easy" | "medium" | "hard"
+        }}
     """
-    
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
         config=types.GenerateContentConfig(response_mime_type="application/json"),

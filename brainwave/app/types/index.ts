@@ -1,3 +1,5 @@
+import { UserCredential } from "firebase/auth";
+
 export interface User {
   id: string;
   name: string;
@@ -5,20 +7,21 @@ export interface User {
   studyPreferences: {
     isMorningPerson: boolean | null;
     preferredSessionLength: "short" | "medium" | "long";
-    subjects: string[];
+    mode: "stay_consistent" | "exam_prep" | "catch_up";
+    subjectPriorities: string[];
   };
   hasFinishedSetup: boolean;
 }
 
 export interface AuthContextType {
   user: User | null;
+  token: string | null;
   updateUser: (newData: Partial<User>) => void;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (userData: SignupData) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserCredential>;
+  signup: (userData: SignupData) => Promise<UserCredential>;
   updateProfileData: (updates: Partial<User>) => Promise<void>;
   logout: () => Promise<void>;
-  token: string | null;
 }
 
 export interface SignupData {
