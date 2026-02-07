@@ -1,12 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
 import { LocalDB } from "../database/localDb";
-import BrAInwaveAPI from "@/api/brAInwaveApi";
+import BrainwaveAPI from "@/api/brAInwaveApi";
 import { useAuth } from "../contexts/AuthContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+export interface StudyPlan {
+  id: string;
+  date: string;
+  tasks: any[];
+  [key: string]: any;
+}
 
 export const useContent = () => {
   const { user } = useAuth();
   const [materials, setMaterials] = useState<any[]>([]);
   const [timetables, setTimetables] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,13 +27,12 @@ export const useContent = () => {
       const dirtyMaterials = currentMaterials.filter((m) => m.is_dirty === 1);
       const dirtyTimetables = currentTimetables.filter((t) => t.is_dirty === 1);
 
-      // Sync Unsynced Materials (Syllabus uploads)
+      // Sync Unsynced Materials
       for (const item of dirtyMaterials) {
         try {
-          // Only attempt file sync if we have a URI
           if (item.uri) {
             const fileName = item.uri.split("/").pop();
-            const result = await BrAInwaveAPI.uploadSyllabus(
+            const result = await BrainwaveAPI.uploadSyllabus(
               user.id,
               item.uri,
               fileName,
@@ -42,7 +50,7 @@ export const useContent = () => {
         try {
           if (table.uri) {
             const fileName = table.uri.split("/").pop();
-            const result = await BrAInwaveAPI.uploadTimetable(
+            const result = await BrainwaveAPI.uploadTimetable(
               user.id,
               table.uri,
               fileName,
@@ -55,7 +63,7 @@ export const useContent = () => {
         }
       }
 
-      // Update state to reflect synced status (is_dirty 1 -> 0)
+      // Update local state with the newly "cleaned" (is_dirty=0) rows
       setMaterials(LocalDB.getAllMaterials(user.id));
       setTimetables(LocalDB.getAllTimetables(user.id));
     },
@@ -66,40 +74,88 @@ export const useContent = () => {
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
 
+    //const targetDate = new Date().toISOString().split("T")[0];
+
     // Load SQLite immediately for speed
     const localMaterials = LocalDB.getAllMaterials(user.id);
     const localTimetables = LocalDB.getAllTimetables(user.id);
+    const localPlans = LocalDB.getAllPlans(user.id);
+
     setMaterials(localMaterials);
     setTimetables(localTimetables);
-
-    // Run sync manager to push local changes up
-    await syncDirtyRecords(localMaterials, localTimetables);
+    setPlans(localPlans);
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Pull fresh data from Python Backend
-      const remoteData = await BrAInwaveAPI.listStudyPlans(user.id);
+      // Step A: Sync any local changes first
+      await syncDirtyRecords(localMaterials, localTimetables);
 
-      // Update SQLite with fresh cloud data
-      LocalDB.syncMaterialsFromServer(user.id, remoteData.plans || []);
+      // Step B: Check if we have an AI plan for today.
+      // If we don't have one in localPlans, ask the API.
+      const lastSync = await AsyncStorage.getItem("lastPlansSync");
+      const TWELVE_HOURS = 1000 * 60 * 60 * 12;
 
-      // Refresh state from the newly updated local DB
+      if(!lastSync || Date.now() - Number(lastSync) > TWELVE_HOURS){
+        const remotePlans = await BrainwaveAPI.listDailyPlans(user.id);
+
+        if(remotePlans?.plans?.length){
+          LocalDB.syncPlansFromServer(user.id, remotePlans.plans);
+          await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
+        }
+      }
+
+      // Step D: Final state refresh from LocalDB (The "Single Source of Truth")
       setMaterials(LocalDB.getAllMaterials(user.id));
+      setPlans(LocalDB.getAllPlans(user.id));
     } catch (err: any) {
-      console.log("Device offline or server error, using local data.", err.message);
+      console.log("Fetch Error: ", err.message);
+      setError("Failed to sync with cloud. Using offline data.");
     } finally {
       setIsLoading(false);
     }
   }, [user?.id, syncDirtyRecords]);
+
+  const generatePlanForDate = async (date: string) => {
+    if (!user?.id) return;
+
+    //GUARD: Checks for local existence instead of using AI all the time
+    const existing = LocalDB.getPlanByDate(user.id, date);
+    if(existing){
+      console.log("Plan already exists, skipping AI");
+      return existing.tasks
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+
+      const dailyPlan = await BrainwaveAPI.generateDailyPlan(user.id, date);
+
+      if (dailyPlan?.items) {
+        LocalDB.syncPlansFromServer(user.id, [
+          { date, items: dailyPlan.items },
+        ]);
+        setPlans(LocalDB.getAllPlans(user.id));
+        return dailyPlan.items;
+      }
+    } catch (err: any) {        
+      setError(
+        err.message.includes("429")
+          ? "AI quota hit. Slow down brochacho ✌️✌️✌️"
+          : "Failed to generate plan",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Initial load
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // 3. ACTION: Create a plan locally first
   const createMaterial = async (
     title: string,
     rawContent: string,
@@ -116,21 +172,21 @@ export const useContent = () => {
       type,
     );
     const updatedLocal = LocalDB.getAllMaterials(user.id);
-
     setMaterials(updatedLocal);
 
-    // Attempt to sync this specific item immediately
+    // Sync in background
     syncDirtyRecords(updatedLocal, timetables);
-
     return localId;
   };
 
   return {
     materials,
     timetables,
+    plans,
     isLoading,
     error,
     refresh: fetchData,
+    generatePlanForDate,
     createMaterial,
   };
-};
+};;

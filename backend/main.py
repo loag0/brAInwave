@@ -278,6 +278,21 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, customTasks=None
     result = json.loads(response.text)
     return result.get("items", [])
 
+@app.get("/daily-plans/{user_id}")
+async def listDailyPlans(user_id: str):
+    plansRef = fs_db.collection("users").document(user_id).collection("plans")
+    docs = plansRef.stream()
+    
+    plans = []
+    for doc in docs:
+        data = doc.to_dict()
+        plans.append({
+            "date": doc.id,
+            "items": data.get("items", [])
+        })
+    
+    return { "plans": plans }
+
 @app.get("/study-plan/{user_id}/{material_id}")
 async def getStudyMaterial(user_id: str, material_id: int, db: Session = Depends(get_db)):
     material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user_id).first()
@@ -289,6 +304,17 @@ async def getStudyMaterial(user_id: str, material_id: int, db: Session = Depends
 async def listStudyPlans(user_id: str, db: Session = Depends(get_db)):
     materials = db.query(StudyMaterial).filter(StudyMaterial.user_id == user_id).order_by(StudyMaterial.created_at.desc()).all()
     return {"count": len(materials), "plans": [{"id": m.id, "title": m.title} for m in materials]}
+
+@app.get("/daily-plan/{user_id}/{date}")
+async def getDailyPlan(user_id: str, date: str):
+    try:
+        planRef = fs_db.collection("users").document(user_id).collection("plans").document(date)
+        plan = planRef.get()
+        if not plan.exists:
+            return {"items": []}
+        return plan.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/study-plan/{user_id}/{material_id}")
 async def deleteStudyMaterial(user_id: str, material_id: int, db: Session = Depends(get_db)):

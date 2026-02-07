@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as Network from "expo-network";
-import { LocalDB, db } from "../database/localDb";
+import { db } from "../database/localDb";
 import { useAuth } from "../contexts/AuthContext";
 
 export const useSync = () => {
@@ -90,9 +90,6 @@ export const useSync = () => {
   useEffect(() => {
     syncOfflineData();
 
-    // Optional: Poll every 5 minutes as a fallback
-    const interval = setInterval(syncOfflineData, 5 * 60 * 1000);
-    return () => clearInterval(interval);
   }, [token]);
 
   return { isSyncing, forceSync: syncOfflineData };

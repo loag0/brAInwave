@@ -68,6 +68,39 @@ export const LocalDB = {
     );
   },
 
+  getPlanByDate: (userId: string, date: string) => {
+    const row = db.getFirstSync(
+      `SELECT * FROM daily_plans WHERE user_id = ? AND date = ?`,
+      [userId, date]
+    ) as any;
+    if(!row) return null;
+    return {
+      ...row,
+      tasks: row.items_json ? JSON.parse(row.items_json) : [],
+    }
+  },
+
+  getAllPlans: (userId: string) => {
+    const results = db.getAllSync(
+      `SELECT * FROM daily_plans WHERE user_id = ? ORDER BY date DESC`,
+      [userId]
+    );
+    return results.map((row: any) => ({
+      ...row,
+      tasks: row.items_json ? JSON.parse(row.items_json) : [],
+    }));
+  },
+
+  syncPlansFromServer: (userId: string, plans: any[]) => {
+    for (const p of plans){
+      const itemsJson = JSON.stringify(p.tasks || p.items || []);
+      db.runSync(
+        `INSERT OR REPLACE INTO daily_plans (user_id, date, items_json) VALUES (?, ?, ?)`,
+        [userId, p.date || p.id, itemsJson]
+      );
+    }
+  },
+
   createMaterialLocally: (
     userId: string,
     title: string,

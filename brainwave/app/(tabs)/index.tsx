@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,23 +7,18 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
-  Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
 import Svg, { Path } from "react-native-svg";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  onSnapshot,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db as firestore } from "@/firebaseConfig";
 import * as DocumentPicker from "expo-document-picker";
 import brainwaveApi from "@/api/brAInwaveApi";
+import { LocalDB } from "../database/localDb";
+import { useContent } from "../hooks/useContent";
 import { router } from "expo-router";
 import Skeleton from "@/components/HomeSkeleton";
 
@@ -103,14 +98,22 @@ const HomeSkeleton = ({ styles, theme }: any) => (
 export default function Home() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
-  const [classes, setClasses] = useState<any[]>([]);
+  const { showAlert } = useAlert();
   const [weeklyTemplate, setWeeklyTemplate] = useState<any>({});
   const [assignments, setAssignments] = useState<any[]>([]);
-  const [suggestedSessions, setSuggestedSessions] = useState<any[]>([]);
+
+  const {
+    timetables,
+    plans,
+    isLoading: contentLoading,
+    refresh,
+    generatePlanForDate,
+  } = useContent();
+
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
+  const [todaysSchedule, setTodaysSchedule] = useState<any[]>([]);
   const hasTimetable = Object.keys(weeklyTemplate || {}).length > 0;
 
   const styles = createStyles(theme, isDark);
@@ -118,7 +121,6 @@ export default function Home() {
   useEffect(() => {
     if (!user?.id) return;
 
-    const todayId = new Date().toISOString().split("T")[0];
     const days = [
       "monday",
       "tuesday",
@@ -128,80 +130,48 @@ export default function Home() {
       "saturday",
       "sunday",
     ];
-    const todayName = days[new Date().getDay()];
 
-    const unsubTimetable = onSnapshot(
-      doc(firestore, "users", user.id, "data", "timetable"),
-      (timeSnap) => {
-        if (timeSnap.exists()) {
-          const data = timeSnap.data();
-          setWeeklyTemplate(data.weekly_template || {});
-          setAssignments(data.assignments || []);
-        }
-      },
-    );
+    const jsDay = new Date().getDay();
+    const shiftedIndex = jsDay === 0 ? 6 : jsDay - 1;
+    const todayName = days[shiftedIndex];
+    const todayISO = new Date().toISOString().split("T")[0];
 
-    // Listen to AI optimized plan
-    const unsubDailyPlan = onSnapshot(
-      doc(firestore, "users", user.id, "plans", todayId),
-      (planSnap) => {
-        if (planSnap.exists()) {
-          const planData = planSnap.data().items || [];
+    console.log("Target Date: ", todayISO);
+    console.log("Available Plan Dates: ", plans.map(p => p.date));
 
-          setClasses(
-            planData.map((item: any) => ({
-              ...item,
-              subject: item.task || item.subject,
-              isAiGenerated: true,
-            })),
-          );
-        } else {
-          getDoc(doc(firestore, "users", user.id, "data", "timetable")).then(
-            (s) => {
-              if (s.exists()) {
-                setClasses(s.data().weekly_template?.[todayName] || []);
-              }
-            },
-          );
-        }
-        setIsInitialLoading(false);
-      },
-    );
-    return () => {
-      unsubTimetable();
-      unsubDailyPlan();
-    };
-  }, [user?.id]);
+    const todaysPlan = plans?.find((p: any) => p.date === todayISO || p.id === todayISO);
 
-  // 2. LISTEN TO AI SUGGESTED SESSIONS
-  useEffect(() => {
-    if (!user?.id) return;
+    if (todaysPlan?.tasks?.length){
+      console.log("Found an AI plan for today!");
+      setTodaysSchedule(todaysPlan.tasks);
+      return;
+    }
 
-    // Listen to AI Suggested Sessions
-    const unsubSuggestions = onSnapshot(
-      doc(firestore, "users", user.id, "data", "ai_suggestions"),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setSuggestedSessions(docSnap.data().sessions || []);
-        }
-      },
-    );
+    const activeTimetable = timetables[0];
 
-    const fallbackTimer = setTimeout(() => {
-      setIsInitialLoading(false);
-    }, 5000);
+    console.log("Active timetable data: ", activeTimetable?.structuredData);
+    console.log("Looking for day: ", todayName);
 
-    return () => {
-      unsubSuggestions();
-      clearTimeout(fallbackTimer);
-    };
-  }, [user?.id]);
+    if(activeTimetable?.structuredData) {
+      console.log("No plan found, falling back to Weekly Template");
+      const schedule = activeTimetable.structuredData[todayName] || [];
+      setTodaysSchedule(schedule);
+    }
+  }, [timetables, plans, user?.id, contentLoading]);
 
-  if (isInitialLoading) {
-    return <HomeSkeleton styles={styles} theme={theme} />;
-  }
+  const onRefresh = useCallback(async () => {
+    if (refresh) await refresh();
+  }, [refresh]);
 
   const handleUploadSchedule = async () => {
+
+    if(!user?.id){
+      showAlert({
+        title: "Error",
+        message: "You must be logged in to upload"
+      });
+      return;
+    }
     try {
       setIsLoading(true);
       const result = await DocumentPicker.getDocumentAsync({
@@ -209,63 +179,39 @@ export default function Home() {
         copyToCacheDirectory: true,
       });
 
-      if (result.canceled || !result.assets) {
-        setIsLoading(false);
-        return;
-      }
+      if (result.canceled || !result.assets) return;
 
       const fileAsset = result.assets[0];
 
       // Fixed: Passing separate arguments to match your BrAInwaveAPI class
       const response = await brainwaveApi.uploadTimetable(
+        user.id,
         fileAsset.uri,
         fileAsset.name,
         fileAsset.mimeType || "application/octet-stream",
       );
 
-      if (!user?.id) return;
-
-      const weeklyData = {
-        monday: response.classes.filter(
-          (c: { day: string }) => c.day === "Monday",
-        ),
-        tuesday: response.classes.filter(
-          (c: { day: string }) => c.day === "Tuesday",
-        ),
-        wednesday: response.classes.filter(
-          (c: { day: string }) => c.day === "Wednesday",
-        ),
-        thursday: response.classes.filter(
-          (c: { day: string }) => c.day === "Thursday",
-        ),
-        friday: response.classes.filter(
-          (c: { day: string }) => c.day === "Friday",
-        ),
-        saturday: response.classes.filter(
-          (c: { day: string }) => c.day === "Saturday",
-        ),
-        sunday: response.classes.filter(
-          (c: { day: string }) => c.day === "Sunday",
-        ),
-      };
-
-      // Save the response data to Firestore
-      // Assuming response contains { classes: [], assignments: [] }
-      await setDoc(
-        doc(firestore, "users", user.id, "data", "timetable"),
-        {
-          weekly_template: weeklyData || [],
-          assignments: response.assignments || [],
-          uploadedAt: serverTimestamp(),
-        },
-        { merge: true },
+      LocalDB.createTimetableLocally(
+        user.id,
+        `Schedule ${new Date().toLocaleDateString()}`,
+        response.weekly_template,
+        fileAsset.uri,
+        fileAsset.mimeType
       );
-
-      alert("File has been successfully uploaded and processed!");
+      showAlert({
+        title: "Success!",
+        message: "The file has been processed successfully",
+        confirmText: "Ok"
+      })
       setShowUploadMenu(false);
-    } catch (error) {
+      refresh();
+
+    } catch (error: any) {
       console.error("Upload Error:", error);
-      Alert.alert("Error", "Failed to upload. Check your connection.");
+      showAlert({
+        title: "Error!",
+        message: error.message || "Check your internet connection vro 🥀",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -276,6 +222,31 @@ export default function Home() {
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   }
+
+  function getNextClass(schedule: any[]){
+    const now = new Date();
+    return schedule
+    .map((s) => ({ ...s, startDate: new Date(s.time || s.start) }))
+    .filter((s) => s.startDate > now)
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())[0];
+  }
+
+  function formatCountdown(date: Date) {
+    const diff = date.getTime() - new Date().getTime();
+    if (diff <= 0) return "Now";
+    const hrs = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hrs}h ${mins}m`;
+  }
+
+  const nextClass = getNextClass(todaysSchedule);
+
+  const aiTips = [
+    "Take a 5-min stretch break every hour 🧘‍♂️",
+    "Focus on high-priority tasks first 🔥",
+    "Stay hydrated! 💧",
+  ];
+  const randomTip = aiTips[Math.floor(Math.random() * aiTips.length)];
 
   function getPriorityColor(priority: string) {
     const p = priority?.toLowerCase();
@@ -338,14 +309,18 @@ export default function Home() {
     </Svg>
   );
 
+   if (contentLoading && timetables.length === 0) {
+     return <HomeSkeleton styles={styles} theme={theme} />;
+   }
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/*LOADING OVERLAY*/}
-      {isLoading && (
+      {(isLoading || contentLoading) && (
         <View style={styles.loaderOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={[styles.dateText, { marginTop: 10 }]}>
-            brAInwave is analyzing your schedule...
+            Analyzing your schedule...
           </Text>
         </View>
       )}
@@ -353,6 +328,13 @@ export default function Home() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
       >
         {/* Header Section */}
         <View style={styles.headerBg}>
@@ -360,20 +342,42 @@ export default function Home() {
             <Text style={styles.welcomeText}>
               Welcome back, {user?.name?.split(" ")[0] || "User"}!
             </Text>
-            <Text style={styles.dateText}>Thursday, October 17, 2025</Text>
-          </View>
-
-          <View style={styles.progressCard}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>Today's Progress</Text>
-              <Text style={styles.progressValue}>2.5 / 4 hours</Text>
-            </View>
-            <View style={styles.progressBarContainer}>
-              <View style={styles.progressBarFill} />
-            </View>
-            <Text style={styles.progressMessage}>
-              Great! You're on track to meet your daily study goal.
+            <Text style={styles.dateText}>
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
             </Text>
+          </View>
+        </View>
+
+        {/* Daily Summary */}
+        <View style={styles.content}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Today's Summary</Text>
+            <View style={{ paddingVertical: 10 }}>
+              <Text>
+                Tasks Remaining:{" "}
+                {todaysSchedule.filter((t) => !t.completed).length}
+              </Text>
+              {nextClass && (
+                <>
+                  <Text>Next Class: {nextClass.subject || nextClass.name}</Text>
+                  <Text>Starts in: {formatCountdown(nextClass.startDate)}</Text>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* AI Tip */}
+        <View style={styles.content}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Tip of the Day</Text>
+            <View style={{ paddingVertical: 10 }}>
+              <Text>{randomTip}</Text>
+            </View>
           </View>
         </View>
 
@@ -385,12 +389,14 @@ export default function Home() {
                 <TodayIcon size={24} color={theme.colors.text.secondary} />
                 <Text style={styles.cardTitle}>
                   {/*This is for if there are items in "classes"*/}
-                  {classes.length > 0 ? "Today's Schedule" : "Daily Schedule"}
+                  {todaysSchedule.length > 0
+                    ? "Today's Schedule"
+                    : "Daily Schedule"}
                 </Text>
               </View>
 
               {/*Only shows the view all button if there is a template OR an optimized plan*/}
-              {(hasTimetable || classes.length > 0) && (
+              {(hasTimetable || todaysSchedule.length > 0) && (
                 <TouchableOpacity onPress={() => router.push("/planner")}>
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
@@ -398,19 +404,38 @@ export default function Home() {
             </View>
 
             <View style={styles.cardContent}>
-              {classes.length > 0 ? (
+              {todaysSchedule.length > 0 ? (
                 // 1. Show whatever is scheduled (classes OR AI tasks)
-                classes.slice(0, 3).map((item, idx) => (
+                todaysSchedule.slice(0, 3).map((item, idx) => (
                   <View
                     key={idx}
                     style={[styles.classItem, idx !== 2 && styles.itemMargin]}
                   >
-                    <View style={[ styles.classIndicator, {backgroundColor: item.isAiGenerated ? theme.colors.secondary : theme.colors.primary}]}/>
+                    <View
+                      style={[
+                        styles.classIndicator,
+                        {
+                          backgroundColor: item.isAiGenerated
+                            ? theme.colors.secondary
+                            : theme.colors.primary,
+                        },
+                      ]}
+                    />
                     <View style={styles.classInfo}>
-                      <Text style={styles.className}>{item.subject}</Text>
+                      <Text style={styles.className}>
+                        {item.subject ||
+                          item.course ||
+                          item.name ||
+                          "Unknown Class"}
+                      </Text>
                       <View style={styles.classDetails}>
-                        <ScheduleIcon size={10} color={theme.colors.text.secondary} />
-                        <Text style={styles.classTime}>{item.time}</Text>
+                        <ScheduleIcon
+                          size={10}
+                          color={theme.colors.text.secondary}
+                        />
+                        <Text style={styles.classTime}>
+                          {item.time || item.duration || "No time"}
+                        </Text>
                         {item.room && (
                           <>
                             <Text style={styles.classSeparator}>•</Text>
@@ -432,11 +457,27 @@ export default function Home() {
                     // 3. Timetable exists, but today is empty (Weekend/Free Day)
                     <>
                       <SunIcon size={32} color={theme.colors.warning} />
-                      <Text style={[ styles.emptyText, { color: theme.colors.text.primary, fontWeight: "600"}]}>
+                      <Text
+                        style={[
+                          styles.emptyText,
+                          {
+                            color: theme.colors.text.primary,
+                            fontWeight: "600",
+                          },
+                        ]}
+                      >
                         You're free today!
                       </Text>
-                      <Text style={[ styles.emptyText, { marginTop: -15, fontSize: 10 }]}>
-                        Enjoy your{" "}{new Date().toLocaleDateString("en-US", {weekday: "long"})}
+                      <Text
+                        style={[
+                          styles.emptyText,
+                          { marginTop: -15, fontSize: 10 },
+                        ]}
+                      >
+                        Enjoy your{" "}
+                        {new Date().toLocaleDateString("en-US", {
+                          weekday: "long",
+                        })}
                       </Text>
                     </>
                   )}
@@ -445,7 +486,7 @@ export default function Home() {
             </View>
           </View>
 
-          {/* Assignments Card */}
+          {/* Assignments */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleContainer}>
@@ -507,66 +548,6 @@ export default function Home() {
                   </View>
                 ))
               )}
-            </View>
-          </View>
-
-          {/* AI Suggested Sessions Card */}
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View>
-                <View style={styles.cardTitleContainer}>
-                  <AISessionsIcon
-                    color={theme.colors.text.secondary}
-                    size={24}
-                  />
-                  <Text style={styles.cardTitle}>AI Suggested Sessions</Text>
-                </View>
-                <Text style={styles.aiSubtitle}>
-                  Optimized for your learning style
-                </Text>
-              </View>
-            </View>
-            <View style={styles.cardContent}>
-              {suggestedSessions.length === 0 ? (
-                <Text style={styles.emptyText}>
-                  Upload a schedule to get AI sessions.
-                </Text>
-              ) : (
-                suggestedSessions.map((session, idx) => (
-                  <View
-                    key={session.id || idx}
-                    style={[
-                      styles.sessionItem,
-                      idx !== suggestedSessions.length - 1 && styles.itemMargin,
-                    ]}
-                  >
-                    <View style={styles.sessionInfo}>
-                      <Text style={styles.sessionSubject}>
-                        {session.subject}
-                      </Text>
-                      <View style={styles.sessionDetails}>
-                        <ScheduleIcon
-                          size={12}
-                          color={theme.colors.text.secondary}
-                        />
-                        <Text style={styles.sessionTime}>{session.time}</Text>
-                        <Text style={styles.sessionSeparator}>•</Text>
-                        <Text style={styles.sessionDuration}>
-                          {session.duration}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.sessionBadge}>
-                      <Text style={styles.sessionBadgeText}>
-                        {session.type}
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              )}
-              <TouchableOpacity style={styles.startSessionButton}>
-                <Text style={styles.startSessionText}>Start Study Session</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -820,22 +801,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       textAlign: "center",
       paddingVertical: 10,
     },
-    content: { padding: 24, paddingBottom: 120 },
-    pomodoroButton: {
-      flexDirection: "row",
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: theme.colors.primary,
-      paddingVertical: 12,
-      borderRadius: 12,
-      marginBottom: 24,
-    },
-    pomodoroText: {
-      color: "#fff",
-      fontSize: 16,
-      fontFamily: theme.fonts.semiBold,
-      marginLeft: 8,
-    },
+    content: { padding: 24},
     card: {
       backgroundColor: theme.colors.surface,
       borderRadius: 16,
