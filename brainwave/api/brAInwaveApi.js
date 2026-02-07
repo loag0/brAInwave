@@ -69,6 +69,19 @@ class BrAInwaveAPI {
     }
   }
 
+  async listDailyPlans(userId) {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/daily-plans/${userId}`
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(
+        error.response?.data?.detail || "failed to fetch daily plans"
+      );
+    }
+  }
+
   async deleteStudyPlan(userId, planId) {
     try {
       const response = await axios.delete(
@@ -101,6 +114,15 @@ class BrAInwaveAPI {
         error.response?.data || error.message,
       );
       throw new Error(`Failed to generate daily plan: ${error.message}`);
+    }
+  }
+
+  async getDailyPlan(userId, date){
+    try{
+      const response = await axios.get(`${API_BASE_URL}/daily-plan/${userId}/${date}`);
+      return response.data;
+    } catch(error){
+      return error.message || null;
     }
   }
 
