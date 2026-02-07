@@ -1,0 +1,38 @@
+export const TABLES = {
+  STUDY_MATERIALS: "study_materials",
+  TIMETABLES: "timetables",
+  DAILY_PLANS: "daily_plans",
+};
+
+export const CREATE_STUDY_MATERIALS = `
+  CREATE TABLE IF NOT EXISTS ${TABLES.STUDY_MATERIALS} (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    raw_content TEXT,
+    ai_plan TEXT,
+    is_dirty INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`;
+
+export const CREATE_TIMETABLES = `
+  CREATE TABLE IF NOT EXISTS ${TABLES.TIMETABLES} (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    structured_data TEXT NOT NULL,
+    is_dirty INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`;
+
+export const CREATE_DAILY_PLANS = `
+  CREATE TABLE IF NOT EXISTS ${TABLES.DAILY_PLANS} (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    items_json TEXT NOT NULL,
+    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`;

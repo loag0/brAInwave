@@ -16,18 +16,24 @@ class StudyMaterial(Base):
     __tablename__ = "study_materials"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index = True)
     title = Column(String, index=True)
     rawContent = Column(Text)
     aiPlan = Column(Text)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    is_dirty = Column(Integer, default=1)
+    is_deleted = Column(Integer, default=0)
     
 class Timetable(Base):
     __tablename__ = "timetables"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
     title = Column(String, index=True)
-    structuredData = Column(JSON)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    structuredData = Column(Text)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    is_dirty = Column(Integer, default=1)
+    is_deleted = Column(Integer, default=0)
 
 def init_db():
     Base.metadata.create_all(bind=engine)

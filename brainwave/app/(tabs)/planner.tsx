@@ -142,7 +142,7 @@ export default function Planner() {
     const days = [];
     const now = new Date();
 
-    for (let i = 0; i < 8; i++) { // change the 5 to alter how many days the scroller shows
+    for (let i = 0; i < 5; i++) { // change the 5 to alter how many days the scroller shows
       const date = new Date();
       date.setDate(now.getDate() + i);
 
