@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import firestore, credentials
-from database import SessionLocal, StudyMaterial, init_db, Timetable
+from database import SessionLocal, StudyMaterial, Timetable, init_db
 from dotenv import load_dotenv
 import os
 import json
@@ -15,13 +15,13 @@ from typing import List, Optional
 
 # 1. Setup environment and Database
 load_dotenv()
-app = FastAPI(title = "brAInwave API", version = "1.0.0")
-cred = credentials.Certificate("serviceAccountKey.json")
+app = FastAPI(title="brAInwave API", version="1.0.0")
 
+# Initialize Firestore
+cred = credentials.Certificate("serviceAccountKey.json")
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
-    
-db = firestore.client()
+fs_db = firestore.client() 
 
 @app.on_event("startup")
 def on_startup():
@@ -37,7 +37,6 @@ app.add_middleware(
 )
 
 apiKey = os.getenv("GEMINI_API_KEY")
-
 if not apiKey:
     raise ValueError("GEMINI_API_KEY not found in environment variables.")
 
@@ -45,34 +44,44 @@ client = genai.Client(api_key=apiKey)
 
 # Database Dependency
 def get_db():
-    db = SessionLocal()
+    session = SessionLocal()
     try:
-        yield db
+        yield session
     finally:
-        db.close()
-        
+        session.close()
+
+# --- Schemas ---
+class StudyMaterialSync(BaseModel):
+    user_id: str  # Added for cohesion
+    title: str
+    rawContent: str
+    aiPlan: str
+
+class TimetableSync(BaseModel):
+    title: str
+    structuredData: dict
+
 class ClassItem(BaseModel):
     subject: str
     time: str
     room: str
     days: str
-    
+
 class CustomTask(BaseModel):
     task: str
     time: str
     duration: Optional[str] = "30 min"
-        
+
 class PlanRequest(BaseModel):
     user_id: str
     date: str
     classes: Optional[List[ClassItem]] = None
     customTasks: Optional[List[CustomTask]] = None
 
+# --- Routes ---
+
 @app.post("/upload-syllabus")
-async def processSyllabus(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """
-    This processes uploaded syllabus files and generates study plans using Gemini AI.
-    """
+async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
         content = await file.read()
         mime_type = file.content_type or "text/plain"
@@ -96,47 +105,33 @@ async def processSyllabus(file: UploadFile = File(...), db: Session = Depends(ge
         
         response = client.models.generate_content(
             model="gemini-3-flash-preview",
-            contents=types.Content(
-                parts=[
-                    types.Part.from_text(text = prompt),
-                    types.Part.from_bytes(
-                        data=content,
-                        mime_type=mime_type,
-                    )
-                ]
-            )
+            contents=[
+                types.Part.from_text(text=prompt),
+                types.Part.from_bytes(data=content, mime_type=mime_type)
+            ]
         )
         
+        if not response.text:
+            raise HTTPException(status_code=500, detail="Failed to generate study plan")
+
         studyPlan = response.text
-            
         material = StudyMaterial(
-            title = file.filename,
-            rawContent = f"Uploaded {file.filename} with MIME type {mime_type}",
-            aiPlan = studyPlan
+            user_id=user_id, # Link to user
+            title=file.filename,
+            rawContent=f"Uploaded {file.filename}",
+            aiPlan=studyPlan
         )
         db.add(material)
         db.commit()
         db.refresh(material)
             
-        return {
-            "status": "success",
-            "id": material.id,
-            "fileName": file.filename,
-            "studyPlan": studyPlan,    
-            "message": "Study plan generated successfully."
-        }
+        return {"status": "success", "id": material.id, "studyPlan": studyPlan}
     except Exception as e:
-        print(f"DEBUG ERROR: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
-     
-     
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/upload-timetable")
-async def uploadTimetable(user_id: str, file: UploadFile = File(...)):
-    """
-    This endpoint allows uploading structured timetable data in JSON format.
-    """
+async def uploadTimetable(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     content = await file.read()
-    
     prompt = """
         You are brAInwave, a smart study planning assistant for college students.
         Extract the class schedule from this document.
@@ -148,13 +143,10 @@ async def uploadTimetable(user_id: str, file: UploadFile = File(...)):
     
     response = client.models.generate_content(
         model="gemini-3-flash-preview",
-        config = types.GenerateContentConfig(response_mime_type="application/json"),
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
         contents=[
-            types.Part.from_text(text = prompt),
-            types.Part.from_bytes(
-                data=content,
-                mime_type=file.content_type or "application/octet-stream",
-            )
+            types.Part.from_text(text=prompt),
+            types.Part.from_bytes(data=content, mime_type=file.content_type or "application/octet-stream")
         ]
     )
     
@@ -164,72 +156,87 @@ async def uploadTimetable(user_id: str, file: UploadFile = File(...)):
     timetableData = json.loads(response.text)
     weeklyTemplate = timetableData.get("weekly_template", {})
     
-    docRef = db.collection("users").document(user_id).collection("data").document("timetable")
+    # Cohesion: Save to SQL
+    newTimetable = Timetable(
+        user_id=user_id,
+        title=f"Imported {datetime.now().strftime('%Y-%m-%d')}",
+        structuredData=json.dumps(weeklyTemplate)
+    )
+    db.add(newTimetable)
+    db.commit()
+
+    # Cohesion: Sync to Firestore
+    docRef = fs_db.collection("users").document(user_id).collection("data").document("timetable")
     docRef.set({
         "weekly_template": weeklyTemplate,
         "updatedAt": datetime.now(timezone.utc).isoformat()
-    }, merge = True)
+    }, merge=True)
     
-    return {
-        "user_id": user_id,
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "weekly_template": weeklyTemplate, 
-    }
+    return {"user_id": user_id, "weekly_template": weeklyTemplate}
 
-#This gets the day name
-def getDayName(date_str: str):
-    #converts "2026-02-05" to "Thursday"
-    return datetime.strptime(date_str, "%Y-%m-%d").strftime("%A")
+@app.post("/timetables")
+async def syncTimetable(user_id: str, data: TimetableSync, db: Session = Depends(get_db)):
+    newTimetable = Timetable(
+        user_id=user_id,
+        title=data.title,
+        structuredData=json.dumps(data.structuredData)
+    )
+    db.add(newTimetable)
+    db.commit()
+    
+    docRef = fs_db.collection("users").document(user_id).collection("data").document("timetable")
+    docRef.set({
+        "weekly_template": data.structuredData,
+        "updatedAt": datetime.now(timezone.utc).isoformat()
+    }, merge=True)
+    
+    return {"id": newTimetable.id, "status": "synced"}
+
+@app.post("/study-materials")
+async def syncStudyMaterials(data: StudyMaterialSync, db: Session = Depends(get_db)):
+    material = StudyMaterial(
+        user_id=data.user_id,
+        title=data.title,
+        rawContent=data.rawContent,
+        aiPlan=data.aiPlan,
+        is_dirty=0
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+    return {"id": material.id, "status": "synced"}
 
 @app.post("/generate-plan")
 async def generateDailyPlan(request: PlanRequest):
     try:
-        
-        userDataRef = db.collection("users").document(request.user_id).collection("data").document("timetable")
+        userDataRef = fs_db.collection("users").document(request.user_id).collection("data").document("timetable")
         userData = userDataRef.get()
         
         if not userData.exists:
-            raise HTTPException(status_code=404, detail = "Please upload a timetable first")
+            raise HTTPException(status_code=404, detail="Please upload a timetable first")
         
         data = userData.to_dict()
         weeklyTemplate = data.get("weekly_template", {})
-        assignments = data.get("assignments", [])
+        assignments = data.get("assignments", []) # Assumes assignments might exist in Firestore
         
-        #Gets the specific day name
-        dayOfWeek = getDayName(request.date).lower()
-        
-        #Only get classes for the ts (THIS) day
-        todaysClasses = weeklyTemplate.get(dayOfWeek, [])
-        
+        dayOfWeekName = datetime.strptime(request.date, "%Y-%m-%d").strftime("%A")
+        todaysClasses = weeklyTemplate.get(dayOfWeekName.lower(), [])
         customTaskList = [t.model_dump() for t in request.customTasks] if request.customTasks else []
-            #if there are classes passed in the request, it uses those
-            
-        dayOfWeek = getDayName(request.date)     
         
-        #AI optimization for proper scheduling   
-        generatedItems = await aiOptimization(todaysClasses, assignments, request.date, dayOfWeek.capitalize(), customTasks = customTaskList)
-        print(f"Gemini returned {len(generatedItems)} items.")
+        generatedItems = await aiOptimization(todaysClasses, assignments, request.date, dayOfWeekName.capitalize(), customTasks=customTaskList)
         
-        planRef = db.collection("users").document(request.user_id).collection("plans").document(request.date)
+        planRef = fs_db.collection("users").document(request.user_id).collection("plans").document(request.date)
         planRef.set({
             "items": generatedItems,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
         })
         
-        print("SUCCESS: Firestore document created/updated.")
-        
-        return {
-            "success": True,
-            "items": generatedItems,
-        }
+        return {"success": True, "items": generatedItems}
     except Exception as e:
-        print(f"CRITICAL ERROR: {str(e)}")
-        raise HTTPException(status_code = 500, detail = str(e))
-    
-async def aiOptimization(classes, assignments, date, dayOfWeek, customTasks = None):
-    
-    customContext = json.dumps(customTasks) if customTasks else "None"
+        raise HTTPException(status_code=500, detail=str(e))
 
+async def aiOptimization(classes, assignments, date, dayOfWeek, customTasks=None):
+    customContext = json.dumps(customTasks) if customTasks else "None"
     prompt = f"""
         You are brAInwave, an AI study architect.
         Create a daily schedule for {dayOfWeek}, {date}.
@@ -258,78 +265,44 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, customTasks = No
                 "difficulty": "easy" | "medium" | "hard"
             }}
     """
+    
     response = client.models.generate_content(
-        model = "gemini-3-flash-preview",
-        config = types.GenerateContentConfig(response_mime_type = "application/json"),
+        model="gemini-3-flash-preview",
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
         contents=[prompt]
     )
     
     if not response.text:
-        raise HTTPException(status_code = 500, detail = "Failed to optimize schedule")
+        raise HTTPException(status_code=500, detail="Failed to generate plan")
     
     result = json.loads(response.text)
-    print(f"DEBUG: Gemini generated {len(result.get('items', []))} items")
     return result.get("items", [])
-    
-#this lretrieves study material by id
-@app.get("/study-plan/{material_id}")
-async def getStudyMaterial(material_id: int, db: Session = Depends(get_db)):
-    material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first()
+
+@app.get("/study-plan/{user_id}/{material_id}")
+async def getStudyMaterial(user_id: str, material_id: int, db: Session = Depends(get_db)):
+    material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user_id).first()
     if not material:
         raise HTTPException(status_code=404, detail="Study plan not found.")
-    
-    return {
-        "id": material.id,
-        "title": material.title,
-        "aiPlan": material.aiPlan,
-        "CreatedAt": material.created_at,
-    }     
-       
-#this lists all study plans for the student
-@app.get("/study-plans")
-async def listStudyPlans(db: Session = Depends(get_db)):
-    material = db.query(StudyMaterial).order_by(StudyMaterial.created_at.desc()).all()
-    
-    return {
-        "count": len(material),
-        "plans": [
-            {
-                "id": m.id,
-                "title": m.title,
-                "CreatedAt": m.created_at,
-            }
-            for m in material
-        ]
-    }
-     
-# deletes a study plan       
-@app.delete("/study-plan/{material_id}")
-async def deleteStudyMaterial(material_id: int, db: Session = Depends(get_db)):
-    material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id).first()
-    
+    return {"id": material.id, "title": material.title, "aiPlan": material.aiPlan}
+
+@app.get("/study-plans/{user_id}")
+async def listStudyPlans(user_id: str, db: Session = Depends(get_db)):
+    materials = db.query(StudyMaterial).filter(StudyMaterial.user_id == user_id).order_by(StudyMaterial.created_at.desc()).all()
+    return {"count": len(materials), "plans": [{"id": m.id, "title": m.title} for m in materials]}
+
+@app.delete("/study-plan/{user_id}/{material_id}")
+async def deleteStudyMaterial(user_id: str, material_id: int, db: Session = Depends(get_db)):
+    material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user_id).first()
     if not material:
         raise HTTPException(status_code=404, detail="Study plan not found.")
-    
     db.delete(material)
     db.commit()
-    
-    return {"status": "success", "message": "Study plan deleted successfully."}
+    return {"status": "success"}
 
 @app.get("/")
 def readRoot():
-    return {
-        "message": "Welcome to the brAInwave Backend API\n",
-        "version": "1.0.0\n",
-        "endpoints": {
-            "upload": "/upload-syllabus [POST]",
-            "getPlan": "/study-plan/{id} [GET, DELETE]",
-            "listPlans": "/study-plans [GET]",
-            "deletePlan": "/study-plan/{id} [DELETE]",
-        }
-            
-    }
-            
+    return {"message": "brAInwave API running", "version": "1.0.0"}
+
 @app.get("/health")
 def healthCheck():
-    #Checking if the backend is running
-    return {"status": "ok", "service": "brAInwave Backend API is running."}
+    return {"status": "ok"}

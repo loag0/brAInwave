@@ -400,7 +400,7 @@ export default function Home() {
             <View style={styles.cardContent}>
               {classes.length > 0 ? (
                 // 1. Show whatever is scheduled (classes OR AI tasks)
-                classes.slice(0, 6).map((item, idx) => (
+                classes.slice(0, 3).map((item, idx) => (
                   <View
                     key={idx}
                     style={[styles.classItem, idx !== 2 && styles.itemMargin]}

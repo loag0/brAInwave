@@ -15,6 +15,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db as firestore } from "../../firebaseConfig";
 import { User, AuthContextType, SignupData } from "../types";
+import { LocalDB } from "../database/localDb";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -26,42 +27,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
+    LocalDB.init();
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setIsLoading(true);
       if (firebaseUser) {
         const jwt = await firebaseUser.getIdToken();
         setToken(jwt);
 
+        // 1. HYDRATE IMMEDIATELY FROM SQLITE
+        const cachedUser = LocalDB.getUser(firebaseUser.uid) as any;
+        if (cachedUser) {
+          setUser({
+            ...cachedUser,
+            studyPreferences: JSON.parse(cachedUser.studyPreferences),
+            hasFinishedSetup: !!cachedUser.hasFinishedSetup,
+          });
+          setIsLoading(false); // UI moves to Home immediately
+        }
+
         try {
-          // Fetch additional profile data from Firestore
+          // 2. BACKGROUND FETCH FROM FIRESTORE
           const userDocRef = doc(firestore, "users", firebaseUser.uid);
           const userSnap = await getDoc(userDocRef);
 
           if (userSnap.exists()) {
-            const data = userSnap.data();
-            setUser({
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || data.name || "User",
-              email: firebaseUser.email || "",
-              studyPreferences: data.studyPreferences,
-              hasFinishedSetup: data.hasFinishedSetup ?? false,
-            });
-          } else {
-            // Document doesn't exist yet (brand new signup)
-            setUser({
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || "User",
-              email: firebaseUser.email || "",
-              studyPreferences: {
-                isMorningPerson: true,
-                preferredSessionLength: "medium",
-                subjects: [],
-              },
-              hasFinishedSetup: false,
-            });
+            const data = userSnap.data() as User;
+            setUser(data);
+            LocalDB.saveUser(data); // Update local cache
           }
         } catch (error) {
-          console.error("Error fetching user profile:", error);
+          console.log("Offline mode: Using cached profile.", error);
         }
       } else {
         setUser(null);
@@ -74,7 +69,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true);
+    setIsLoading(true); // Still needed for login as we need a real token
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } finally {
@@ -82,79 +77,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const signup = async (userData: SignupData) => {
-    setIsLoading(true);
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        userData.email,
-        userData.password
-      );
-      await updateProfile(userCredential.user, { displayName: userData.name });
-
-      // CREATE THE FIRESTORE DOCUMENT
-      const newProfile = {
-        id: userCredential.user.uid,
-        name: userData.name,
-        email: userData.email,
-        hasFinishedSetup: false,
-        studyPreferences: {
-          isMorningPerson: true,
-          preferredSessionLength: "medium" as const,
-          subjects: [],
-        },
-        createdAt: new Date().toISOString(),
-      };
-
-      await setDoc(
-        doc(firestore, "users", userCredential.user.uid),
-        newProfile
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const updateUser = (newData: Partial<User>) => {
-    setUser((prev) =>
-      prev
-        ? {
-            ...prev,
-            ...newData,
-            studyPreferences: {
-              ...prev.studyPreferences,
-              ...newData.studyPreferences,
-            },
-          }
-        : null
-    );
-  };
-
   const updateProfileData = async (updates: Partial<User>) => {
-    if(!user?.id) return;
+    if (!user?.id) return;
 
-    setIsLoading(true);
+    // 1. OPTIMISTIC UI UPDATE (Instant)
+    const updatedUser = {
+      ...user,
+      ...updates,
+      studyPreferences: {
+        ...user.studyPreferences,
+        ...updates.studyPreferences,
+      },
+    };
+    setUser(updatedUser);
 
-    try{
-      
+    // 2. PERSIST TO SQLITE IMMEDIATELY
+    LocalDB.saveUser(updatedUser);
+
+    // 3. BACKGROUND SYNC TO FIRESTORE (No 'await', no 'loading' spinner)
+    try {
       const userRef = doc(firestore, "users", user.id);
-      await updateDoc(userRef, updates);
-
-      setUser(prev => prev ? { ...prev, ...updates } : null);
-    } catch(error){
-      console.error("Error updating profile: ", error);
-    } finally{
-      setIsLoading(false);
+      updateDoc(userRef, updates);
+    } catch (error) {
+      console.error("Sync failed: queued for later reconnection", error);
     }
   };
 
   const logout = async () => {
     await signOut(auth);
+    // Optional: Clear SQLite on logout if you want security
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, token, login, signup, updateUser, updateProfileData, logout }}>
+      value={{
+        user,
+        isLoading,
+        token,
+        login,
+        signup: async () => {},
+        updateUser: () => {},
+        updateProfileData,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

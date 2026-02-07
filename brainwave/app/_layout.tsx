@@ -20,7 +20,8 @@ import { useKeepAwake } from "expo-keep-awake";
 import Toast from "react-native-toast-message";
 import { AlertProvider } from "./contexts/AlertContext";
 import { TimerProvider } from "./contexts/TimerContext";
-import { PomodoroModal } from "@/components/PomodoroModal";
+import { LocalDB } from "./database/localDb";
+import { useSync } from "./hooks/useSync"
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,7 +39,6 @@ export default function RootLayout() {
         <TimerProvider>
           <AuthProvider>
             <NavigationHandler fontsLoaded={fontsLoaded} />
-            <PomodoroModal/>
             <Toast />
           </AuthProvider>
         </TimerProvider>
@@ -54,6 +54,9 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const router = useRouter();
   const { isDark, isThemeLoading } = useTheme();
 
+  //this is the sync engine. it runs in the background, watches the network and those dirty flags from localdb and what not
+  useSync();
+
   useEffect(() => {
     if (fontsLoaded && !isLoading && !isThemeLoading) {
       setTimeout(() => {
@@ -64,6 +67,9 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   useEffect(() => {
     if (isLoading || !fontsLoaded) return;
+
+    //initializes the db tables
+    LocalDB.init();
 
     const currentGroup = segments[0];
     const currentScreen = segments[1];
