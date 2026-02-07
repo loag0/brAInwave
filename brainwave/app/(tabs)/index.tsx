@@ -99,6 +99,7 @@ export default function Home() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  const [refreshing, setRefreshing] = useState(false);
   const [weeklyTemplate, setWeeklyTemplate] = useState<any>({});
   const [assignments, setAssignments] = useState<any[]>([]);
 
@@ -159,9 +160,17 @@ export default function Home() {
     }
   }, [timetables, plans, user?.id, contentLoading]);
 
-  const onRefresh = useCallback(async () => {
-    if (refresh) await refresh();
-  }, [refresh]);
+ const onRefresh = useCallback(async () => {
+   setRefreshing(true);
+   try {
+     if (refresh) await refresh(true);
+     setRefreshing(false);
+   } catch (error) {
+     console.error("Refresh failed", error);
+   } finally {
+     setRefreshing(false);
+   }
+ }, [refresh]);
 
   const handleUploadSchedule = async () => {
 
@@ -210,7 +219,7 @@ export default function Home() {
       console.error("Upload Error:", error);
       showAlert({
         title: "Error!",
-        message: error.message || "Check your internet connection vro 🥀",
+        message: "Failed to upload file",
       });
     } finally {
       setIsLoading(false);
@@ -277,15 +286,6 @@ export default function Home() {
     <Svg width={size} height={size} viewBox="0, -960, 960, 960" fill={color}>
       <Path
         d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h168q13-36 43.5-58t68.5-22q38 0 68.5 22t43.5 58h168q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm80-80h280v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Zm200-190q13 0 21.5-8.5T510-820q0-13-8.5-21.5T480-850q-13 0-21.5 8.5T450-820q0 13 8.5 21.5T480-790ZM200-200v-560 560Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const AISessionsIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M852-212 732-332l56-56 120 120-56 56ZM708-692l-56-56 120-120 56 56-120 120Zm-456 0L132-812l56-56 120 120-56 56ZM108-212l-56-56 120-120 56 56-120 120Zm246-75 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Zm247-361Z"
         fill={color}
       />
     </Svg>

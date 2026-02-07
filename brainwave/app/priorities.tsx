@@ -1,71 +1,136 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import DraggableFlatList, { ScaleDecorator, RenderItemParams } from "react-native-draggable-flatlist"
+import {SafeAreaView} from "react-native-safe-area-context";
+import DraggableFlatList, {
+  ScaleDecorator,
+  RenderItemParams,
+} from "react-native-draggable-flatlist";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "./contexts/AuthContext";
 import { useTheme } from "./contexts/ThemeContext";
+import { useAlert } from "./contexts/AlertContext";
+import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
-import { useRouter } from "expo-router"
+import { LocalDB } from "./database/localDb";
 
 interface IconProps {
-    size: number,
-    color: string
+  size: number;
+  color: string;
 }
 
 export default function SubjectPriorities() {
   const { theme, isDark } = useTheme();
   const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
   const router = useRouter();
+  const { showAlert } = useAlert();
   const { user, updateProfileData } = useAuth();
-  const [subjects, setSubjects] = useState(
-    user?.studyPreferences.subjects || [],
-  );
+
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const ChevronUpIcon: React.FC<IconProps> = ({ size, color }) => (
+  // 1. Load subjects from LocalDB on mount
+  // 1. Load subjects from LocalDB and merge with existing rankings
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const loadSubjects = async () => {
+      const timetables = await LocalDB.getAllTimetables(user.id);
+      const subjectSet = new Set<string>();
+
+      // Extract subjects from local timetables
+      timetables.forEach((tt: any) => {
+        if (tt.structuredData) {
+          Object.values(tt.structuredData).forEach((dayItems: any) => {
+            if (Array.isArray(dayItems)) {
+              dayItems.forEach((item) => {
+                let name = item.subject || item.course || item.name;
+                if (name) {
+                  const cleanedName = name
+                    .replace(
+                      /\b(LAB|LECTURE|LEC|TUTORIAL|TUT|PRACTICAL|PRAC)\b/gi,
+                      "",
+                    )
+                    .trim();
+                  subjectSet.add(cleanedName);
+                }
+              });
+            }
+          });
+        }
+      });
+
+      const extractedSubjects = Array.from(subjectSet);
+
+      // If the user already has saved priorities, use those as the base.
+      const savedPriorities = user.studyPreferences?.subjectPriorities || [];
+
+      if (savedPriorities.length > 0) {
+
+        // 1. Filter out subjects that no longer exist in the timetable
+        const stillValid = savedPriorities.filter((s) =>
+          extractedSubjects.includes(s),
+        );
+
+        const newOnes = extractedSubjects.filter(
+          (s) => !savedPriorities.includes(s),
+        );
+
+        setSubjects([...stillValid, ...newOnes]);
+      } else {
+        setSubjects(extractedSubjects);
+      }
+
+      setIsLoading(false);
+    };
+
+    loadSubjects();
+  }, [user?.id, user?.studyPreferences?.subjectPriorities]);
+
+  const handleSave = async () => {
+    if (!user?.id) return;
+    setSaving(true);
+    
+    try {
+      // Updates the studyPreferences map in Firestore
+      await updateProfileData({
+        studyPreferences: {
+          ...user.studyPreferences,
+          subjectPriorities: subjects,
+        },
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      setTimeout(() => router.back(), 500);
+    } catch (e) {
+      console.error("Failed to save priorities:", e);
+      showAlert({
+        title: "Save Failed",
+        message: "We couldn't reach the cloud. Check your connection brev.",
+        confirmText: "Retry",
+        showCancel: true,
+        onConfirm: handleSave,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const CloudIcon: React.FC<IconProps> = ({ size, color }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
-        d="M480-528 296-344l-56-56 240-240 240 240-56 56-184-184Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const ChevronDownIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0, -960 960 960" fill="none">
-      <Path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" fill={color} />
-    </Svg>
-  );
-  
-  const ChevronLeftIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0, -960 960 960" fill="none">
-      <Path
-        d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const SaveIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg>
-        <Path 
-            d="M840-680v480q0 33-23.5 56.5T760-120H200q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h480l160 160Zm-80 34L646-760H200v560h560v-446ZM565-275q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35ZM240-560h360v-160H240v160Zm-40-86v446-560 114Z"
-            fill={color}/>
-    </Svg>
-  );
-
-  const CheckIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"
+        d={
+          saving
+            ? "M260-160q-91 0-155.5-63T40-377q0-78 47-139t123-78q25-92 100-149t170-57q117 0 198.5 81.5T760-520q69 8 114.5 59.5T920-340q0 75-52.5 127.5T740-160H520q-33 0-56.5-23.5T440-240v-206l-64 62-56-56 160-160 160 160-56 56-64-62v206h220q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-80q0-83-58.5-141.5T480-720q-83 0-141.5 58.5T280-520h-20q-58 0-99 41t-41 99q0 58 41 99t99 41h100v80H260Zm220-280Z"
+            : "m414-280 226-226-58-58-169 169-84-84-57 57 142 142ZM260-160q-91 0-155.5-63T40-377q0-78 47-139t123-78q25-92 100-149t170-57q117 0 198.5 81.5T760-520q69 8 114.5 59.5T920-340q0 75-52.5 127.5T740-160H260Zm0-80h480q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-80q0-83-58.5-141.5T480-720q-83 0-141.5 58.5T280-520h-20q-58 0-99 41t-41 99q0 58 41 99t99 41Zm220-240Z"
+        }
         fill={color}
       />
     </Svg>
@@ -80,34 +145,6 @@ export default function SubjectPriorities() {
     </Svg>
   );
 
-  const moveSubject = (index: number, direction: "up" | "down") => {
-    const newSubjects = [...subjects];
-    const swapIndex = direction === "up" ? index - 1 : index + 1;
-
-    if (swapIndex < 0 || swapIndex >= newSubjects.length) return;
-
-    [newSubjects[index], newSubjects[swapIndex]] = [
-      newSubjects[swapIndex],
-      newSubjects[index],
-    ];
-    setSubjects(newSubjects);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await updateProfileData({
-        studyPreferences: { ...user!.studyPreferences, subjects },
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => router.back(), 600);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const renderItem = useCallback(
     ({ item, drag, isActive }: RenderItemParams<string>) => {
       return (
@@ -118,10 +155,7 @@ export default function SubjectPriorities() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               drag();
             }}
-            style={[
-              styles.priorityCard,
-              isActive && styles.activeCard, // Hover effect
-            ]}
+            style={[styles.priorityCard, isActive && styles.activeCard]}
           >
             <View style={styles.cardLeft}>
               <View style={styles.numberBadge}>
@@ -131,30 +165,80 @@ export default function SubjectPriorities() {
               </View>
               <Text style={styles.subjectName}>{item}</Text>
             </View>
-
-            {/* Drag Indicator Icon */}
-            <TouchableOpacity onPressIn={drag} style={styles.dragHandle}>
+            <View style={styles.dragHandle}>
               <DragIcon color={theme.colors.text.secondary} size={20} />
-            </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </ScaleDecorator>
       );
     },
-    [subjects, theme],
+    [subjects, theme, styles],
   );
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator style={{ flex: 1 }} color={theme.colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (subjects.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 40,
+          }}
+        >
+          <Text
+            style={[styles.title, { textAlign: "center", marginBottom: 10 }]}
+          >
+            No Subjects Found
+          </Text>
+          <Text style={[styles.subtitle, { textAlign: "center" }]}>
+            Upload your timetable first so we can identify your subjects.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <ChevronLeftIcon color={theme.colors.text.primary} size={24} />
-        </TouchableOpacity>
-        <View>
-          <Text style={styles.title}>AI Priorities</Text>
-          <Text style={styles.subtitle}>Hold & drag to reorder focus</Text>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                fontSize: 18,
+                fontWeight: "600",
+                color: theme.colors.text.primary,
+              },
+            ]}
+          >
+            Focus Order
+          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 2,
+            }}
+          >
+            <CloudIcon
+              size={14}
+              color={saving ? theme.colors.primary : theme.colors.success}
+            />
+            <Text style={[styles.subtitle, { fontSize: 12 }]}>
+              {saving ? "Syncing to cloud..." : "Saved to your profile"}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -162,7 +246,7 @@ export default function SubjectPriorities() {
         data={subjects}
         onDragEnd={({ data }) => {
           setSubjects(data);
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Vibration on drop/switch
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }}
         keyExtractor={(item) => item}
         renderItem={renderItem}
@@ -179,7 +263,7 @@ export default function SubjectPriorities() {
           {saving ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.saveText}>Save Order</Text>
+            <Text style={styles.saveText}>Save Focus Order</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -191,15 +275,13 @@ const createStyles = (theme: any, isDark: boolean) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
     header: {
-      padding: 20,
+      marginTop: -32,
+      paddingHorizontal: 30,
+      paddingVertical: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border + "30",
       flexDirection: "row",
       alignItems: "center",
-      gap: 15,
-    },
-    backButton: {
-      padding: 8,
-      borderRadius: 12,
-      backgroundColor: isDark ? theme.colors.border + "30" : "#F0F0F0",
     },
     title: {
       fontSize: 22,
@@ -221,7 +303,6 @@ const createStyles = (theme: any, isDark: boolean) =>
       borderColor: theme.colors.border + "50",
     },
     activeCard: {
-      // This is the "Hover" state
       backgroundColor: isDark ? theme.colors.border : "#FFFFFF",
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 10 },
@@ -265,4 +346,3 @@ const createStyles = (theme: any, isDark: boolean) =>
     },
     saveText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
   });
-

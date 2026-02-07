@@ -92,14 +92,17 @@ export const LocalDB = {
   },
 
   syncPlansFromServer: (userId: string, plans: any[]) => {
-    for (const p of plans){
-      const itemsJson = JSON.stringify(p.tasks || p.items || []);
-      db.runSync(
-        `INSERT OR REPLACE INTO daily_plans (user_id, date, items_json) VALUES (?, ?, ?)`,
-        [userId, p.date || p.id, itemsJson]
-      );
-    }
-  },
+  // 1️⃣ delete all existing plans for this user first
+  db.runSync(`DELETE FROM daily_plans WHERE user_id = ?`, [userId]);
+
+  // 2️⃣ insert fresh plans from server
+  for (const p of plans){
+    const itemsJson = JSON.stringify(p.tasks || p.items || []);
+    db.runSync(
+      `INSERT INTO daily_plans (user_id, date, items_json) VALUES (?, ?, ?)`,
+      [userId, p.date || p.id, itemsJson]
+    );
+  }},
 
   createMaterialLocally: (
     userId: string,

@@ -9,12 +9,11 @@ export default function OnboardingLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.colors.background },
-        gestureEnabled: false, // Prevents swiping back to login
-        animation: "fade_from_bottom", // Visual cue that this is a "modal" setup
+        gestureEnabled: false,
+        animation: "fade_from_bottom",
       }}
     >
-      <Stack.Screen name="goals" />
-      <Stack.Screen name="schedule" />
+      <Stack.Screen name="index" />
     </Stack>
   );
 }

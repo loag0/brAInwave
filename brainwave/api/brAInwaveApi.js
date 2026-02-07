@@ -1,3 +1,4 @@
+import SubjectPriorities from "@/app/priorities";
 import axios from "axios";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -93,18 +94,31 @@ class BrAInwaveAPI {
     }
   }
 
-  async generateDailyPlan(userId, date, customTasks = []) {
+  /**
+   * Used for generating the daily plan considering user-specific preferences
+   * @param {string} userId 
+   * @param {string} date
+   * @param {Object} preferences 
+   * @param {Array} customTasks 
+   */
+
+  async generateDailyPlan(userId, date, preferences, customTasks = []) {
     try {
       const response = await axios.post(
         `${API_BASE_URL}/generate-plan`,
         {
           user_id: userId,
           date: date,
+
+          isMorningPerson: preferences.isMorningPerson,
+          preferredSessionLength: preferences.preferredSessionLength,
+          mode: preferences.mode,
+          subjectPriorities: preferences.subjectPriorities,
           customTasks: customTasks,
         },
         {
           headers: { "Content-Type": "application/json" },
-          timeout: 30000,
+          timeout: 45000,
         },
       );
       return response.data;
@@ -113,7 +127,7 @@ class BrAInwaveAPI {
         "Error in generateDailyPlan: ",
         error.response?.data || error.message,
       );
-      throw new Error(`Failed to generate daily plan: ${error.message}`);
+      throw new Error(error.response?.data?.detail || `Failed to generate daily plan: ${error.message}`);
     }
   }
 

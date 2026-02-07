@@ -158,6 +158,8 @@ export default function Settings() {
   const [isUpdatingFocus, setIsUpdatingFocus] = useState(false);
   const [isSessionExpanded, setIsSessionExpanded] = useState(false);
   const [isUpdatingSession, setIsUpdatingSession] = useState(false);
+  const [isModeExpanded, setIsModeExpanded] = useState(false);
+  const [isUpdatingMode, setIsUpdatingMode] = useState(false);
 
   const MoonIcon: React.FC<IconProps> = ({ color, size }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
@@ -225,6 +227,21 @@ export default function Settings() {
       await updateProfileData({ studyPreferences: updatedPreferences });
     } finally {
       setTimeout(() => setIsUpdatingSession(false), 500)
+    }
+  };
+
+  const handleModeUpdate = async (mode: "stay_consistent" | "exam_prep" | "catch_up") => {
+    if (!user?.id) return;
+    setIsUpdatingMode(true);
+
+    try {
+      const updatedPreferences = {
+        ...user.studyPreferences,
+        mode: mode,
+      };
+      await updateProfileData({ studyPreferences: updatedPreferences });
+    } finally {
+      setTimeout(() => setIsUpdatingMode(false), 500);
     }
   };
 
@@ -470,9 +487,7 @@ export default function Settings() {
                           color={theme.colors.primary}
                           size="small"
                         />
-                        <Text style={styles.loadingText}>
-                          Syncing...
-                        </Text>
+                        <Text style={styles.loadingText}>Syncing...</Text>
                       </View>
                     ) : (
                       <>
@@ -500,6 +515,97 @@ export default function Settings() {
                                 ]}
                               >
                                 {len.charAt(0).toUpperCase() + len.slice(1)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              <Separator theme={theme} />
+
+              {/* 4. Study Mode Accordion */}
+              <View style={styles.accordionContainer}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => setIsModeExpanded(!isModeExpanded)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.menuItemLeft}>
+                    <BookIcon color={theme.colors.text.secondary} size={18} />
+                    <View style={styles.menuItemText}>
+                      <Text style={styles.menuItemTitle}>Study Mode</Text>
+                      <Text style={styles.menuItemSubtitle}>
+                        Currently:{" "}
+                        {user?.studyPreferences.mode === "stay_consistent"
+                          ? "Stay Consistent"
+                          : user?.studyPreferences.mode === "exam_prep"
+                            ? "Exam Prep"
+                            : "Catch Up"}
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      transform: [
+                        { rotate: isModeExpanded ? "180deg" : "0deg" },
+                      ],
+                    }}
+                  >
+                    <ChevronDownIcon
+                      color={theme.colors.text.secondary}
+                      size={24}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {isModeExpanded && (
+                  <View style={styles.expandedContent}>
+                    {isUpdatingMode ? (
+                      <View style={styles.miniLoader}>
+                        <ActivityIndicator
+                          color={theme.colors.primary}
+                          size="small"
+                        />
+                        <Text style={styles.loadingText}>Syncing...</Text>
+                      </View>
+                    ) : (
+                      <>
+                        <Text style={styles.helperText}>
+                          Choose your current study mode:
+                        </Text>
+                        <View style={styles.segmentedControl}>
+                          {(
+                            [
+                              "stay_consistent",
+                              "exam_prep",
+                              "catch_up",
+                            ] as const
+                          ).map((m) => (
+                            <TouchableOpacity
+                              key={m}
+                              style={[
+                                styles.segment,
+                                user?.studyPreferences.mode === m &&
+                                  styles.segmentActive,
+                              ]}
+                              onPress={() => handleModeUpdate(m)}
+                            >
+                              <Text
+                                style={[
+                                  styles.segmentText,
+                                  user?.studyPreferences.mode === m &&
+                                    styles.segmentTextActive,
+                                ]}
+                              >
+                                {m === "stay_consistent"
+                                  ? "Stay Consistent"
+                                  : m === "exam_prep"
+                                    ? "Exam Prep"
+                                    : "Catch Up"}
                               </Text>
                             </TouchableOpacity>
                           ))}
@@ -774,9 +880,9 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: 12,
     },
     helperText: {
+      alignSelf:"center",
       fontSize: 12,
       color: theme.colors.text.secondary,
-      marginLeft: 26, // Align with the title text
       marginTop: 2,
     },
     segmentedControl: {
