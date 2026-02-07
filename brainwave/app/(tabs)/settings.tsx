@@ -15,6 +15,8 @@ import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
 import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
+import { ensureNotificationPermission, scheduleNextClassNotification } from "@/utils/notifications";
+import { useNextClass } from "../hooks/useNextClass";
 
 interface IconProps {
   color: string;
@@ -85,30 +87,6 @@ const BookIcon: React.FC<IconProps> = ({ color, size }) => (
   </Svg>
 );
 
-const ScheduleIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"
-      fill={color} />
-  </Svg>
-);
-
-const AssignmentIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h168q13-36 43.5-58t68.5-22q38 0 68.5 22t43.5 58h168q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm80-80h280v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Zm200-190q13 0 21.5-8.5T510-820q0-13-8.5-21.5T480-850q-13 0-21.5 8.5T450-820q0 13 8.5 21.5T480-790ZM200-200v-560 560Z"
-      fill={color} />
-  </Svg>
-);
-
-const CheckeredFlag: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M360-720h80v-80h-80v80Zm160 0v-80h80v80h-80ZM360-400v-80h80v80h-80Zm320-160v-80h80v80h-80Zm0 160v-80h80v80h-80Zm-160 0v-80h80v80h-80Zm160-320v-80h80v80h-80Zm-240 80v-80h80v80h-80ZM200-160v-640h80v80h80v80h-80v80h80v80h-80v320h-80Zm400-320v-80h80v80h-80Zm-160 0v-80h80v80h-80Zm-80-80v-80h80v80h-80Zm160 0v-80h80v80h-80Zm80-80v-80h80v80h-80Z"
-      fill={color} />
-  </Svg>
-);
-
 const EnvelopeIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
@@ -154,6 +132,7 @@ export default function Settings() {
   const { user, logout, updateProfileData } = useAuth();
   const router = useRouter();
   const { showAlert } = useAlert();
+  const [isNotificationExpanded, setIsNotificationExpanded] = useState(false);
   const [isFocusExpanded, setIsFocusExpanded] = useState(false);
   const [isUpdatingFocus, setIsUpdatingFocus] = useState(false);
   const [isSessionExpanded, setIsSessionExpanded] = useState(false);
@@ -173,13 +152,6 @@ export default function Settings() {
       />
     </Svg>
   );
-
-  const [notifications, setNotifications] = useState({
-    studyReminders: true,
-    assignmentDeadlines: true,
-    goalAchievements: true,
-    dailySummary: false,
-  });
 
   const styles = createStyles(theme, isDark);
 
@@ -287,48 +259,78 @@ export default function Settings() {
               <Text style={styles.cardTitle}>Notifications</Text>
             </View>
             <View style={styles.cardContent}>
-              <SettingItem
-                theme={theme}
-                label="Study reminders"
-                description="Get notified before study sessions"
-                value={notifications.studyReminders}
-                onValueChange={(val) =>
-                  setNotifications({ ...notifications, studyReminders: val })
-                }
-              />
-              <Separator theme={theme} />
-              <SettingItem
-                theme={theme}
-                label="Assignment deadlines"
-                description="Alerts for upcoming due dates"
-                value={notifications.assignmentDeadlines}
-                onValueChange={(val) =>
-                  setNotifications({
-                    ...notifications,
-                    assignmentDeadlines: val,
-                  })
-                }
-              />
-              <Separator theme={theme} />
-              <SettingItem
-                theme={theme}
-                label="Goal achievements"
-                description="Celebrate your milestones"
-                value={notifications.goalAchievements}
-                onValueChange={(val) =>
-                  setNotifications({ ...notifications, goalAchievements: val })
-                }
-              />
-              <Separator theme={theme} />
-              <SettingItem
-                theme={theme}
-                label="Daily summary"
-                description="End-of-day progress report"
-                value={notifications.dailySummary}
-                onValueChange={(val) =>
-                  setNotifications({ ...notifications, dailySummary: val })
-                }
-              />
+              <View style={styles.accordionContainer}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() =>
+                    setIsNotificationExpanded(!isNotificationExpanded)
+                  }
+                >
+                  <View style={styles.menuItemLeft}>
+                    <NotificationIcon color={theme.colors.text.secondary} size={18} />
+                    <View style={styles.menuItemText}>
+                      <Text style={styles.menuItemTitle}>
+                        Class Notification
+                      </Text>
+                      <Text style={styles.menuItemSubtitle}>
+                        Notify me{" "}
+                        {user?.studyPreferences.notificationLeadMinutes} minutes
+                        before class
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      transform: [
+                        { rotate: isNotificationExpanded ? "180deg" : "0deg" },
+                      ],
+                    }}
+                  >
+                    <ChevronDownIcon
+                      color={theme.colors.text.secondary}
+                      size={24}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {isNotificationExpanded && (
+                  <View style={styles.expandedContent}>
+                    <Text style={styles.helperText}>
+                      Choose when to get notified before your next class:
+                    </Text>
+                    <View style={styles.segmentedControl}>
+                      {[5, 10, 15, 30].map((min) => (
+                        <TouchableOpacity
+                          key={min}
+                          style={[
+                            styles.segment,
+                            user?.studyPreferences.notificationLeadMinutes ===
+                              min && styles.segmentActive,
+                          ]}
+                          onPress={() =>
+                            updateProfileData({
+                              studyPreferences: {
+                                ...user?.studyPreferences,
+                                notificationLeadMinutes: min,
+                              },
+                            })
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.segmentText,
+                              user?.studyPreferences.notificationLeadMinutes ===
+                                min && styles.segmentTextActive,
+                            ]}
+                          >
+                            {min} min
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
