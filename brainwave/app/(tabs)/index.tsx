@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,12 +15,13 @@ import { useAuth } from "../contexts/AuthContext";
 import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
 import Svg, { Path } from "react-native-svg";
-import * as DocumentPicker from "expo-document-picker";
-import brainwaveApi from "@/api/brAInwaveApi";
-import { LocalDB } from "../database/localDb";
 import { useContent } from "../hooks/useContent";
 import { router } from "expo-router";
 import Skeleton from "@/components/HomeSkeleton";
+import { useTodaySchedule } from "../hooks/useTodaySchedule";
+import { useTimetableUpload } from "../hooks/useTimetableUpload";
+import { useNextClass } from "../hooks/useNextClass";
+import { ensureNotificationPermission, scheduleNextClassNotification } from "@/utils/notifications";
 
 const { width } = Dimensions.get("window");
 
@@ -100,7 +101,6 @@ export default function Home() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const [refreshing, setRefreshing] = useState(false);
-  const [weeklyTemplate, setWeeklyTemplate] = useState<any>({});
   const [assignments, setAssignments] = useState<any[]>([]);
 
   const {
@@ -108,58 +108,33 @@ export default function Home() {
     plans,
     isLoading: contentLoading,
     refresh,
-    generatePlanForDate,
   } = useContent();
 
   const [isLoading, setIsLoading] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
-  const [todaysSchedule, setTodaysSchedule] = useState<any[]>([]);
-  const hasTimetable = Object.keys(weeklyTemplate || {}).length > 0;
+  const hasTimetable = timetables.length > 0;
+  
+  const leadMinutes = user?.studyPreferences.notificationLeadMinutes ?? 10;
+    if(user?.studyPreferences.notifications?.studyReminders && useNextClass){
+      scheduleNextClassNotification(useNextClass, leadMinutes)
+    }
 
   const styles = createStyles(theme, isDark);
   // 1. LISTEN TO FIRESTORE ON MOUNT
-  useEffect(() => {
-    if (!user?.id) return;
 
-    const days = [
-      "monday",
-      "tuesday",
-      "wednesday",
-      "thursday",
-      "friday",
-      "saturday",
-      "sunday",
-    ];
+  const todaysSchedule = useTodaySchedule(
+    plans,
+    timetables,
+    user?.id,
+    contentLoading,
+  );
 
-    const jsDay = new Date().getDay();
-    const shiftedIndex = jsDay === 0 ? 6 : jsDay - 1;
-    const todayName = days[shiftedIndex];
-    const todayISO = new Date().toISOString().split("T")[0];
-
-    console.log("Target Date: ", todayISO);
-    console.log("Available Plan Dates: ", plans.map(p => p.date));
-
-    const todaysPlan = plans?.find((p: any) => p.date === todayISO || p.id === todayISO);
-
-    if (todaysPlan?.tasks?.length){
-      console.log("Found an AI plan for today!");
-      setTodaysSchedule(todaysPlan.tasks);
-      return;
-    }
-
-    const activeTimetable = timetables[0];
-
-    console.log("Active timetable data: ", activeTimetable?.structuredData);
-    console.log("Looking for day: ", todayName);
-
-    if(activeTimetable?.structuredData) {
-      console.log("No plan found, falling back to Weekly Template");
-      const schedule = activeTimetable.structuredData[todayName] || [];
-      setTodaysSchedule(schedule);
-    }
-  }, [timetables, plans, user?.id, contentLoading]);
-
+  const { upload } = useTimetableUpload(
+    user?.id,
+    refresh,
+    showAlert,
+  );
  const onRefresh = useCallback(async () => {
    setRefreshing(true);
    try {
@@ -170,85 +145,30 @@ export default function Home() {
    } finally {
      setRefreshing(false);
    }
- }, [refresh]);
+}, [refresh]);
 
-  const handleUploadSchedule = async () => {
+const { nextClass, countdown } = useNextClass(todaysSchedule);
 
-    if(!user?.id){
-      showAlert({
-        title: "Error",
-        message: "You must be logged in to upload"
-      });
-      return;
-    }
-    try {
-      setIsLoading(true);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf", "image/*"],
-        copyToCacheDirectory: true,
-      });
+useEffect(() => {
+  if(!user) return;
+  if (!nextClass) return;
 
-      if (result.canceled || !result.assets) return;
+  (async () => {
+    const allowed = await ensureNotificationPermission();
+    if (!allowed) return;
 
-      const fileAsset = result.assets[0];
-
-      // Fixed: Passing separate arguments to match your BrAInwaveAPI class
-      const response = await brainwaveApi.uploadTimetable(
-        user.id,
-        fileAsset.uri,
-        fileAsset.name,
-        fileAsset.mimeType || "application/octet-stream",
-      );
-
-      LocalDB.createTimetableLocally(
-        user.id,
-        `Schedule ${new Date().toLocaleDateString()}`,
-        response.weekly_template,
-        fileAsset.uri,
-        fileAsset.mimeType
-      );
-      showAlert({
-        title: "Success!",
-        message: "The file has been processed successfully",
-        confirmText: "Ok"
-      })
-      setShowUploadMenu(false);
-      refresh();
-
-    } catch (error: any) {
-      console.error("Upload Error:", error);
-      showAlert({
-        title: "Error!",
-        message: "Failed to upload file",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    await scheduleNextClassNotification(
+      nextClass,
+      user.studyPreferences.notificationLeadMinutes,
+    );
+  })();
+}, [nextClass, user, user?.studyPreferences.notificationLeadMinutes]);
 
   function toggleAssignment(id: number) {
     setCheckedAssignments((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   }
-
-  function getNextClass(schedule: any[]){
-    const now = new Date();
-    return schedule
-    .map((s) => ({ ...s, startDate: new Date(s.time || s.start) }))
-    .filter((s) => s.startDate > now)
-    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())[0];
-  }
-
-  function formatCountdown(date: Date) {
-    const diff = date.getTime() - new Date().getTime();
-    if (diff <= 0) return "Now";
-    const hrs = Math.floor(diff / (1000 * 60 * 60));
-    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hrs}h ${mins}m`;
-  }
-
-  const nextClass = getNextClass(todaysSchedule);
 
   const aiTips = [
     "Take a 5-min stretch break every hour 🧘‍♂️",
@@ -330,7 +250,7 @@ export default function Home() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={false}
+            refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={theme.colors.primary}
           />
@@ -361,11 +281,13 @@ export default function Home() {
                 Tasks Remaining:{" "}
                 {todaysSchedule.filter((t) => !t.completed).length}
               </Text>
-              {nextClass && (
-                <>
-                  <Text>Next Class: {nextClass.subject || nextClass.name}</Text>
-                  <Text>Starts in: {formatCountdown(nextClass.startDate)}</Text>
-                </>
+              {nextClass ? (
+                <View>
+                  <Text>{nextClass.title || nextClass.subject}</Text>
+                  <Text>starts in {countdown}</Text>
+                </View>
+              ) : (
+                <Text>No more classes today</Text>
               )}
             </View>
           </View>
@@ -567,7 +489,7 @@ export default function Home() {
           theme={theme}
           onClose={() => setShowUploadMenu(false)}
           onSelectOption={(opt: string) => {
-            if (opt === "schedule") handleUploadSchedule();
+            if (opt === "schedule") upload();
           }}
         />
       )}

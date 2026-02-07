@@ -5,10 +5,17 @@ export interface User {
   name: string;
   email: string;
   studyPreferences: {
-    isMorningPerson: boolean | null;
-    preferredSessionLength: "short" | "medium" | "long";
-    mode: "stay_consistent" | "exam_prep" | "catch_up";
-    subjectPriorities: string[];
+    isMorningPerson?: boolean | null;
+    preferredSessionLength?: "short" | "medium" | "long";
+    mode?: "stay_consistent" | "exam_prep" | "catch_up";
+    subjectPriorities?: string[];
+    notificationLeadMinutes: number;
+    notifications?: {
+      studyReminders: true;
+      assignmentDeadlines: true;
+      goalAchievements: true;
+      dailySummary: false;
+    };
   };
   hasFinishedSetup: boolean;
 }
