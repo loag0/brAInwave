@@ -1,11 +1,27 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  Animated,
+} from "react-native";
+import Toast from "react-native-toast-message";
+import * as Haptics from "expo-haptics";
 import { useTimer } from "../contexts/TimerContext";
 import { useTheme } from "../contexts/ThemeContext";
+import MinutePicker from "@/components/MinutePicker"
+import { Theme } from "../types";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Notifications from "expo-notifications";
 import { SchedulableTriggerInputTypes } from "expo-notifications";
-import { useAlert } from "../contexts/AlertContext";
+import Svg, { Circle } from "react-native-svg";
+import { ChevronDownIcon, StopIcon, PauseIcon } from "@/components/Icons";
+import { useNavigation, useRouter } from "expo-router";
+
+const CIRCLE_LENGTH = 1000;
+const R = 159;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -18,215 +34,387 @@ Notifications.setNotificationHandler({
 });
 
 export default function FocusScreen() {
-  const { theme } = useTheme();
-  const { showAlert } = useAlert();
+  const { theme, isDark } = useTheme();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const [isPickerVisible, setPickerVisible] = useState(false);
+  const [customDurations, setCustomDurations] = useState<number[]>([]);
+  const [isTimePickerVisible, setTimePickerVisible] = useState(false);
   const [notificationId, setNotificationId] = useState<string | null>(null);
+
+  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const styles = createStyles(theme, isDark);
 
   const {
     minutes,
     seconds,
     isRunning,
-    setIsRunning, // Ensure your context exports this
+    setIsRunning,
     resetTimer,
-    isKeepAwake,
-    setIsKeepAwake,
+    setMinutes,
+    setSeconds,
+    totalTargetSeconds,
   } = useTimer();
 
   useKeepAwake();
 
-  const setupNotifications = async () => {
-    
-    //Android channel so the OS knows what to do with the alert
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
-        name: "Timer Alerts",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: theme.colors.primary,
-      });
-    }
+  useEffect(() => {
+    const parent = navigation.getParent()?.getParent();
+    if(!parent) return;
 
-    // 2. Check existing status first
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    parent.setOptions({
+      tabBarStyle: isRunning
+        ? { display: "none" }
+        : {
+            display: "flex",
+            backgroundColor: theme.colors.background,
+            borderTopColor: theme.colors.border,
+            borderTopWidth: 1,
+          },
+    });
+  }, [isRunning, navigation, theme]);
 
-    // 3. Only ask if we don't have it yet
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    // 4. Final check
-    if (finalStatus !== "granted") {
-      showAlert({
-        title: "Notifications Disabled!",
-        message:
-          "Enable notifications in settings to hear the timer while in other apps.",
-      });
-      return false;
-    }
-    return true;
-  };
+  const remainingSeconds = minutes * 60 + seconds;
 
   useEffect(() => {
-    setupNotifications();
-  }, []); // Added the empty dependency array here!
+    const progress =
+      totalTargetSeconds > 0 ? remainingSeconds / totalTargetSeconds : 0;
+
+      Animated.timing(progressAnim, {
+        toValue: progress,
+        duration: 900,
+        useNativeDriver: true,
+      }).start();
+  }, [remainingSeconds, progressAnim, totalTargetSeconds]);
+
+  const strokeDashOffset = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [CIRCLE_LENGTH, 0],
+  });
+
+  const handlePreset = async (mins: number) => {
+    const safeMins = Math.min(Math.max(mins, 1), 180);
+    setMinutes(safeMins);
+    setSeconds(0);
+    setPickerVisible(false);
+    setTimePickerVisible(false);
+  };
 
   const toggleTimer = async () => {
     try {
       if (!isRunning) {
         const totalSeconds = minutes * 60 + seconds;
+        if (totalSeconds <= 0) return;
 
-        // Don't schedule if time is already zero
-        if (totalSeconds > 0) {
-          const identifier = await Notifications.scheduleNotificationAsync({
-            content: {
-              title: "Focus Session Complete! 🧠",
-              body: "Time for a well-deserved break",
-              sound: true,
-            },
-            trigger: {
-              type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-              seconds: totalSeconds,
-            },
-          });
-          setNotificationId(identifier);
-        }
+        const id = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Focus session complete",
+            body: "Time for a well-deserved break",
+            sound: true,
+          },
+          trigger: {
+            type: SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: totalSeconds,
+          },
+        });
+
+        setNotificationId(id);
+        setIsRunning(true);
       } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
         if (notificationId) {
           await Notifications.cancelScheduledNotificationAsync(notificationId);
           setNotificationId(null);
         }
+        setIsRunning(false);
+        // Don't reset the timer here - just pause it
       }
-      setIsRunning(!isRunning);
-    } catch (error) {
-      console.error("Notification Error:", error);
+    } catch (e) {
+      console.error("Notification error", e);
     }
   };
 
   const handleStop = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     resetTimer();
+    setIsRunning(false);
+
     if (notificationId) {
       await Notifications.cancelScheduledNotificationAsync(notificationId);
       setNotificationId(null);
     }
-    // Safety clear all
-    await Notifications.cancelAllScheduledNotificationsAsync();
   };
 
-  const formatNumber = (num: number) => num.toString().padStart(2, "0");
-
-  const isAtStart = !isRunning && minutes === 25 && seconds === 0;
+  const handleMinimize = () => {
+    router.push("/(tabs)");
+  }
 
   return (
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      {/* Screen Always On Toggle */}
+      {/* Minimize */}
+      {isRunning && (
+        <TouchableOpacity style={styles.minimizeBtn} onPress={handleMinimize}>
+          <ChevronDownIcon size={28} color={theme.colors.text.primary} />
+        </TouchableOpacity>
+      )}
+
+      {/* Timer */}
       <TouchableOpacity
-        style={styles.keepAwakeBtn}
-        onPress={() => setIsKeepAwake(!isKeepAwake)}
+        disabled={isRunning}
+        onPress={() => setPickerVisible(true)}
+        style={styles.circleContainer}
       >
-        <Text
-          style={[
-            styles.keepAwakeText,
-            {
-              color: isKeepAwake
-                ? theme.colors.primary
-                : theme.colors.text.secondary,
-            },
-          ]}
-        >
-          {isKeepAwake ? "☀️ Screen Always On" : "🌙 Screen Normal"}
-        </Text>
+        <Svg width={350} height={350} viewBox="0 0 350 350">
+          <Circle
+            cx="175"
+            cy="175"
+            r={R}
+            stroke={isDark ? theme.colors.surface : "#f0f0f0"}
+            strokeWidth="10"
+            fill="transparent"
+          />
+          <AnimatedCircle
+            cx="175"
+            cy="175"
+            r={R}
+            stroke={theme.colors.primary}
+            strokeWidth="12"
+            fill="transparent"
+            strokeDasharray={CIRCLE_LENGTH}
+            strokeDashoffset={strokeDashOffset}
+            strokeLinecap="round"
+            transform="rotate(-90 175 175)"
+          />
+        </Svg>
+
+        <View style={styles.timeLabelContainer}>
+          <Text
+            style={[styles.timerText, { color: theme.colors.text.primary }]}
+          >
+            {String(minutes).padStart(2, "0")}:
+            {String(seconds).padStart(2, "0")}
+          </Text>
+          {!isRunning && (
+            <Text style={{ color: theme.colors.primary }}>Tap to set time</Text>
+          )}
+          {isRunning && (
+            <Text style={{ color: theme.colors.primary }}>
+              Stay locked in twin
+            </Text>
+          )}
+        </View>
       </TouchableOpacity>
 
-      <View style={styles.timerContainer}>
-        <Text style={[styles.timerText, { color: theme.colors.text.primary }]}>
-          {formatNumber(minutes)}:{formatNumber(seconds)}
-        </Text>
-
-        {/* Conditional Status Text */}
-        <View style={{ height: 30 }}>
-          {!isRunning && !isAtStart ? (
-            <Text style={[styles.statusLabel, { color: theme.colors.warning }]}>
-              Paused
-            </Text>
-          ) : isAtStart ? (
-            <Text
+      {/* Controls */}
+      <View style={{ width: "80%", alignItems: "center", marginTop: 40 }}>
+        <View style={styles.controlsRow}>
+          {isRunning ? (
+            <TouchableOpacity onPress={toggleTimer} style={styles.stopBtn}>
+              <PauseIcon size={44} color={theme.colors.primary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
               style={[
-                styles.statusLabel,
-                { color: theme.colors.text.secondary },
+                styles.mainBtn,
+                { backgroundColor: theme.colors.primary },
               ]}
+              onPress={toggleTimer}
             >
-              Deep Work Session
-            </Text>
-          ) : null}
+              <Text style={styles.mainBtnText}>Focus</Text>
+            </TouchableOpacity>
+          )}
+
+          {isRunning && (
+            <TouchableOpacity onPress={handleStop} style={styles.stopBtn}>
+              <StopIcon size={44} color={theme.colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Controls */}
-      <View style={styles.controlsRow}>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={handleStop}>
-          <Text style={{ color: theme.colors.text.secondary, fontSize: 18 }}>
-            Stop
-          </Text>
-        </TouchableOpacity>
+      {/* Picker */}
+      <Modal visible={isPickerVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <Text
+              style={[styles.modalTitle, { color: theme.colors.text.primary }]}
+            >
+              Set Duration
+            </Text>
 
-        <TouchableOpacity
-          style={[styles.mainBtn, { backgroundColor: theme.colors.primary }]}
-          onPress={toggleTimer}
-        >
-          <Text style={styles.mainBtnText}>
-            {isRunning ? "Pause" : "Start"}
-          </Text>
-        </TouchableOpacity>
+            <View style={styles.presetRow}>
+              {[15, 25, 45, ...customDurations].map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={styles.presetBtn}
+                  onPress={() => handlePreset(m)}
+                  onLongPress={() => {
+                    if (customDurations.includes(m)) {
+                      setCustomDurations((prev) => prev.filter((x) => x !== m));
+                      Toast.show({
+                        type: "info",
+                        text1: `${m}mins, removed`,
+                        position: "bottom",
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.presetText}>{m}m</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={() => {
-            /* Add skip logic */
-          }}
-        >
-          <Text style={{ color: theme.colors.text.secondary, fontSize: 18 }}>
-            Skip
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.customRow}>
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={() => setTimePickerVisible(true)}
+              >
+                <Text style={{ color: "#fff", fontSize: 28 }}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity onPress={() => setPickerVisible(false)}>
+              <Text style={{ marginTop: 20, color: theme.colors.error }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <MinutePicker
+        visible={isTimePickerVisible}
+        onClose={() => setTimePickerVisible(false)}
+        onConfirm={(mins) => {
+          if (customDurations.includes(mins)) {
+            Toast.show({
+              type: "error",
+              text1: "Duration already added!",
+              position: "bottom",
+            });
+            return;
+          }
+          setCustomDurations((prev) => [...prev, mins].sort((a, b) => a - b));
+        }}
+        theme={theme}
+        initial={25}
+        existingDurations={customDurations}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center" },
-  keepAwakeBtn: {
-    position: "absolute",
-    top: 60,
-    padding: 10,
-    borderRadius: 20,
-  },
-  keepAwakeText: { fontSize: 14, fontWeight: "600" },
-  timerContainer: { alignItems: "center", marginBottom: 60 },
-  timerText: { fontSize: 90, fontWeight: "200", letterSpacing: -2 },
-  statusLabel: {
-    fontSize: 20,
-    marginTop: 10,
-    fontWeight: "400",
-    textAlign: "center",
-  },
-  controlsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "80%",
-    justifyContent: "space-around",
-  },
-  mainBtn: {
-    paddingHorizontal: 40,
-    paddingVertical: 15,
-    borderRadius: 30,
-    elevation: 2,
-  },
-  mainBtnText: { color: "white", fontSize: 20, fontWeight: "600" },
-  secondaryBtn: { padding: 10 },
-});
+const createStyles = (theme: Theme, isDark: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    timerText: {
+      fontSize: 90,
+      fontWeight: "200",
+      letterSpacing: -2,
+    },
+    controlsRow: {
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      position: "relative",
+      gap: 20
+    },
+    mainBtn: {
+      minWidth: 50,
+      paddingHorizontal: 40,
+      paddingVertical: 15,
+      borderRadius: 30,
+      elevation: 2,
+      zIndex: 1,
+    },
+    mainBtnText: {
+      color: "white",
+      fontSize: 20,
+      fontWeight: "600",
+    },
+    circleContainer: {
+      justifyContent: "center",
+      alignItems: "center",
+      position: "relative",
+    },
+    timeLabelContainer: {
+      position: "absolute",
+      alignItems: "center",
+    },
+    minimizeBtn: {
+      position: "absolute",
+      top: 50,
+      left: 15,
+      padding: 10,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      width: "80%",
+      padding: 30,
+      borderRadius: 20,
+      alignItems: "center",
+    },
+    presetRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 15,
+      marginVertical: 20,
+    },
+    presetText: {
+      fontWeight: "600",
+      color: theme.colors.secondary,
+    },
+    presetBtn: {
+      paddingHorizontal: 52,
+      paddingVertical: 7,
+      backgroundColor: theme.colors.primary,
+      borderRadius: 12,
+    },
+    customRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    input: {
+      borderWidth: 1,
+      padding: 10,
+      borderRadius: 10,
+      width: 100,
+      textAlign: "center",
+    },
+    addBtn: {
+      backgroundColor: theme.colors.primary,
+      width: 45,
+      height: 45,
+      borderRadius: 22.5,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    stopBtn: {
+      padding: 10,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      marginBottom: 20,
+    },
+  });
