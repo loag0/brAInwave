@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Alert,
   Platform,
   KeyboardAvoidingView,
   ScrollView,
@@ -14,33 +13,13 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAlert } from "../contexts/AlertContext";
-import Svg, { Path } from "react-native-svg";
+import { ShieldIcon, CopyIcon, ICONS } from "@/components/Icons";
 
 export default function MFASetup() {
   const { theme } = useTheme();
   const [code, setCode] = useState("");
   const { showAlert } = useAlert();
-
-  interface IconProps {
-    size: number;
-    color: string;
-  }
-  const ShieldIcon:React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M480-80q-139-35-229.5-159.5T160-516v-244l320-120 320 120v244q0 152-90.5 276.5T480-80Zm0-84q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm0-316Zm-80 160h160q17 0 28.5-11.5T600-360v-120q0-17-11.5-28.5T560-520v-40q0-33-23.5-56.5T480-640q-33 0-56.5 23.5T400-560v40q-17 0-28.5 11.5T360-480v120q0 17 11.5 28.5T400-320Zm40-200v-40q0-17 11.5-28.5T480-600q17 0 28.5 11.5T520-560v40h-80Z"
-        fill={color} />
-    </Svg>
-  );
-
-  const CopyIcon:React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"
-        fill={color} />
-    </Svg>
-  );
-
+  
   // Fake secret key for demonstration purposes
   const secretKey = "JBSW Y3DP EHPK 3PXP";
 
@@ -63,7 +42,13 @@ export default function MFASetup() {
 
     // Success haptic
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Success", "2FA is now active on your account.");
+    showAlert({
+      title: "Success",
+      message: "2FA is now active on your account.",
+      iconPath: ICONS.SUCCESS,
+      iconColor: theme.colors.success,
+      confirmText: "Great!"
+    })
   };
 
   return (
