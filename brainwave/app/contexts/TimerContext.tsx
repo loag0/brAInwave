@@ -21,26 +21,23 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Derived value for the progress ring: (Current Seconds / Total Seconds)
   const timeLeftInSeconds = minutes * 60 + seconds;
-  const progress = timeLeftInSeconds / totalSeconds;
+  const progress = totalSeconds > 0 ? timeLeftInSeconds / totalSeconds : 0;
 
   useEffect(() => {
-    const handleFinish = () => {
-      setIsRunning(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert({
-        title: "Session Complete! 🏆",
-        message: "You earned 25 XP. Take a 5-minute break.",
-        confirmText: "LFG!",
-      });
-      resetTimer();
-    };
-
     if (isRunning) {
       intervalRef.current = setInterval(() => {
         setSeconds((prev) => {
           if (prev === 0) {
             if (minutes === 0) {
-              handleFinish();
+              setIsRunning(false);
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              );
+              showAlert({
+                title: "Session Complete! 🏆",
+                message: "You earned 25 XP.",
+                confirmText: "LFG!",
+              });
               return 0;
             }
             setMinutes((m) => m - 1);
@@ -55,6 +52,21 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
     return () => clearInterval(intervalRef.current);
   }, [showAlert, isRunning, minutes]);
 
+  const startSession = (mins: number) => {
+    const total = mins * 60;
+    setTotalSeconds(total);
+    setMinutes(mins);
+    setSeconds(0);
+    setIsRunning(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  useEffect(() => {
+    if(!isRunning){
+      setTotalSeconds(minutes * 60 + seconds);
+    }
+  }, [minutes, seconds, isRunning])
+
   const resetTimer = () => {
     setIsRunning(false);
     setMinutes(25);
@@ -62,23 +74,21 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
     setTotalSeconds(25 * 60);
   };
 
-  const toggleTimer = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsRunning(!isRunning);
-  };
-
   return (
     <TimerContext.Provider
       value={{
         minutes,
         seconds,
-        progress, // Shared with Nav Bar
+        setMinutes,
+        setSeconds,
+        progress,
         isRunning,
         setIsRunning,
         isKeepAwake,
         setIsKeepAwake,
-        toggleTimer,
         resetTimer,
+        startSession,
+        totalSeconds
       }}
     >
       {children}
