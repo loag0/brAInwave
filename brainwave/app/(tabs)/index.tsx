@@ -14,7 +14,6 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
-import Svg, { Path } from "react-native-svg";
 import { useContent } from "../hooks/useContent";
 import { router } from "expo-router";
 import Skeleton from "@/components/HomeSkeleton";
@@ -22,31 +21,9 @@ import { useTodaySchedule } from "../hooks/useTodaySchedule";
 import { useTimetableUpload } from "../hooks/useTimetableUpload";
 import { useNextClass } from "../hooks/useNextClass";
 import { ensureNotificationPermission, scheduleNextClassNotification } from "@/utils/notifications";
+import { CloseIcon, SunIcon, AddIcon, TodayIcon, AssignmentIcon, CheckIcon, ScheduleIcon, CalendarIcon, UploadSyllabusIcon, AddAssignmentIcon, UploadNotesIcon, ChevronRightIcon } from "@/components/Icons";
 
 const { width } = Dimensions.get("window");
-
-interface IconProps {
-  size: number;
-  color: string;
-}
-
-const CloseIcon: React.FC<IconProps> = ({ size, color }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
-      fill={color}
-    />
-  </Svg>
-);
-
-const SunIcon: React.FC<IconProps> = ({ size, color }) => (
-  <Svg width={size} height={size} viewBox="0, -960, 960, 960" fill="none">
-    <Path
-      d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm283-100q-100 0-170-70t-70-170q0-100 70-170t170-70q100 0 170 70t70 170q0 100-70 170t-170 70Zm0-80q66 0 113-47t47-113q0-66-47-113t-113-47q-66 0-113 47t-47 113q0 66 47 113t113 47Zm0-160Z"
-      fill={color}
-    />
-  </Svg>
-);
 
 const HomeSkeleton = ({ styles, theme }: any) => (
   <View style={styles.container}>
@@ -183,51 +160,6 @@ useEffect(() => {
     if (p === "medium") return theme.colors.warning;
     return theme.colors.text.secondary;
   }
-
-  const AddIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const TodayIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill={color}>
-      <Path
-        d="M360-300q-42 0-71-29t-29-71q0-42 29-71t71-29q42 0 71 29t29 71q0 42-29 71t-71 29ZM200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const AssignmentIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0, -960, 960, 960" fill={color}>
-      <Path
-        d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h168q13-36 43.5-58t68.5-22q38 0 68.5 22t43.5 58h168q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm80-80h280v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Zm200-190q13 0 21.5-8.5T510-820q0-13-8.5-21.5T480-850q-13 0-21.5 8.5T450-820q0 13 8.5 21.5T480-790ZM200-200v-560 560Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const CheckIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const ScheduleIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"
-        fill={color}
-      />
-    </Svg>
-  );
 
    if (contentLoading && timetables.length === 0) {
      return <HomeSkeleton styles={styles} theme={theme} />;
@@ -499,51 +431,6 @@ useEffect(() => {
 
 // UPLOAD MENU COMPONENT
 const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
-  const CalendarIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Zm280 240q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-160 0q-17 0-28.5-11.5T280-440q0-17 11.5-28.5T320-480q17 0 28.5 11.5T360-440q0 17-11.5 28.5T320-400Zm320 0q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-160 0q-17 0-28.5-11.5T280-280q0-17 11.5-28.5T320-320q17 0 28.5 11.5T360-280q0 17-11.5 28.5T320-240Zm320 0q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const UploadSyllabusIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M320-440h320v-80H320v80Zm0 120h320v-80H320v80Zm0 120h200v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const AddAssignmentIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v268q-19-9-39-15.5t-41-9.5v-243H200v560h242q3 22 9.5 42t15.5 38H200Zm0-120v40-560 243-3 280Zm80-40h163q3-21 9.5-41t14.5-39H280v80Zm0-160h244q32-30 71.5-50t84.5-27v-3H280v80Zm0-160h400v-80H280v80ZM720-40q-83 0-141.5-58.5T520-240q0-83 58.5-141.5T720-440q83 0 141.5 58.5T920-240q0 83-58.5 141.5T720-40Zm-20-80h40v-100h100v-40H740v-100h-40v100H600v40h100v100Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const UploadNotesIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M440-240h80v-120h120v-80H520v-120h-80v120H320v80h120v120ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-  const ChevronRightIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
   const uploadOptions = [
     {
       id: "schedule",

@@ -9,10 +9,10 @@ interface AlertOptions {
   iconPath?: string,
   iconColor?: string,
   onConfirm?: () => void;
-  onCancel?: () => void; // Added cancel
+  onCancel?: () => void;
   confirmText?: string;
-  cancelText?: string; // Added cancel text
-  showCancel?: boolean; // Toggle for single vs double button
+  cancelText?: string;
+  showCancel?: boolean;
 }
 
 const AlertContext = createContext<any>(null);

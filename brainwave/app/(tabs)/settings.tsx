@@ -15,117 +15,12 @@ import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
 import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
-import { ensureNotificationPermission, scheduleNextClassNotification } from "@/utils/notifications";
-import { useNextClass } from "../hooks/useNextClass";
+import { ChevronRightIcon, BrainIcon, FireIcon, SunIcon, StarIcon, NotificationIcon, ChevronDownIcon, BookIcon, EnvelopeIcon, LockIcon, MobileIcon, SettingsIcon, LogoutIcon } from "@/components/Icons";
 
 interface IconProps {
   color: string;
   size: number;
 }
-
-const ChevronRight: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z" fill={color} />
-  </Svg>
-);
-
-const BrainIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M390-120q-51 0-88-35.5T260-241q-60-8-100-53t-40-106q0-21 5.5-41.5T142-480q-11-18-16.5-38t-5.5-42q0-61 40-105.5t99-52.5q3-51 41-86.5t90-35.5q26 0 48.5 10t41.5 27q18-17 41-27t49-10q52 0 89.5 35t40.5 86q59 8 99.5 53T840-560q0 22-5.5 42T818-480q11 18 16.5 38.5T840-400q0 62-40.5 106.5T699-241q-5 50-41.5 85.5T570-120q-25 0-48.5-9.5T480-156q-19 17-42 26.5t-48 9.5Zm130-590v460q0 21 14.5 35.5T570-200q20 0 34.5-16t15.5-36q-21-8-38.5-21.5T550-306q-10-14-7.5-30t16.5-26q14-10 30-7.5t26 16.5q11 16 28 24.5t37 8.5q33 0 56.5-23.5T760-400q0-5-.5-10t-2.5-10q-17 10-36.5 15t-40.5 5q-17 0-28.5-11.5T640-440q0-17 11.5-28.5T680-480q33 0 56.5-23.5T760-560q0-33-23.5-56T680-640q-11 18-28.5 31.5T613-587q-16 6-31-1t-20-23q-5-16 1.5-31t22.5-20q15-5 24.5-18t9.5-30q0-21-14.5-35.5T570-760q-21 0-35.5 14.5T520-710Zm-80 460v-460q0-21-14.5-35.5T390-760q-21 0-35.5 14.5T340-710q0 16 9 29.5t24 18.5q16 5 23 20t2 31q-6 16-21 23t-31 1q-21-8-38.5-21.5T279-640q-32 1-55.5 24.5T200-560q0 33 23.5 56.5T280-480q17 0 28.5 11.5T320-440q0 17-11.5 28.5T280-400q-21 0-40.5-5T203-420q-2 5-2.5 10t-.5 10q0 33 23.5 56.5T280-320q20 0 37-8.5t28-24.5q10-14 26-16.5t30 7.5q14 10 16.5 26t-7.5 30q-14 19-32 33t-39 22q1 20 16 35.5t35 15.5q21 0 35.5-14.5T440-250Zm40-230Z"
-      fill={color} 
-      />
-  </Svg>
-);
-
-const FireIcon: React.FC<IconProps> = ({color, size}) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M240-400q0 52 21 98.5t60 81.5q-1-5-1-9v-9q0-32 12-60t35-51l113-111 113 111q23 23 35 51t12 60v9q0 4-1 9 39-35 60-81.5t21-98.5q0-50-18.5-94.5T648-574q-20 13-42 19.5t-45 6.5q-62 0-107.5-41T401-690q-39 33-69 68.5t-50.5 72Q261-513 250.5-475T240-400Zm240 52-57 56q-11 11-17 25t-6 29q0 32 23.5 55t56.5 23q33 0 56.5-23t23.5-55q0-16-6-29.5T537-292l-57-56Zm0-492v132q0 34 23.5 57t57.5 23q18 0 33.5-7.5T622-658l18-22q74 42 117 117t43 163q0 134-93 227T480-80q-134 0-227-93t-93-227q0-129 86.5-245T480-840Z"
-      fill={color} />
-  </Svg>
-);
-
-const SunIcon: React.FC<IconProps> = ({ size, color }) => (
-  <Svg width={size} height={size} viewBox="0, -960, 960, 960" fill="none">
-    <Path
-      d="M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm283-100q-100 0-170-70t-70-170q0-100 70-170t170-70q100 0 170 70t70 170q0 100-70 170t-170 70Zm0-80q66 0 113-47t47-113q0-66-47-113t-113-47q-66 0-113 47t-47 113q0 66 47 113t113 47Zm0-160Z"
-      fill={color}
-    />
-  </Svg>
-);
-
-const StarIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M852-212 732-332l56-56 120 120-56 56ZM708-692l-56-56 120-120 56 56-120 120Zm-456 0L132-812l56-56 120 120-56 56ZM108-212l-56-56 120-120 56 56-120 120Zm246-75 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Zm247-361Z"
-        fill={color}
-      />
-    </Svg>
-  );
-
-const NotificationIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M160-200v-80h80v-280q0-83 50-147.5T420-792v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 20 130 84.5T720-560v280h80v80H160Zm320-300Zm0 420q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM320-280h320v-280q0-66-47-113t-113-47q-66 0-113 47t-47 113v280Z"
-      fill={color}
-    />
-  </Svg>
-);
-
-const ChevronDownIcon: React.FC<IconProps> = ({ size, color }) => (
-  <Svg width={size} height={size} viewBox="0, -960 960 960" fill="none">
-    <Path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" fill={color} />
-  </Svg>
-);
-
-const BookIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm0-80h480v-640h-80v280l-100-60-100 60v-280H240v640Zm0 0v-640 640Zm200-360 100-60 100 60-100-60-100 60Z"
-      fill={color} />
-  </Svg>
-);
-
-const EnvelopeIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm320-280L160-640v400h640v-400L480-440Zm0-80 320-200H160l320 200ZM160-640v-80 480-400Z"
-      fill={color} />
-  </Svg>
-);
-
-const LockIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80ZM240-160v-400 400Z"
-      fill={color} />
-  </Svg>
-);
-
-const MobileIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path
-      d="M280-40q-33 0-56.5-23.5T200-120v-720q0-33 23.5-56.5T280-920h400q33 0 56.5 23.5T760-840v124q18 7 29 22t11 34v80q0 19-11 34t-29 22v404q0 33-23.5 56.5T680-40H280Zm0-80h400v-720H280v720Zm0 0v-720 720Zm160-200h80l6-50q8-3 14-6.5t12-9.5l46 20 40-70-40-30q2-8 2-15t-2-15l40-30-42-68-44 18q-6-5-12-8t-14-6l-6-50h-80l-6 50q-8 3-14 6t-12 8l-44-18-42 68 40 30q-2 8-2 15t2 15l-40 30 40 70 46-20q6 6 12 9.5t14 6.5l6 50Zm40-100q-26 0-43-17t-17-43q0-26 17-43t43-17q26 0 43 17t17 43q0 26-17 43t-43 17Z"
-      fill={color}
-    />
-  </Svg>
-);
-
-const SettingsIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path 
-      d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"
-      fill={color} />
-  </Svg>
-);
-
-const LogoutIcon: React.FC<IconProps> = ({ color, size }) => (
-  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L585-622l55-58 200 200-200 200Z"
-    fill={color} />
-  </Svg>
-);
 
 export default function Settings() {
   const { theme, isDark, toggleTheme } = useTheme();
@@ -248,7 +143,7 @@ export default function Settings() {
                   {user?.name || "Alex johnson"}
                 </Text>
               </View>
-              <ChevronRight color={theme.colors.text.secondary} size={28} />
+              <ChevronRightIcon color={theme.colors.text.secondary} size={28} />
             </View>
           </TouchableOpacity>
 
@@ -634,7 +529,7 @@ export default function Settings() {
                     </Text>
                   </View>
                 </View>
-                <ChevronRight color={theme.colors.text.secondary} size={24} />
+                <ChevronRightIcon color={theme.colors.text.secondary} size={24} />
               </TouchableOpacity>
             </View>
           </View>
@@ -671,7 +566,7 @@ export default function Settings() {
                   <EnvelopeIcon color={theme.colors.text.secondary} size={18} />
                   <Text style={styles.menuItemTitle}>Email preferences</Text>
                 </View>
-                <ChevronRight color={theme.colors.text.secondary} size={28} />
+                <ChevronRightIcon color={theme.colors.text.secondary} size={28} />
               </TouchableOpacity>
 
               <Separator theme={theme} />
@@ -681,7 +576,7 @@ export default function Settings() {
                   <LockIcon color={theme.colors.text.secondary} size={18} />
                   <Text style={styles.menuItemTitle}>Privacy & Security</Text>
                 </View>
-                <ChevronRight color={theme.colors.text.secondary} size={28} />
+                <ChevronRightIcon color={theme.colors.text.secondary} size={28} />
               </TouchableOpacity>
             </View>
           </View>
