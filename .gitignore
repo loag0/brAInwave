@@ -39,3 +39,5 @@ yarn-error.*
 TODO.md
 
 app-example
+
+*.stackdump

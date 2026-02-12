@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as DocumentPicker from "expo-document-picker";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useAlert } from "../contexts/AlertContext";
@@ -21,7 +22,7 @@ import { useTodaySchedule } from "../hooks/useTodaySchedule";
 import { useTimetableUpload } from "../hooks/useTimetableUpload";
 import { useNextClass } from "../hooks/useNextClass";
 import { ensureNotificationPermission, scheduleNextClassNotification } from "@/utils/notifications";
-import { CloseIcon, SunIcon, AddIcon, TodayIcon, AssignmentIcon, CheckIcon, ScheduleIcon, CalendarIcon, UploadSyllabusIcon, AddAssignmentIcon, UploadNotesIcon, ChevronRightIcon } from "@/components/Icons";
+import { CloseIcon, SunIcon, AddIcon, TodayIcon, AssignmentIcon, CheckIcon, ScheduleIcon, CalendarIcon, UploadSyllabusIcon, AddAssignmentIcon, ChevronRightIcon } from "@/components/Icons";
 
 const { width } = Dimensions.get("window");
 
@@ -78,16 +79,18 @@ export default function Home() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const [refreshing, setRefreshing] = useState(false);
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const [assignments] = useState<any[]>([]);
 
   const {
     timetables,
     plans,
     isLoading: contentLoading,
     refresh,
+    createMaterial,
   } = useContent();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Analyzing...");
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
   const hasTimetable = timetables.length > 0;
@@ -112,34 +115,81 @@ export default function Home() {
     refresh,
     showAlert,
   );
- const onRefresh = useCallback(async () => {
-   setRefreshing(true);
-   try {
-     if (refresh) await refresh(true);
-     setRefreshing(false);
-   } catch (error) {
-     console.error("Refresh failed", error);
-   } finally {
-     setRefreshing(false);
-   }
-}, [refresh]);
 
-const { nextClass, countdown } = useNextClass(todaysSchedule);
+  const handleUploadSyllabus = useCallback(async () => {
+    if (!user?.id) {
+      showAlert?.({ title: "Error", message: "You must be logged in" });
+      return;
+    }
 
-useEffect(() => {
-  if(!user) return;
-  if (!nextClass) return;
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/*"],
+      copyToCacheDirectory: true,
+      multiple: true,
+    });
 
-  (async () => {
-    const allowed = await ensureNotificationPermission();
-    if (!allowed) return;
+    if (result.canceled || !result.assets) return;
 
-    await scheduleNextClassNotification(
-      nextClass,
-      user.studyPreferences.notificationLeadMinutes,
-    );
-  })();
-}, [nextClass, user, user?.studyPreferences.notificationLeadMinutes]);
+    setIsLoading(true);
+    const totalFiles = result.assets.length;
+
+    try {
+      for (let i = 0; i < totalFiles; i++) {
+        const file = result.assets[i];
+        // Update the message dynamically
+        setLoadingMessage(`Uploading ${i + 1} of ${totalFiles}...`);
+
+        const title = file.name || `Syllabus ${i + 1}`;
+
+        // We await this so the UI updates the "1 of 3" correctly
+        await createMaterial(
+          title,
+          `Uploaded ${file.name || "file"}`,
+          file.uri,
+          file.mimeType || "application/octet-stream",
+        );
+      }
+
+      showAlert?.({
+        title: totalFiles > 1 ? "Files added" : "Syllabus added",
+        message: "Processing your content now.",
+      });
+    } catch (error) {
+      showAlert?.({ title: "Error", message: "Upload failed twin." });
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage("Analyzing your schedule...");
+    }
+  }, [user?.id, createMaterial, showAlert]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (refresh) await refresh(true);
+      setRefreshing(false);
+    } catch (error) {
+      console.error("Refresh failed", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh]);
+
+  const { nextClass, countdown } = useNextClass(todaysSchedule);
+
+  useEffect(() => {
+    if (!user) return;
+    if (!nextClass) return;
+
+    (async () => {
+      const allowed = await ensureNotificationPermission();
+      if (!allowed) return;
+
+      await scheduleNextClassNotification(
+        nextClass,
+        user.studyPreferences.notificationLeadMinutes,
+      );
+    })();
+  }, [nextClass, user, user?.studyPreferences.notificationLeadMinutes]);
 
   function toggleAssignment(id: number) {
     setCheckedAssignments((prev) =>
@@ -148,11 +198,16 @@ useEffect(() => {
   }
 
   const aiTips = [
-    "Take a 5-min stretch break every hour 🧘‍♂️",
-    "Focus on high-priority tasks first 🔥",
-    "Stay hydrated! 💧",
+    "Lock in your hardest subject while your energy is high.",
+    "Short, focused sessions beat long distracted ones.",
+    "Review notes within 24 hours to actually remember them.",
   ];
-  const randomTip = aiTips[Math.floor(Math.random() * aiTips.length)];
+  const [tipOfTheDay] = useState(
+    () => aiTips[Math.floor(Math.random() * aiTips.length)],
+  );
+
+  const tasksRemaining = todaysSchedule.filter((t) => !t.completed).length;
+  const hasNextClass = Boolean(nextClass);
 
   function getPriorityColor(priority: string) {
     const p = priority?.toLowerCase();
@@ -168,11 +223,11 @@ useEffect(() => {
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/*LOADING OVERLAY*/}
-      {(isLoading || contentLoading) && (
+      {isLoading && (
         <View style={styles.loaderOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={[styles.dateText, { marginTop: 10 }]}>
-            Analyzing your schedule...
+            {loadingMessage}
           </Text>
         </View>
       )}
@@ -204,33 +259,27 @@ useEffect(() => {
           </View>
         </View>
 
-        {/* Daily Summary */}
+        {/* Hero: Summary + Tip */}
         <View style={styles.content}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Today's Summary</Text>
-            <View style={{ paddingVertical: 10 }}>
-              <Text>
-                Tasks Remaining:{" "}
-                {todaysSchedule.filter((t) => !t.completed).length}
-              </Text>
-              {nextClass ? (
-                <View>
-                  <Text>{nextClass.title || nextClass.subject}</Text>
-                  <Text>starts in {countdown}</Text>
-                </View>
-              ) : (
-                <Text>No more classes today</Text>
-              )}
-            </View>
-          </View>
-        </View>
+          <View style={styles.heroCard}>
+            <Text style={styles.heroTitle}>Today at a glance</Text>
 
-        {/* AI Tip */}
-        <View style={styles.content}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Tip of the Day</Text>
-            <View style={{ paddingVertical: 10 }}>
-              <Text>{randomTip}</Text>
+            <View style={styles.heroRow}>
+              <Text style={styles.heroNumber}>{tasksRemaining}</Text>
+              <Text style={styles.heroLabel}>
+                {tasksRemaining === 1 ? "task left" : "tasks left"}
+              </Text>
+            </View>
+
+            <Text style={styles.heroSub}>
+              {hasNextClass
+                ? `${nextClass?.title || nextClass?.subject} starts in ${countdown}`
+                : "No more classes today. Review those notes fn."}
+            </Text>
+
+            <View style={styles.tipPill}>
+              <Text style={styles.tipPrefix}>brAInwave says...</Text>
+              <Text style={styles.tipText}>{tipOfTheDay}</Text>
             </View>
           </View>
         </View>
@@ -422,6 +471,14 @@ useEffect(() => {
           onClose={() => setShowUploadMenu(false)}
           onSelectOption={(opt: string) => {
             if (opt === "schedule") upload();
+            if (opt === "syllabus") handleUploadSyllabus();
+            if (opt === "assignment") {
+              showAlert?.({
+                title: "Assignments coming soon",
+                message:
+                  "You'll be able to track coursework and due dates from here.",
+              });
+            }
           }}
         />
       )}
@@ -448,13 +505,7 @@ const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
       id: "assignment",
       Icon: AddAssignmentIcon,
       label: "Add assignment",
-      description: "Create a new task",
-    },
-    {
-      id: "notes",
-      Icon: UploadNotesIcon,
-      label: "Upload notes",
-      description: "Add study materials",
+      description: "Track upcoming coursework",
     },
   ];
 
@@ -618,6 +669,63 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: 24,
       borderWidth: 1,
       borderColor: theme.colors.border,
+    },
+    heroCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: 18,
+      padding: 20,
+      marginBottom: -6,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    heroTitle: {
+      fontSize: 18,
+      fontFamily: theme.fonts.semiBold,
+      color: theme.colors.text.primary,
+      marginBottom: 12,
+    },
+    heroRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      marginBottom: 8,
+      gap: 8,
+    },
+    heroNumber: {
+      fontSize: 32,
+      fontFamily: theme.fonts.bold,
+      color: theme.colors.primary,
+    },
+    heroLabel: {
+      fontSize: 14,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.secondary,
+      marginBottom: 4,
+    },
+    heroSub: {
+      fontSize: 14,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+      marginBottom: 14,
+    },
+    tipPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: theme.colors.primary + "10",
+      gap: 6,
+    },
+    tipPrefix: {
+      fontSize: 12,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.primary,
+    },
+    tipText: {
+      flex: 1,
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
     },
     cardHeader: {
       flexDirection: "row",

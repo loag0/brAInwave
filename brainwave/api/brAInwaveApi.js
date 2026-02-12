@@ -1,5 +1,5 @@
-import SubjectPriorities from "@/app/priorities";
 import axios from "axios";
+import { Platform } from "react-native";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -13,7 +13,6 @@ class BrAInwaveAPI {
       type: fileType,
     });
 
-    // Removed trailing slash and added user_id query param
     const response = await axios.post(
       `${API_BASE_URL}/upload-timetable?user_id=${userId}`,
       formData,
@@ -26,25 +25,34 @@ class BrAInwaveAPI {
   }
 
   async uploadSyllabus(userId, fileUri, fileName, fileType) {
+    // Fix for Android: The uri should be in a format the native layer can read
+    const uri =
+      Platform.OS === "android" ? fileUri : fileUri.replace("file://", "");
+
     const formData = new FormData();
     formData.append("file", {
-      uri: fileUri,
-      name: fileName,
-      type: fileType,
+      uri: uri,
+      name: fileName || "upload.pdf",
+      type: fileType || "application/pdf",
     });
 
     try {
-      // Added user_id query param
       const response = await axios.post(
         `${API_BASE_URL}/upload-syllabus?user_id=${userId}`,
         formData,
         {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: {
+            Accept: "application/json",
+          },
+          transformRequest: (data, headers) => {
+            return data;
+          },
           timeout: 60000,
         },
       );
       return response.data;
     } catch (error) {
+      console.error("Axios Error Detail:", error.response?.data);
       throw new Error(`Failed to upload syllabus: ${error.message}`);
     }
   }
@@ -72,13 +80,11 @@ class BrAInwaveAPI {
 
   async listDailyPlans(userId) {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/daily-plans/${userId}`
-      );
+      const response = await axios.get(`${API_BASE_URL}/daily-plans/${userId}`);
       return response.data;
     } catch (error) {
       throw new Error(
-        error.response?.data?.detail || "failed to fetch daily plans"
+        error.response?.data?.detail || "failed to fetch daily plans",
       );
     }
   }
@@ -96,10 +102,10 @@ class BrAInwaveAPI {
 
   /**
    * Used for generating the daily plan considering user-specific preferences
-   * @param {string} userId 
+   * @param {string} userId
    * @param {string} date
-   * @param {Object} preferences 
-   * @param {Array} customTasks 
+   * @param {Object} preferences
+   * @param {Array} customTasks
    */
 
   async generateDailyPlan(userId, date, preferences, customTasks = []) {
@@ -127,15 +133,20 @@ class BrAInwaveAPI {
         "Error in generateDailyPlan: ",
         error.response?.data || error.message,
       );
-      throw new Error(error.response?.data?.detail || `Failed to generate daily plan: ${error.message}`);
+      throw new Error(
+        error.response?.data?.detail ||
+          `Failed to generate daily plan: ${error.message}`,
+      );
     }
   }
 
-  async getDailyPlan(userId, date){
-    try{
-      const response = await axios.get(`${API_BASE_URL}/daily-plan/${userId}/${date}`);
+  async getDailyPlan(userId, date) {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/daily-plan/${userId}/${date}`,
+      );
       return response.data;
-    } catch(error){
+    } catch (error) {
       return error.message || null;
     }
   }

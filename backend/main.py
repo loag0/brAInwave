@@ -266,9 +266,9 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
     customContext = json.dumps(customTasks) if customTasks else "None"
     
     lengthMap = {"short": "25-45", "medium": "45-75", "long": "90-120"}
-    targetRange = lengthMap.get(prefs['sessionLength'], "45-75")
+    targetRange = lengthMap.get(prefs.get('sessionLength', ''), "45-75")
     
-    priorityList = prefs.get('subjectPriorites', [])
+    priorityList = prefs.get('subjectPriorities', [])
     priorityContext = ", ".join(priorityList) if priorityList else "Balanced"
         
     prompt = f"""
@@ -286,7 +286,7 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
         - Weekly Classes: {json.dumps(classes)}
         - Pending Assignments: {json.dumps(assignments)}
         - USER'S FIXED CUSTOM TASKS: {customContext}
-
+        
         --- ARCHITECTURAL INSTRUCTIONS ---
         1. CLASS FILTERING: Only include classes from 'Weekly Classes' that occur on {dayOfWeek}.
         2. FIXED CONSTRAINTS: All 'USER'S FIXED CUSTOM TASKS' are non-negotiable. Place them exactly at their specified times.
@@ -301,6 +301,9 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
         5. LOGIC & HEALTH: 
             - No study sessions between 11:00 PM and 7:00 AM unless the user isn't a morning person (even then, prioritize sleep).
             - Include 15-minute 'Brain Breaks' between study blocks.
+        6. SUBJECT NAMES:
+            - When setting the "subject" field, only use subject names that appear in Weekly Classes, Pending Assignments, or in the Subject Priorities list above.
+            - Do NOT invent new or random subjects that the user has never seen.
         
         --- OUTPUT FORMAT ---
         Return a JSON object with a single key 'items' containing an array of objects.

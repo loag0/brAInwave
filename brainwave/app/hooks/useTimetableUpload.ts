@@ -24,28 +24,45 @@ export function useTimetableUpload(
     if (result.canceled || !result.assets) return;
 
     const file = result.assets[0];
+    const title = `Schedule ${new Date().toLocaleDateString()}`;
+    const mimeType = file.mimeType || "application/octet-stream";
 
-    const response = await brainwaveApi.uploadTimetable(
+    //Create a local copy first so the user has a timetable tracked offline
+    const localId = LocalDB.createTimetableLocally(
       userId,
+      title,
+      {},
       file.uri,
-      file.name,
-      file.mimeType || "application/octet-stream",
+      mimeType,
     );
 
-    LocalDB.createTimetableLocally(
-      userId,
-      `Schedule ${new Date().toLocaleDateString()}`,
-      response.weekly_template,
-      file.uri,
-      file.mimeType,
-    );
+    try {
+      // upload to backend
+      const response = await brainwaveApi.uploadTimetable(
+        userId,
+        file.uri,
+        file.name,
+        mimeType,
+      );
 
-    await refresh?.(true);
+      // Mark the local timetable as synced
+      LocalDB.markTimetableSynced(localId, response.id, response.weekly_template);
 
-    showAlert?.({
-      title: "Success",
-      message: "Timetable uploaded",
-    });
+      await refresh?.(true);
+
+      showAlert?.({
+        title: "Success",
+        message: "Timetable uploaded",
+      });
+    } catch (error: any) {
+      console.error("Timetable upload failed, remaining offline-only:", error);
+
+      showAlert?.({
+        title: "Saved offline",
+        message:
+          "We saved your timetable locally and will sync it when you're back online.",
+      });
+    }
   };
 
   return { upload };

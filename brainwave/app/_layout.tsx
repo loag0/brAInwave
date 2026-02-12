@@ -21,7 +21,6 @@ import Toast from "react-native-toast-message";
 import { AlertProvider } from "./contexts/AlertContext";
 import { TimerProvider } from "./contexts/TimerContext";
 import { LocalDB } from "./database/localDb";
-import { useSync } from "./hooks/useSync";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 SplashScreen.preventAutoHideAsync();
@@ -56,9 +55,6 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const segments = useSegments();
   const router = useRouter();
   const { theme, isDark, isThemeLoading } = useTheme();
-
-  //this is the sync engine. it runs in the background, watches the network and those dirty flags from localdb and what not
-  useSync();
 
   useEffect(() => {
     if (fontsLoaded && !isLoading && !isThemeLoading) {
