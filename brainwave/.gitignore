@@ -15,3 +15,5 @@ build/
 
 google-services.json
 GoogleService-Info.plist
+
+*.stackdump

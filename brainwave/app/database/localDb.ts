@@ -91,6 +91,24 @@ export const LocalDB = {
     }));
   },
 
+  upsertPlan: (userId: string, date: string, items: any[]) => {
+    const itemsJson = JSON.stringify(items || []);
+
+    // Try update first
+    const result = db.runSync(
+      `UPDATE daily_plans SET items_json = ? WHERE user_id = ? AND date = ?`,
+      [itemsJson, userId, date],
+    );
+
+    // If nothing was updated, insert a new row
+    if (!result.changes) {
+      db.runSync(
+        `INSERT INTO daily_plans (user_id, date, items_json) VALUES (?, ?, ?)`,
+        [userId, date, itemsJson],
+      );
+    }
+  },
+
   syncPlansFromServer: (userId: string, plans: any[]) => {
   // 1️⃣ delete all existing plans for this user first
   db.runSync(`DELETE FROM daily_plans WHERE user_id = ?`, [userId]);
@@ -173,10 +191,24 @@ export const LocalDB = {
     }
   },
 
-  markTimetableSynced: (localId: number, remoteId: number) => {
-    db.runSync(
-      `UPDATE timetables SET is_dirty = 0, remote_id = ? WHERE id = ?`,
-      [remoteId, localId],
-    );
+  markTimetableSynced: (
+    localId: number,
+    remoteId: number,
+    structuredData?: any,
+  ) => {
+    // When the backend has parsed the timetable, persist the structured template locally
+    if (structuredData) {
+      db.runSync(
+        `UPDATE timetables 
+         SET is_dirty = 0, remote_id = ?, structuredData = ? 
+         WHERE id = ?`,
+        [remoteId, JSON.stringify(structuredData), localId],
+      );
+    } else {
+      db.runSync(
+        `UPDATE timetables SET is_dirty = 0, remote_id = ? WHERE id = ?`,
+        [remoteId, localId],
+      );
+    }
   },
 };

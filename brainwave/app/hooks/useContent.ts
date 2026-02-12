@@ -31,23 +31,23 @@ export const useContent = () => {
       for (const item of dirtyMaterials) {
         try {
           if (item.uri) {
-            const fileName = item.uri.split("/").pop();
-            console.log("Attempting sync for:", item.title, "URI:", item.uri);
+            const fileName = item.uri.split("/").pop() || "upload.pdf";
+
+            console.log(`Syncing: ${item.title}`);
+
             const result = await BrainwaveAPI.uploadSyllabus(
               user.id,
               item.uri,
               fileName,
               item.type || "application/pdf",
             );
-            LocalDB.markMaterialSynced(item.id, result.id);
+
+            await LocalDB.markMaterialSynced(item.id, result.id);
           }
         } catch (e: any) {
-          console.error(
-            `Failed to sync material on ${item.title}:`,
-            e.response?.data,
-          );
-
-          setError(`Server could not read the timetable "${item.title}".`);
+          // Log the actual error to help debugging
+          console.error(`Sync Error for ${item.title}:`, e.message);
+          setError(`Failed to sync "${item.title}". Check your connection.`);
         }
       }
 
@@ -62,7 +62,13 @@ export const useContent = () => {
               fileName,
               table.type || "application/pdf",
             );
-            LocalDB.markTimetableSynced(table.id, result.id);
+
+            // Persist the parsed weekly_template locally so offline views can use it
+            LocalDB.markTimetableSynced(
+              table.id,
+              result.id,
+              result.weekly_template,
+            );
           }
         } catch (e: any) {
           console.error("Failed to sync timetable:", table.title, e.message);
@@ -145,7 +151,7 @@ export const useContent = () => {
     setError(null);
 
     try {
-      // generate from AI
+      // generate from AI (only if no local plan)
       const dailyPlan = await BrainwaveAPI.generateDailyPlan(
         user.id,
         date,
@@ -154,10 +160,8 @@ export const useContent = () => {
       );
 
       if (dailyPlan?.items) {
-        // sync to local DB
-        await LocalDB.syncPlansFromServer(user.id, [
-          { date, items: dailyPlan.items },
-        ]);
+        // Upsert just this date into the local DB instead of nuking all plans type shi
+        await LocalDB.upsertPlan(user.id, date, dailyPlan.items);
 
         // update state
         const updatedPlans = await LocalDB.getAllPlans(user.id);

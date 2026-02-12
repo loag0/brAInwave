@@ -24,6 +24,8 @@ import brainwaveApi from "@/api/brAInwaveApi";
 import { useAlert } from "../contexts/AlertContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { PlannerIcon, SunIcon, InsightIcon, ICONS } from "@/components/Icons";
+import { useContent } from "../hooks/useContent";
+import { LocalDB } from "../database/localDb";
 
 const PlannerSkeleton = ({ theme }: { theme: any }) => {
   const styles = createStyles(theme);
@@ -111,6 +113,7 @@ export default function Planner() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  const { plans } = useContent();
 
   //This is for state management
   const [planItems, setPlanItems] = useState<any[]>([]);
@@ -128,33 +131,43 @@ export default function Planner() {
 
   const styles = createStyles(theme);
 
+  const normalizeSubject = (value?: string) =>
+    value?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() ?? "";
+
   const aiInsight = useMemo(() => {
     const priorities = user?.studyPreferences?.subjectPriorities || [];
-    const topSubject = priorities[0];
+    const topSubjectRaw = priorities[0];
+    const topSubject = normalizeSubject(topSubjectRaw);
 
-    const hasHardestSubject = planItems.some(
-      (item) => item.subject?.toLowerCase() === topSubject?.toLowerCase()
-    );
+    const hasHardestSubject =
+      !!topSubject &&
+      planItems.some((item) => {
+        const subject = normalizeSubject(item.subject);
+        return subject === topSubject || subject.includes(topSubject);
+      });
 
-    if (topSubject && hasHardestSubject){
+    if (topSubject && hasHardestSubject) {
       return {
         title: "Priority Focus",
-        text: `I've prioritized ${topSubject} today. Get it done early!`,
-        icon: "rocket"
+        text: `I've prioritized ${topSubjectRaw} today. Get it done early!`,
+        icon: "rocket",
       };
     }
 
-    if(topSubject && !hasHardestSubject){
+    if (topSubject && !hasHardestSubject) {
       return {
         title: "Light Day?",
-        text: `No ${topSubject} sessions today. Use this extra headspace to review your #2 priority: ${priorities[1] || 'your notes'}.`,
+        text: `No ${topSubjectRaw} sessions today. Use this extra headspace to review your #2 priority: ${
+          priorities[1] || "your notes"
+        }.`,
         icon: "leaf",
       };
     }
-    return{
+
+    return {
       title: "AI Insight",
       text: "You're most productive in the evening. I've planned challenging tasks after 6pm.",
-      icon: "bulb"
+      icon: "bulb",
     };
   }, [planItems, user?.studyPreferences?.subjectPriorities]);
 
@@ -185,7 +198,8 @@ export default function Planner() {
 
   const [selectedDay, setSelectedDay] = useState(weekDays[0].id);
 
-  //Initial fetch from db for timetable
+  //Initial fetch from db for timetable 
+  // this is then mirrored into Firestore by the backend
   useEffect(() => {
     if (!user?.id) return;
 
@@ -208,7 +222,7 @@ export default function Planner() {
     return () => unsubTemplate();
   }, [user?.id]);
 
-  //Fetches data for day switching
+  //Fetches data for day switching and mirrors Firestore into LocalDB
   useEffect(() => {
     if (!user?.id) return;
 
@@ -218,11 +232,12 @@ export default function Planner() {
       doc(firestore, "users", user.id, "plans", selectedDay),
       (docSnap) => {
         if (docSnap.exists()) {
-          //if there is a generated plan, show that
-          setPlanItems(docSnap.data().items || []);
-
+          // If there is a generated plan, show that and mirror it into LocalDB
+          const items = docSnap.data().items || [];
+          setPlanItems(items);
+          LocalDB.upsertPlan(user.id, selectedDay, items);
         } else {
-          //FALLBACK: if there is no plan, then just show classes from the template
+          // FALLBACK: if there is no plan, then just show classes from the template
           const dateObj = new Date(selectedDay);
           const dayName = dateObj
             .toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })
@@ -254,6 +269,46 @@ export default function Planner() {
     );
     return () => unsubPlan();
   }, [user?.id, selectedDay, weeklyTemplate]);
+
+  // Offline fallback: if we don't have a Firestore plan yet, try LocalDB via useContent
+  useEffect(() => {
+    if (!user?.id) return;
+    if (planItems.length > 0) return;
+
+    const localPlan = plans.find(
+      (p) => p.date === selectedDay || p.id === selectedDay,
+    );
+
+    if (localPlan?.tasks?.length) {
+      setPlanItems(localPlan.tasks);
+      setLoading(false);
+      return;
+    }
+
+    // If no cached plan, fall back to timetable template
+    const dateObj = new Date(selectedDay);
+    const dayName = dateObj
+      .toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })
+      .toLowerCase();
+
+    const templateClasses = weeklyTemplate?.[dayName] || [];
+
+    if (templateClasses.length) {
+      const formattedItems = templateClasses.map((cls: any, index: number) => ({
+        id: `temp-offline-${index}`,
+        time: cls.time,
+        subject: cls.subject,
+        task: "Class Lecture",
+        duration: "1 hour",
+        completed: false,
+        difficulty: "medium",
+        isTemplate: true,
+      }));
+
+      setPlanItems(formattedItems);
+      setLoading(false);
+    }
+  }, [user?.id, selectedDay, plans, weeklyTemplate, planItems.length]);
 
   const toggleTaskCompletion = (id: string | number) => {
     setPlanItems((items) =>
