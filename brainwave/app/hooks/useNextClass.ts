@@ -4,8 +4,33 @@ function parseStartDate(item: any) {
   const raw = item.time || item.start;
   if (!raw) return null;
 
-  const date = new Date(raw);
-  return isNaN(date.getTime()) ? null : date;
+  const startTimeStr = raw.split("-")[0].trim();
+  const now = new Date();
+
+  try {
+    // Split "12:00 PM" or "12:00"
+    let [time, modifier] = startTimeStr.split(" ");
+    let [hours, minutes] = time.split(":").map((n: any) => parseInt(n, 10));
+
+    // Handle AM/PM
+    if (modifier?.toLowerCase() === "pm" && hours < 12) hours += 12;
+    if (modifier?.toLowerCase() === "am" && hours === 12) hours = 0;
+
+    // Create date based on LOCAL time, not UTC
+    const target = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      hours,
+      minutes || 0,
+      0,
+    );
+
+    return isNaN(target.getTime()) ? null : target;
+  } catch (e: any) {
+    console.log("useNextClass date error: ", e.message);
+    return null;
+  }
 }
 
 function formatCountdown(target: Date) {
@@ -21,9 +46,7 @@ function formatCountdown(target: Date) {
 
 export function useNextClass(schedule: any[]) {
   return useMemo(() => {
-    if (!schedule?.length) {
-      return { nextClass: null, countdown: null };
-    }
+    if (!schedule?.length) return { nextClass: null, countdown: null };
 
     const now = new Date();
 
@@ -33,19 +56,25 @@ export function useNextClass(schedule: any[]) {
         if (!startDate) return null;
         return { ...item, startDate };
       })
-      .filter(Boolean)
-      .filter((item: any) => item.startDate > now)
-      .sort((a: any, b: any) => a.startDate.getTime() - b.startDate.getTime());
+      .filter((item): item is any => item !== null)
+      // Change: Include classes that started up to 10 mins ago
+      // so you don't lose the "Current" class immediately.
+      .filter((item) => {
+        const fiftyMinutesAgo = new Date(now.getTime() - 50 * 60000);
+        return item.startDate > fiftyMinutesAgo;
+      })
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
-    if (!upcoming.length) {
-      return { nextClass: null, countdown: null };
-    }
+    if (!upcoming.length) return { nextClass: null, countdown: null };
 
     const next = upcoming[0];
 
+    // If the class has already started but is in our 10-min window
+    const isOngoing = next.startDate <= now;
+
     return {
       nextClass: next,
-      countdown: formatCountdown(next.startDate),
+      countdown: isOngoing ? "Started" : formatCountdown(next.startDate),
     };
   }, [schedule]);
 }

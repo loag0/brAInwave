@@ -104,7 +104,6 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false }}>
-        {/* We list these to define animations/presentations, NOT to 'create' the routes */}
         <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
         <Stack.Screen
           name="(onboarding)"
@@ -133,6 +132,19 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
             headerTitleStyle: { fontWeight: "bold" },
             headerShadowVisible: false,
             title: "AI Priorities",
+          }}
+        />
+        <Stack.Screen
+          name="material/[id]"
+          options={{
+            headerShown: true, // Show header so user can go back
+            title: "Study Plan",
+            headerStyle: { backgroundColor: theme.colors.background },
+            headerTintColor: theme.colors.text.primary,
+            headerTitleStyle: { fontFamily: theme.fonts.bold },
+            headerShadowVisible: false,
+            animation: "slide_from_bottom", // High-end feel for opening a document
+            presentation: "card",
           }}
         />
       </Stack>

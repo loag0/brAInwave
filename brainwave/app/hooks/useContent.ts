@@ -17,9 +17,9 @@ export const useContent = () => {
   const [timetables, setTimetables] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({current: 0, total: 0});
   const [error, setError] = useState<string | null>(null);
 
-  // 1. SYNC MANAGER: Pushes local "Dirty" changes to the Python Backend
   const syncDirtyRecords = useCallback(
     async (currentMaterials: any[], currentTimetables: any[]) => {
       if (!user?.id) return;
@@ -27,62 +27,58 @@ export const useContent = () => {
       const dirtyMaterials = currentMaterials.filter((m) => m.is_dirty === 1);
       const dirtyTimetables = currentTimetables.filter((t) => t.is_dirty === 1);
 
-      // Sync Unsynced Materials
+      const totalToSync = dirtyMaterials.length + dirtyTimetables.length;
+      if (totalToSync === 0) return;
+
+      setSyncProgress({current: 0, total: totalToSync});
+      let completed = 0;
+
+      //each file is wapped individually so the loop continues when one fails
       for (const item of dirtyMaterials) {
         try {
           if (item.uri) {
-            const fileName = item.uri.split("/").pop() || "upload.pdf";
-
-            console.log(`Syncing: ${item.title}`);
-
-            const result = await BrainwaveAPI.uploadSyllabus(
+            await BrainwaveAPI.uploadSyllabus(
               user.id,
               item.uri,
-              fileName,
-              item.type || "application/pdf",
+              item.title,
+              item.type,
             );
+            await LocalDB.markMaterialSynced(item.id, item.id);
 
-            await LocalDB.markMaterialSynced(item.id, result.id);
+            completed++;
+            setSyncProgress({current: completed, total: totalToSync});
           }
         } catch (e: any) {
-          // Log the actual error to help debugging
-          console.error(`Sync Error for ${item.title}:`, e.message);
-          setError(`Failed to sync "${item.title}". Check your connection.`);
+          // Individual error: This file failed, but the loop continues!
+          console.error(`Syllabus Sync Failed [${item.title}]:`, e.message);
         }
       }
 
-      // Sync Unsynced Timetables
+      // Sync Timetables - Wrapped individually
       for (const table of dirtyTimetables) {
         try {
           if (table.uri) {
-            const fileName = table.uri.split("/").pop();
-            const result = await BrainwaveAPI.uploadTimetable(
+            await BrainwaveAPI.uploadTimetable(
               user.id,
               table.uri,
-              fileName,
+              table.title,
               table.type || "application/pdf",
             );
-
-            // Persist the parsed weekly_template locally so offline views can use it
-            LocalDB.markTimetableSynced(
-              table.id,
-              result.id,
-              result.weekly_template,
-            );
+            await LocalDB.markTimetableSynced(table.id, table.id, table.weely_template);
           }
         } catch (e: any) {
-          console.error("Failed to sync timetable:", table.title, e.message);
+          console.error(`Timetable Sync Failed [${table.title}]:`, e.message);
         }
       }
 
-      // Update local state with the newly "cleaned" (is_dirty=0) rows
+      setTimeout(() => setSyncProgress({current: 0, total: 0}), 2000);
+
       setMaterials(await LocalDB.getAllMaterials(user.id));
       setTimetables(await LocalDB.getAllTimetables(user.id));
     },
     [user?.id],
   );
 
-  // 2. FETCH DATA: Instant load from SQLite + Background Cloud Refresh
   const fetchData = useCallback(
     async (force = false) => {
       if (!user?.id) return;
@@ -196,6 +192,7 @@ export const useContent = () => {
   ) => {
     if (!user?.id) return null;
 
+    console.log("Saving to Local SQLite...");
     const localId = await LocalDB.createMaterialLocally(
       user.id,
       title,
@@ -206,14 +203,35 @@ export const useContent = () => {
     const updatedLocal = await LocalDB.getAllMaterials(user.id);
     setMaterials(updatedLocal);
 
-    // Sync in background
-    syncDirtyRecords(updatedLocal, timetables);
+    console.log("Attempting immediate cloud sync for: ", title);
+
+    try{
+      if(uri){
+        const fileName = uri.split("/").pop() || "file.pdf";
+
+        const result = await BrainwaveAPI.uploadSyllabus(
+          user.id,
+          uri,
+          fileName,
+          type || "application/pdf"
+        );
+
+        console.log("Cloud sync success: ", result.id);
+        await LocalDB.markMaterialSynced(localId, result.id);
+
+        setMaterials(await LocalDB.getAllMaterials(user.id));
+      }
+    } catch(syncError: any){
+      console.error("Cloud sync failed directly: ", syncError.message);
+    }
+
     return localId;
   };
 
   return {
     materials,
     timetables,
+    syncProgress,
     plans,
     isLoading,
     error,
