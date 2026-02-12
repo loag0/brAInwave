@@ -87,9 +87,12 @@ export default function Home() {
     isLoading: contentLoading,
     refresh,
     createMaterial,
+    syncProgress,
   } = useContent();
 
   const [isLoading, setIsLoading] = useState(false);
+  const isManualLoading = isLoading;
+  const isBackgroundSyncing = syncProgress.total > 0;
   const [loadingMessage, setLoadingMessage] = useState("Analyzing...");
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
@@ -154,19 +157,23 @@ export default function Home() {
         title: totalFiles > 1 ? "Files added" : "Syllabus added",
         message: "Processing your content now.",
       });
-    } catch (error) {
+    } catch (error: any) {
       showAlert?.({ title: "Error", message: "Upload failed twin." });
+      console.log(error.message)
     } finally {
       setIsLoading(false);
       setLoadingMessage("Analyzing your schedule...");
     }
   }, [user?.id, createMaterial, showAlert]);
 
+  const displayMessage = isManualLoading
+    ? loadingMessage
+    : `Syncing records (${syncProgress.current}/${syncProgress.total})...`;
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       if (refresh) await refresh(true);
-      setRefreshing(false);
     } catch (error) {
       console.error("Refresh failed", error);
     } finally {
@@ -175,6 +182,7 @@ export default function Home() {
   }, [refresh]);
 
   const { nextClass, countdown } = useNextClass(todaysSchedule);
+    const isOngoing = countdown === "Started";
 
   useEffect(() => {
     if (!user) return;
@@ -189,7 +197,10 @@ export default function Home() {
         user.studyPreferences.notificationLeadMinutes,
       );
     })();
-  }, [nextClass, user, user?.studyPreferences.notificationLeadMinutes]);
+
+    console.log("DEBUG: Todays Schedule Data: ", JSON.stringify(todaysSchedule, null, 2));
+    console.log("DEBUG: Next class identified: ", nextClass);
+  }, [todaysSchedule, nextClass, user, user?.studyPreferences.notificationLeadMinutes]);
 
   function toggleAssignment(id: number) {
     setCheckedAssignments((prev) =>
@@ -207,7 +218,15 @@ export default function Home() {
   );
 
   const tasksRemaining = todaysSchedule.filter((t) => !t.completed).length;
-  const hasNextClass = Boolean(nextClass);
+  const hasNextClass = nextClass !== null && nextClass !== undefined;
+
+  const heroSubText = hasNextClass
+    ? isOngoing
+      ? `${nextClass?.subject || nextClass?.title} has already started!`
+      : `${nextClass?.subject || nextClass?.title} starts in ${countdown}`
+    : tasksRemaining > 0
+      ? `You still have ${tasksRemaining} tasks to do hb. Get moovin'!`
+      : "No more classes today. Review those notes fn";
 
   function getPriorityColor(priority: string) {
     const p = priority?.toLowerCase();
@@ -223,11 +242,20 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/*LOADING OVERLAY*/}
-      {isLoading && (
+      {(isManualLoading || isBackgroundSyncing) && (
         <View style={styles.loaderOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={[styles.dateText, { marginTop: 10 }]}>
-            {loadingMessage}
+          <Text
+            style={[
+              styles.dateText,
+              {
+                marginTop: 10,
+                fontWeight: "600",
+                color: theme.colors.text.secondary,
+              },
+            ]}
+          >
+            {displayMessage}
           </Text>
         </View>
       )}
@@ -271,11 +299,20 @@ export default function Home() {
               </Text>
             </View>
 
-            <Text style={styles.heroSub}>
-              {hasNextClass
-                ? `${nextClass?.title || nextClass?.subject} starts in ${countdown}`
-                : "No more classes today. Review those notes fn."}
-            </Text>
+            <View style={styles.heroSub}>
+              {isOngoing && (
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: theme.colors.error,
+                    marginRight: 8,
+                  }}
+                ></View>
+              )}
+              <Text style={styles.heroSubTextOnly}>{heroSubText}</Text>
+            </View>
 
             <View style={styles.tipPill}>
               <Text style={styles.tipPrefix}>brAInwave says...</Text>
@@ -702,10 +739,14 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: 4,
     },
     heroSub: {
+      flexDirection: "row",
+      marginBottom: 12,
+      alignItems: "center",
+    },
+    heroSubTextOnly:{
       fontSize: 14,
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
-      marginBottom: 14,
     },
     tipPill: {
       flexDirection: "row",

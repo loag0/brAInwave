@@ -1,7 +1,24 @@
 import axios from "axios";
-import { Platform } from "react-native";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+const checkConnection = async () => {
+  console.log(`Checking connection to: ${API_BASE_URL}`);
+
+  try {
+    const response = await fetch(API_BASE_URL);
+
+    if (response.ok) {
+      console.log("Server is LIVE and reachable!");
+    } else {
+      console.warn(`Server responded with status: ${response.status}`);
+    }
+  } catch (error) {
+    console.error("Server is DOWN or unreachable:", error.message);
+  }
+};
+
+checkConnection();
 
 class BrAInwaveAPI {
   // Added userId to params to match backend requirement
@@ -17,7 +34,10 @@ class BrAInwaveAPI {
       `${API_BASE_URL}/upload-timetable?user_id=${userId}`,
       formData,
       {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "ngrok-skip-browser-warning": true,
+        },
         timeout: 60000,
       },
     );
@@ -25,35 +45,35 @@ class BrAInwaveAPI {
   }
 
   async uploadSyllabus(userId, fileUri, fileName, fileType) {
-    // Fix for Android: The uri should be in a format the native layer can read
-    const uri =
-      Platform.OS === "android" ? fileUri : fileUri.replace("file://", "");
-
     const formData = new FormData();
-    formData.append("file", {
-      uri: uri,
-      name: fileName || "upload.pdf",
+
+    const fileToUpload = {
+      uri: fileUri,
+      name: fileName || "file.pdf",
       type: fileType || "application/pdf",
-    });
+    };
+
+    formData.append("file", fileToUpload);
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/upload-syllabus?user_id=${userId}`,
-        formData,
-        {
-          headers: {
-            Accept: "application/json",
-          },
-          transformRequest: (data, headers) => {
-            return data;
-          },
-          timeout: 60000,
+      const response = await axios({
+        method: "post",
+        url: `${API_BASE_URL}/upload-syllabus`,
+        params: { user_id: userId },
+        data: formData,
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "ngrok-skip-browser-warning": "true",
+          Accept: "application/json",
         },
-      );
+        transformRequest: (data, headers) => {
+          return data;
+        },
+      });
       return response.data;
     } catch (error) {
-      console.error("Axios Error Detail:", error.response?.data);
-      throw new Error(`Failed to upload syllabus: ${error.message}`);
+      console.log("Axios Error Object:", JSON.stringify(error, null, 2));
+      throw error;
     }
   }
 
@@ -124,6 +144,7 @@ class BrAInwaveAPI {
         },
         {
           headers: { "Content-Type": "application/json" },
+          "ngrok-skip-browser-warning": true,
           timeout: 45000,
         },
       );

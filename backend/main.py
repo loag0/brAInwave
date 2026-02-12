@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from google.genai import types
+from google.cloud.firestore import ArrayUnion
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -92,22 +93,7 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
         content = await file.read()
         mime_type = file.content_type or "text/plain"
         
-        prompt = """
-            You are brAInwave, a smart study planning assistant for college students. Analyze this syllabus/study material and create a comprehensive, personalized study plan. Break down the content into manageable sections, suggest study techniques, and recommend a timeline for effective learning.
-            
-            Your study plan should include:
-            1. Key topics & concepts - Break down the syllabus into main topics.
-            2. Week-by-week breakdown - Create a realistic timeline
-            3. Time allocation - Suggest how long to spend on each topic.
-            4. Study techniques - Recommend the best methods to learn this material, like active recall, spaced repetition, etc.
-            5. Important dates - Note any deadlines, exams, or milestones.
-            6. Retention tips - Give advice for long-term learning, not just cramming
-            7. Progress checkpoints - Suggest ways to test understanding along the way.
-            
-            Make it friendly, encouraging, and realistic for a busy student. 
-            Keep the tone motivating but honest about the work required.
-       
-        """
+        prompt = """Analyze this syllabus and create a study plan...""" # Keep your prompt here
         
         response = client.models.generate_content(
             model="gemini-3-flash-preview",
@@ -121,8 +107,10 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
             raise HTTPException(status_code=500, detail="Failed to generate study plan")
 
         studyPlan = response.text
+        
+        # 1. Save to Local SQL (Python Backend)
         material = StudyMaterial(
-            user_id=user_id, # Link to user
+            user_id=user_id,
             title=file.filename,
             rawContent=f"Uploaded {file.filename}",
             aiPlan=studyPlan
@@ -130,10 +118,25 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
         db.add(material)
         db.commit()
         db.refresh(material)
-            
+        
+        # 2. Sync to Firebase Firestore
+        doc_ref = fs_db.collection("users").document(user_id).collection("data").document("materials")
+        doc_ref.set({
+            "syllabus_list": ArrayUnion([{
+                "id": material.id,
+                "title": file.filename,
+                "aiPlan": studyPlan,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }])
+        }, merge=True)
+
         return {"status": "success", "id": material.id, "studyPlan": studyPlan}
+
     except Exception as e:
+        print(f"Syllabus error: {e}") # Log this so you can see it in your terminal
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
 
 @app.post("/upload-timetable")
 async def uploadTimetable(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -212,7 +215,6 @@ async def syncStudyMaterials(data: StudyMaterialSync, db: Session = Depends(get_
     db.refresh(material)
     return {"id": material.id, "status": "synced"}
 
-@app.post("/generate-plan")
 @app.post("/generate-plan")
 async def generateDailyPlan(request: PlanRequest):
     try:

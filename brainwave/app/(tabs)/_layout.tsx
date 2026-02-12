@@ -2,7 +2,12 @@ import { Tabs } from "expo-router";
 import { useTheme } from "../contexts/ThemeContext";
 import { useTimer } from "../contexts/TimerContext";
 import { PomoTabIcon } from "@/components/PomoTabIcon";
-import { HomeIcon, PlannerC_Icon, SettingsIcon, ProgressIcon } from "@/components/Icons";
+import {
+  HomeIcon,
+  PlannerC_Icon,
+  SettingsIcon,
+  LibraryIcon,
+} from "@/components/Icons";
 
 export default function TabsLayout() {
   const { theme } = useTheme();
@@ -57,11 +62,11 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="progress"
+          name="library"
           options={{
-            title: "Progress",
+            title: "Library",
             tabBarIcon: ({ color, size }) => (
-              <ProgressIcon color={color} size={size} />
+              <LibraryIcon color={color} size={size} />
             ),
           }}
         />

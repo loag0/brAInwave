@@ -2,14 +2,14 @@ import React from "react";
 import Svg, { Path, SvgProps } from "react-native-svg";
 
 interface IconProps extends SvgProps {
-    size?: number;
-    color?: string;
+  size?: number;
+  color?: string;
 }
 
-interface InsightIconProps extends SvgProps{
-  size?: number,
-  color?: string,
-  name?: string
+interface InsightIconProps extends SvgProps {
+  size?: number;
+  color?: string;
+  name?: string;
 }
 
 export const ICONS = {
@@ -23,7 +23,10 @@ export const ICONS = {
 
 export const ChevronRight: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z" fill={color} />
+    <Path
+      d="M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z"
+      fill={color}
+    />
   </Svg>
 );
 
@@ -31,16 +34,17 @@ export const BrainIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M390-120q-51 0-88-35.5T260-241q-60-8-100-53t-40-106q0-21 5.5-41.5T142-480q-11-18-16.5-38t-5.5-42q0-61 40-105.5t99-52.5q3-51 41-86.5t90-35.5q26 0 48.5 10t41.5 27q18-17 41-27t49-10q52 0 89.5 35t40.5 86q59 8 99.5 53T840-560q0 22-5.5 42T818-480q11 18 16.5 38.5T840-400q0 62-40.5 106.5T699-241q-5 50-41.5 85.5T570-120q-25 0-48.5-9.5T480-156q-19 17-42 26.5t-48 9.5Zm130-590v460q0 21 14.5 35.5T570-200q20 0 34.5-16t15.5-36q-21-8-38.5-21.5T550-306q-10-14-7.5-30t16.5-26q14-10 30-7.5t26 16.5q11 16 28 24.5t37 8.5q33 0 56.5-23.5T760-400q0-5-.5-10t-2.5-10q-17 10-36.5 15t-40.5 5q-17 0-28.5-11.5T640-440q0-17 11.5-28.5T680-480q33 0 56.5-23.5T760-560q0-33-23.5-56T680-640q-11 18-28.5 31.5T613-587q-16 6-31-1t-20-23q-5-16 1.5-31t22.5-20q15-5 24.5-18t9.5-30q0-21-14.5-35.5T570-760q-21 0-35.5 14.5T520-710Zm-80 460v-460q0-21-14.5-35.5T390-760q-21 0-35.5 14.5T340-710q0 16 9 29.5t24 18.5q16 5 23 20t2 31q-6 16-21 23t-31 1q-21-8-38.5-21.5T279-640q-32 1-55.5 24.5T200-560q0 33 23.5 56.5T280-480q17 0 28.5 11.5T320-440q0 17-11.5 28.5T280-400q-21 0-40.5-5T203-420q-2 5-2.5 10t-.5 10q0 33 23.5 56.5T280-320q20 0 37-8.5t28-24.5q10-14 26-16.5t30 7.5q14 10 16.5 26t-7.5 30q-14 19-32 33t-39 22q1 20 16 35.5t35 15.5q21 0 35.5-14.5T440-250Zm40-230Z"
-      fill={color} 
-      />
+      fill={color}
+    />
   </Svg>
 );
 
-export const FireIcon: React.FC<IconProps> = ({color, size}) => (
+export const FireIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M240-400q0 52 21 98.5t60 81.5q-1-5-1-9v-9q0-32 12-60t35-51l113-111 113 111q23 23 35 51t12 60v9q0 4-1 9 39-35 60-81.5t21-98.5q0-50-18.5-94.5T648-574q-20 13-42 19.5t-45 6.5q-62 0-107.5-41T401-690q-39 33-69 68.5t-50.5 72Q261-513 250.5-475T240-400Zm240 52-57 56q-11 11-17 25t-6 29q0 32 23.5 55t56.5 23q33 0 56.5-23t23.5-55q0-16-6-29.5T537-292l-57-56Zm0-492v132q0 34 23.5 57t57.5 23q18 0 33.5-7.5T622-658l18-22q74 42 117 117t43 163q0 134-93 227T480-80q-134 0-227-93t-93-227q0-129 86.5-245T480-840Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -54,13 +58,13 @@ export const SunIcon: React.FC<IconProps> = ({ size, color }) => (
 );
 
 export const StarIcon: React.FC<IconProps> = ({ size, color }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path
-        d="M852-212 732-332l56-56 120 120-56 56ZM708-692l-56-56 120-120 56 56-120 120Zm-456 0L132-812l56-56 120 120-56 56ZM108-212l-56-56 120-120 56 56-120 120Zm246-75 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Zm247-361Z"
-        fill={color}
-      />
-    </Svg>
-  );
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="M852-212 732-332l56-56 120 120-56 56ZM708-692l-56-56 120-120 56 56-120 120Zm-456 0L132-812l56-56 120 120-56 56ZM108-212l-56-56 120-120 56 56-120 120Zm246-75 126-76 126 77-33-144 111-96-146-13-58-136-58 135-146 13 111 97-33 143ZM233-120l65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Zm247-361Z"
+      fill={color}
+    />
+  </Svg>
+);
 
 export const NotificationIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
@@ -73,7 +77,10 @@ export const NotificationIcon: React.FC<IconProps> = ({ color, size }) => (
 
 export const ChevronDownIcon: React.FC<IconProps> = ({ size, color }) => (
   <Svg width={size} height={size} viewBox="0, -960 960 960" fill="none">
-    <Path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" fill={color} />
+    <Path
+      d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z"
+      fill={color}
+    />
   </Svg>
 );
 
@@ -81,7 +88,8 @@ export const BookIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm0-80h480v-640h-80v280l-100-60-100 60v-280H240v640Zm0 0v-640 640Zm200-360 100-60 100 60-100-60-100 60Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -89,7 +97,8 @@ export const ScheduleIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="m612-292 56-56-148-148v-184h-80v216l172 172ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-400Zm0 320q133 0 226.5-93.5T800-480q0-133-93.5-226.5T480-800q-133 0-226.5 93.5T160-480q0 133 93.5 226.5T480-160Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -97,7 +106,8 @@ export const AssignmentIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h168q13-36 43.5-58t68.5-22q38 0 68.5 22t43.5 58h168q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm80-80h280v-80H280v80Zm0-160h400v-80H280v80Zm0-160h400v-80H280v80Zm200-190q13 0 21.5-8.5T510-820q0-13-8.5-21.5T480-850q-13 0-21.5 8.5T450-820q0 13 8.5 21.5T480-790ZM200-200v-560 560Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -105,7 +115,8 @@ export const CheckeredFlag: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M360-720h80v-80h-80v80Zm160 0v-80h80v80h-80ZM360-400v-80h80v80h-80Zm320-160v-80h80v80h-80Zm0 160v-80h80v80h-80Zm-160 0v-80h80v80h-80Zm160-320v-80h80v80h-80Zm-240 80v-80h80v80h-80ZM200-160v-640h80v80h80v80h-80v80h80v80h-80v320h-80Zm400-320v-80h80v80h-80Zm-160 0v-80h80v80h-80Zm-80-80v-80h80v80h-80Zm160 0v-80h80v80h-80Zm80-80v-80h80v80h-80Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -113,7 +124,8 @@ export const EnvelopeIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm320-280L160-640v400h640v-400L480-440Zm0-80 320-200H160l320 200ZM160-640v-80 480-400Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -121,7 +133,8 @@ export const LockIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80ZM240-160v-400 400Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -136,16 +149,19 @@ export const MobileIcon: React.FC<IconProps> = ({ color, size }) => (
 
 export const SettingsIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path 
+    <Path
       d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
 export const LogoutIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L585-622l55-58 200 200-200 200Z"
-    fill={color} />
+    <Path
+      d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L585-622l55-58 200 200-200 200Z"
+      fill={color}
+    />
   </Svg>
 );
 
@@ -249,10 +265,13 @@ export const BulbIcon: React.FC<IconProps> = ({ color, size }) => (
 );
 
 export const PlannerC_Icon: React.FC<IconProps> = ({ color, size }) => (
-    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Z" fill={color} />
-    </Svg>
-  );
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Z"
+      fill={color}
+    />
+  </Svg>
+);
 
 export const PlannerIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
@@ -290,10 +309,10 @@ export const HomeIcon: React.FC<IconProps> = ({ color, size }) => (
   </Svg>
 );
 
-export const ProgressIcon: React.FC<IconProps> = ({ color, size }) => (
+export const LibraryIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
-      d="M120-240q-33 0-56.5-23.5T40-320q0-33 23.5-56.5T120-400h10.5q4.5 0 9.5 2l182-182q-2-5-2-9.5V-600q0-33 23.5-56.5T400-680q33 0 56.5 23.5T480-600q0 2-2 20l102 102q5-2 9.5-2h21q4.5 0 9.5 2l142-142q-2-5-2-9.5V-640q0-33 23.5-56.5T840-720q33 0 56.5 23.5T920-640q0 33-23.5 56.5T840-560h-10.5q-4.5 0-9.5-2L678-420q2 5 2 9.5v10.5q0 33-23.5 56.5T600-320q-33 0-56.5-23.5T520-400v-10.5q0-4.5 2-9.5L420-522q-5 2-9.5 2H400q-2 0-20-2L198-340q2 5 2 9.5v10.5q0 33-23.5 56.5T120-240Z"
+      d="M80-160v-80h800v80H80Zm80-160v-320h80v320h-80Zm160 0v-480h80v480h-80Zm160 0v-480h80v480h-80Zm280 0L600-600l70-40 160 280-70 40Z"
       fill={color}
     />
   </Svg>
@@ -306,29 +325,35 @@ export const INSIGHT_PATHS = {
   leaf: "M216-176q-45-45-70.5-104T120-402q0-63 24-124.5T222-642q35-35 86.5-60t122-39.5Q501-756 591.5-759t202.5 7q8 106 5 195t-16.5 160.5q-13.5 71.5-38 125T684-182q-53 53-112.5 77.5T450-80q-65 0-127-25.5T216-176Zm112-16q29 17 59.5 24.5T450-160q46 0 91-18.5t86-59.5q18-18 36.5-50.5t32-85Q709-426 716-500.5t2-177.5q-49-2-110.5-1.5T485-670q-61 9-116 29t-90 55q-45 45-62 89t-17 85q0 59 22.5 103.5T262-246q42-80 111-153.5T534-520q-72 63-125.5 142.5T328-192Zm0 0Zm0 0Z",
 };
 
-export const InsightIcon: React.FC<InsightIconProps> = ({name, size, color}) => {
-  const pathData = INSIGHT_PATHS[name as keyof typeof INSIGHT_PATHS]
+export const InsightIcon: React.FC<InsightIconProps> = ({
+  name,
+  size,
+  color,
+}) => {
+  const pathData = INSIGHT_PATHS[name as keyof typeof INSIGHT_PATHS];
 
-  return(
+  return (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-      <Path d={pathData} fill={color}/>
+      <Path d={pathData} fill={color} />
     </Svg>
-  )
-}
+  );
+};
 
-export const ShieldIcon:React.FC<IconProps> = ({ size, color }) => (
+export const ShieldIcon: React.FC<IconProps> = ({ size, color }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M480-80q-139-35-229.5-159.5T160-516v-244l320-120 320 120v244q0 152-90.5 276.5T480-80Zm0-84q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm0-316Zm-80 160h160q17 0 28.5-11.5T600-360v-120q0-17-11.5-28.5T560-520v-40q0-33-23.5-56.5T480-640q-33 0-56.5 23.5T400-560v40q-17 0-28.5 11.5T360-480v120q0 17 11.5 28.5T400-320Zm40-200v-40q0-17 11.5-28.5T480-600q17 0 28.5 11.5T520-560v40h-80Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
-export const CopyIcon:React.FC<IconProps> = ({ size, color }) => (
+export const CopyIcon: React.FC<IconProps> = ({ size, color }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
@@ -336,21 +361,25 @@ export const KeyIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M280-400q-33 0-56.5-23.5T200-480q0-33 23.5-56.5T280-560q33 0 56.5 23.5T360-480q0 33-23.5 56.5T280-400Zm0 160q-100 0-170-70T40-480q0-100 70-170t170-70q67 0 121.5 33t86.5 87h352l120 120-180 180-80-60-80 60-85-60h-47q-32 54-86.5 87T280-240Zm0-80q56 0 98.5-34t56.5-86h125l58 41 82-61 71 55 75-75-40-40H435q-14-52-56.5-86T280-640q-66 0-113 47t-47 113q0 66 47 113t113 47Z"
-      fill={color} />
+      fill={color}
+    />
   </Svg>
 );
 
-export const StopIcon: React.FC<IconProps> = ({size, color}) => (
+export const StopIcon: React.FC<IconProps> = ({ size, color }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M320-320h320v-320H320v320ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"
-      fill={color}/>
+      fill={color}
+    />
   </Svg>
 );
 
-export const PauseIcon: React.FC<IconProps> = ({size, color }) => (
+export const PauseIcon: React.FC<IconProps> = ({ size, color }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
-    <Path d="M520-200v-560h240v560H520Zm-320 0v-560h240v560H200Zm400-80h80v-400h-80v400Zm-320 0h80v-400h-80v400Zm0-400v400-400Zm320 0v400-400Z"
-    fill={color}/>
+    <Path
+      d="M520-200v-560h240v560H520Zm-320 0v-560h240v560H200Zm400-80h80v-400h-80v400Zm-320 0h80v-400h-80v400Zm0-400v400-400Zm320 0v400-400Z"
+      fill={color}
+    />
   </Svg>
-)
+);
