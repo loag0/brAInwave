@@ -66,13 +66,15 @@ class BrAInwaveAPI {
           "ngrok-skip-browser-warning": "true",
           Accept: "application/json",
         },
-        transformRequest: (data, headers) => {
+        transformRequest: (data) => {
           return data;
         },
       });
       return response.data;
     } catch (error) {
-      console.log("Axios Error Object:", JSON.stringify(error, null, 2));
+      if(error.response){
+        console.log("Server Error Data:", error.response.data);
+      }
       throw error;
     }
   }

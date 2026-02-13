@@ -22,7 +22,7 @@ import { useTodaySchedule } from "../hooks/useTodaySchedule";
 import { useTimetableUpload } from "../hooks/useTimetableUpload";
 import { useNextClass } from "../hooks/useNextClass";
 import { ensureNotificationPermission, scheduleNextClassNotification } from "@/utils/notifications";
-import { CloseIcon, SunIcon, AddIcon, TodayIcon, AssignmentIcon, CheckIcon, ScheduleIcon, CalendarIcon, UploadSyllabusIcon, AddAssignmentIcon, ChevronRightIcon } from "@/components/Icons";
+import { CloseIcon, SunIcon, AddIcon, TodayIcon, AssignmentIcon, CheckIcon, ScheduleIcon, CalendarIcon, UploadSyllabusIcon, AddAssignmentIcon, ChevronRightIcon, ICONS } from "@/components/Icons";
 
 const { width } = Dimensions.get("window");
 
@@ -144,19 +144,21 @@ export default function Home() {
 
         const title = file.name || `Syllabus ${i + 1}`;
 
-        // We await this so the UI updates the "1 of 3" correctly
         await createMaterial(
           title,
-          `Uploaded ${file.name || "file"}`,
+          `Uploaded ${title}`,
           file.uri,
           file.mimeType || "application/octet-stream",
         );
       }
 
       showAlert?.({
-        title: totalFiles > 1 ? "Files added" : "Syllabus added",
-        message: "Processing your content now.",
+        title: totalFiles > 1 ? "Files added" : "Successful Upload",
+        message: "Your files have successfully been uploaded",
+        icon: ICONS.SUCCESS,
+        iconColor: theme.colors.success
       });
+
     } catch (error: any) {
       showAlert?.({ title: "Error", message: "Upload failed twin." });
       console.log(error.message)
@@ -164,7 +166,7 @@ export default function Home() {
       setIsLoading(false);
       setLoadingMessage("Analyzing your schedule...");
     }
-  }, [user?.id, createMaterial, showAlert]);
+  }, [user?.id, createMaterial, showAlert, theme]);
 
   const displayMessage = isManualLoading
     ? loadingMessage
@@ -251,7 +253,7 @@ export default function Home() {
               {
                 marginTop: 10,
                 fontWeight: "600",
-                color: theme.colors.text.secondary,
+                color: "#fff",
               },
             ]}
           >

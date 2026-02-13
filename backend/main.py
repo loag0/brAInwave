@@ -126,7 +126,7 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
                 "id": material.id,
                 "title": file.filename,
                 "aiPlan": studyPlan,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(timezone.utc)
             }])
         }, merge=True)
 
@@ -136,8 +136,6 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
         print(f"Syllabus error: {e}") # Log this so you can see it in your terminal
         raise HTTPException(status_code=500, detail=str(e))
     
-    
-
 @app.post("/upload-timetable")
 async def uploadTimetable(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     content = await file.read()
