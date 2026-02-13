@@ -1,126 +1,137 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
   TouchableOpacity,
+  TextInput,
+  RefreshControl
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useAuth } from "../contexts/AuthContext";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../../firebaseConfig";
+import { SearchIcon, CloseIcon } from "@/components/Icons"
+import { useContent } from "../hooks/useContent";
 
-const { width } = Dimensions.get("window");
-
-// Mock / Types for logic
-interface WeeklyStat {
-  day: string;
-  hours: number;
-}
-interface Subject {
-  name: string;
-  hours: number;
-  progress: number;
-  color: string;
-}
-interface Achievement {
-  id: number;
+// Types for Library items matching your Firestore structure
+interface Material {
+  id: string;
   title: string;
-  description: string;
-  icon: string;
-  unlocked: boolean;
+  createdAt: any;
+  aiPlan: string;
 }
+
+const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
+  <View
+    style={[
+      styles.skeletonCard,
+      {
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.border,
+      },
+    ]}
+  >
+    <View
+      style={[
+        styles.skeletonIcon,
+        { backgroundColor: theme.colors.border + "40" },
+      ]}
+    />
+    <View style={{ flex: 1, gap: 8 }}>
+      <View
+        style={[
+          styles.skeletonLine,
+          { width: "60%", backgroundColor: theme.colors.border + "40" },
+        ]}
+      />
+      <View
+        style={[
+          styles.skeletonLine,
+          {
+            width: "30%",
+            height: 10,
+            backgroundColor: theme.colors.border + "20",
+          },
+        ]}
+      />
+    </View>
+  </View>
+);
 
 export default function Library() {
   const { theme, isDark } = useTheme();
+  const { user } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"insights" | "library">(
-    "insights",
-  );
+  const { refresh } = useContent(); 
+
+  const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [refreshing, setRefreshing ] = useState(false);
+
   const styles = createStyles(theme, isDark);
 
-  // --- MOCK DATA (Replace with your actual hooks/context) ---
-  const materials = [
-    { id: "1", title: "CS101 Syllabus", createdAt: new Date().toISOString() },
-    { id: "2", title: "Calculus II Prep", createdAt: new Date().toISOString() },
-  ];
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refresh(true);
+    setRefreshing(false);
+  }
 
-  const weeklyStats: WeeklyStat[] = [
-    { day: "Mon", hours: 3.5 },
-    { day: "Tue", hours: 4.2 },
-    { day: "Wed", hours: 2.8 },
-    { day: "Thu", hours: 4.5 },
-    { day: "Fri", hours: 3.1 },
-    { day: "Sat", hours: 1.5 },
-    { day: "Sun", hours: 2.0 },
-  ];
+  useEffect(() => {
+    if (!user?.id) return;
 
-  const subjects: Subject[] = [
-    { name: "Data structures", hours: 12.5, progress: 78, color: "#1a1a1a" },
-    { name: "Calculus ii", hours: 10.2, progress: 65, color: "#4a4a4a" },
-    { name: "English literature", hours: 8.3, progress: 82, color: "#6a6a6a" },
-    { name: "Physics", hours: 6.8, progress: 45, color: "#8a8a8a" },
-  ];
+    const docRef = doc(db, "users", user.id, "data", "materials")
 
-  const achievements: Achievement[] = [
-    {
-      id: 1,
-      title: "7-day streak",
-      description: "Studied every day this week",
-      icon: "🔥",
-      unlocked: true,
-    },
-    {
-      id: 2,
-      title: "Early bird",
-      description: "Completed 5 morning sessions",
-      icon: "🌅",
-      unlocked: true,
-    },
-    {
-      id: 3,
-      title: "Night owl",
-      description: "10 late night study sessions",
-      icon: "🦉",
-      unlocked: false,
-    },
-    {
-      id: 4,
-      title: "Perfect week",
-      description: "Met all weekly goals",
-      icon: "⭐",
-      unlocked: true,
-    },
-  ];
+    const unsubscribe = onSnapshot(
+      docRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const list = data.syllabus_list || [];
 
-  const maxHours = Math.max(...weeklyStats.map((s) => s.hours));
+          const formattedMaterials = list.map((item: any, index: number) => ({
+            id: item.id || index.toString(),
+            title: item.title || "Untitled Syllabus",
+            createdAt: item.createdAt || item.timestamp,
+            aiPlan: item.aiPlan,
+          }));
+
+          setMaterials(formattedMaterials);
+        } else {
+          setMaterials([]);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Firestore Library Error:", error);
+        setLoading(false);
+      },
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const filteredMaterials = useMemo(() => {
+    return materials.filter((item) =>
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [searchQuery, materials]);
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 1. Header with Segmented Switcher */}
+      {/* Header & Switcher */}
       <View style={styles.stickyHeader}>
-        <Text style={styles.headerTitle}>Analytics</Text>
+        <Text style={styles.headerTitle}>
+          {activeTab === "library" ? "Knowledge Vault" : "Analytics"}
+        </Text>
         <View style={styles.tabSwitcher}>
-          <TouchableOpacity
-            style={[
-              styles.tabButton,
-              activeTab === "insights" && styles.tabButtonActive,
-            ]}
-            onPress={() => setActiveTab("insights")}
-          >
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === "insights" && styles.tabButtonTextActive,
-              ]}
-            >
-              Insights
-            </Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.tabButton,
@@ -137,204 +148,134 @@ export default function Library() {
               Library
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              activeTab === "insights" && styles.tabButtonActive,
+            ]}
+            onPress={() => setActiveTab("insights")}
+          >
+            <Text
+              style={[
+                styles.tabButtonText,
+                activeTab === "insights" && styles.tabButtonTextActive,
+              ]}
+            >
+              Insights
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
       >
-        {activeTab === "insights" ? (
-          <View style={styles.content}>
-            {/* Overview Stats Grid */}
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <View style={styles.statHeader}>
-                  <Ionicons
-                    name="time-outline"
-                    size={16}
-                    color={theme.colors.text.primary}
-                  />
-                  <Text style={styles.statLabel}>This week</Text>
-                </View>
-                <Text style={styles.statValue}>21.6 hrs</Text>
-                <View style={styles.statTrend}>
-                  <Ionicons
-                    name="trending-up"
-                    size={12}
-                    color={theme.colors.success}
-                  />
-                  <Text style={styles.statTrendText}>+15%</Text>
-                </View>
+        {/* --- Search Bar --- */}
+        {activeTab === "library" && (
+          <View style={styles.searchContainer}>
+            <SearchIcon
+              size={18}
+              color={theme.colors.text.secondary}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              placeholder="Search your vault..."
+              placeholderTextColor={theme.colors.text.secondary + "80"}
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <CloseIcon size={18} color={theme.colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+        {activeTab === "library" ? (
+          <View style={styles.libraryContent}>
+            {loading ? (
+              // Show 4 skeletons while loading
+              <View style={{ gap: 12 }}>
+                {[1, 2, 3, 4].map((key) => (
+                  <MaterialSkeleton key={key} theme={theme} />
+                ))}
               </View>
-
-              <View style={styles.statCard}>
-                <View style={styles.statHeader}>
-                  <Ionicons
-                    name="flag-outline"
-                    size={16}
-                    color={theme.colors.text.primary}
-                  />
-                  <Text style={styles.statLabel}>Weekly goal</Text>
-                </View>
-                <Text style={styles.statValue}>87%</Text>
-                <View style={styles.progressBarMini}>
-                  <View style={[styles.progressBarMiniFill, { width: "87%" }]}>
-                    <LinearGradient
-                      colors={[theme.colors.primary, theme.colors.secondary]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.progressGradient}
+            ) : filteredMaterials.length > 0 ? (
+              filteredMaterials.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.materialCard}
+                  onPress={() => router.push(`/material/${item.id}`)}
+                >
+                  <View style={styles.materialIcon}>
+                    <Ionicons
+                      name="document-text"
+                      size={24}
+                      color={theme.colors.primary}
                     />
                   </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Weekly Chart */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Study hours this week</Text>
-              <View style={styles.chartContainer}>
-                {weeklyStats.map((stat) => (
-                  <View key={stat.day} style={styles.chartBar}>
-                    <View style={styles.chartBarContainer}>
-                      <View
-                        style={[
-                          styles.chartBarFill,
-                          { height: `${(stat.hours / maxHours) * 100}%` },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.chartDay}>{stat.day}</Text>
-                    <Text style={styles.chartHours}>{stat.hours}h</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.materialTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.materialDate}>
+                      {item.createdAt?.seconds
+                        ? new Date(
+                            item.createdAt.seconds * 1000,
+                          ).toLocaleDateString()
+                        : "Just now"}
+                    </Text>
                   </View>
-                ))}
-              </View>
-            </View>
-
-            {/* Subject Progress */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Subject progress</Text>
-              <View style={styles.subjectList}>
-                {subjects.map((subject, index) => (
-                  <View
-                    key={subject.name}
-                    style={[
-                      styles.subjectItem,
-                      index !== subjects.length - 1 && styles.subjectItemMargin,
-                    ]}
-                  >
-                    <View style={styles.subjectHeader}>
-                      <View style={styles.subjectNameContainer}>
-                        <View
-                          style={[
-                            styles.subjectDot,
-                            { backgroundColor: subject.color },
-                          ]}
-                        />
-                        <Text style={styles.subjectName}>{subject.name}</Text>
-                      </View>
-                      <View style={styles.subjectStats}>
-                        <Text style={styles.subjectHours}>
-                          {subject.hours}h
-                        </Text>
-                        <View style={styles.progressBadge}>
-                          <Text style={styles.progressBadgeText}>
-                            {subject.progress}%
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.progressBar}>
-                      <View
-                        style={[
-                          styles.progressBarFill,
-                          { width: `${subject.progress}%` },
-                        ]}
-                      >
-                        <LinearGradient
-                          colors={[
-                            theme.colors.primary,
-                            theme.colors.secondary,
-                          ]}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={styles.progressGradient}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* Achievements */}
-            <View style={styles.card}>
-              <View style={styles.achievementHeader}>
-                <View style={styles.achievementTitleContainer}>
                   <Ionicons
-                    name="trophy-outline"
+                    name="chevron-forward"
                     size={20}
-                    color={theme.colors.text.primary}
+                    color={theme.colors.border}
                   />
-                  <Text style={styles.cardTitle}>Achievements</Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons
+                    name={
+                      searchQuery ? "search-outline" : "cloud-upload-outline"
+                    }
+                    size={40}
+                    color={theme.colors.text.secondary}
+                  />
                 </View>
-                <View style={styles.achievementBadge}>
-                  <Text style={styles.achievementBadgeText}>3/4</Text>
-                </View>
+                <Text style={styles.emptyText}>
+                  {searchQuery ? "No matches found" : "Vault is empty"}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {searchQuery
+                    ? "Try searching for a different keyword."
+                    : "Upload a syllabus to see your AI-generated study plans here."}
+                </Text>
               </View>
-              <View style={styles.achievementGrid}>
-                {achievements.map((achievement) => (
-                  <View
-                    key={achievement.id}
-                    style={[
-                      styles.achievementCard,
-                      !achievement.unlocked && styles.achievementCardLocked,
-                    ]}
-                  >
-                    <Text style={styles.achievementIcon}>
-                      {achievement.icon}
-                    </Text>
-                    <Text style={styles.achievementTitle}>
-                      {achievement.title}
-                    </Text>
-                    <Text style={styles.achievementDescription}>
-                      {achievement.description}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
+            )}
           </View>
         ) : (
-          <View style={styles.libraryContent}>
-            <Text style={styles.sectionTitle}>Knowledge Vault</Text>
-            {materials.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.materialCard}
-                onPress={() => router.push(`./material/${item.id}`)}
-              >
-                <View style={styles.materialIcon}>
-                  <Ionicons
-                    name="document-text"
-                    size={24}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.materialTitle}>{item.title}</Text>
-                  <Text style={styles.materialDate}>
-                    Added {new Date(item.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={theme.colors.border}
-                />
-              </TouchableOpacity>
-            ))}
+          <View style={styles.content}>
+            <Text
+              style={{
+                color: theme.colors.text.secondary,
+                textAlign: "center",
+                marginTop: 40,
+              }}
+            >
+              Analytics charts go here...
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -342,14 +283,28 @@ export default function Library() {
   );
 }
 
+const styles = StyleSheet.create({
+  skeletonCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  skeletonIcon: { width: 44, height: 44, borderRadius: 12, marginRight: 16 },
+  skeletonLine: { height: 14, borderRadius: 4 },
+});
+
 const createStyles = (theme: Theme, isDark: boolean) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
     scrollView: { flex: 1 },
+    centerBox: { marginTop: 100, alignItems: "center" },
     stickyHeader: {
       paddingHorizontal: theme.spacing.lg,
       paddingVertical: theme.spacing.md,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.secondary,
     },
     headerTitle: {
       fontSize: 28,
@@ -386,60 +341,83 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       color: theme.colors.text.primary,
       fontFamily: theme.fonts.bold,
     },
-    content: { padding: theme.spacing.lg, paddingBottom: 100 },
-    libraryContent: { padding: theme.spacing.lg },
-    sectionTitle: {
-      fontSize: 20,
-      fontFamily: theme.fonts.bold,
-      color: theme.colors.text.primary,
-      marginBottom: 20,
-    },
-    statsGrid: {
+    searchContainer: {
+      width: "80%",
       flexDirection: "row",
-      flexWrap: "wrap",
-      gap: theme.spacing.sm,
-      marginBottom: theme.spacing.lg,
+      alignItems: "center",
+      alignSelf: "center",
+      backgroundColor: isDark ? "#2d2d2d" : "#f5f5f5",
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      height: 44,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginTop: 24,
+      marginBottom: -12
     },
-    statCard: {
-      width: (width - theme.spacing.lg * 2 - theme.spacing.sm) / 2,
+    searchIcon: { marginRight: 12 },
+    searchInput: {
+      flex: 1,
+      color: theme.colors.text.primary,
+      fontFamily: theme.fonts.regular,
+      fontSize: 18,
+    },
+    content: { padding: theme.spacing.lg },
+    libraryContent: { padding: theme.spacing.lg, paddingBottom: 40 },
+    materialCard: {
+      flexDirection: "row",
+      alignItems: "center",
       backgroundColor: theme.colors.surface,
+      padding: 16,
       borderRadius: 16,
-      padding: theme.spacing.md,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: theme.colors.border,
     },
-    statHeader: {
-      flexDirection: "row",
+    materialIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: theme.colors.primary + "15",
+      justifyContent: "center",
       alignItems: "center",
-      gap: 6,
-      marginBottom: 8,
+      marginRight: 16,
     },
-    statLabel: {
+    materialTitle: {
+      fontSize: 16,
+      fontFamily: theme.fonts.semiBold,
+      color: theme.colors.text.primary,
+    },
+    materialDate: {
       fontSize: 12,
-      fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
+      marginTop: 2,
     },
-    statValue: {
-      fontSize: 24,
+    emptyState: { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
+    emptyIconCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: theme.colors.surface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    emptyText: {
+      fontSize: 18,
       fontFamily: theme.fonts.bold,
       color: theme.colors.text.primary,
-      marginBottom: 4,
     },
-    statTrend: { flexDirection: "row", alignItems: "center", gap: 4 },
-    statTrendText: {
-      fontSize: 12,
-      fontFamily: theme.fonts.medium,
-      color: theme.colors.success,
-    },
-    progressBarMini: {
-      height: 6,
-      backgroundColor: theme.colors.border + "40",
-      borderRadius: 3,
-      overflow: "hidden",
+    emptySubtext: {
+      fontSize: 14,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+      textAlign: "center",
       marginTop: 8,
+      lineHeight: 20,
     },
-    progressBarMiniFill: { height: "100%", borderRadius: 3 },
-    progressGradient: { flex: 1 },
     card: {
       backgroundColor: theme.colors.surface,
       borderRadius: 16,
@@ -477,139 +455,5 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 11,
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
-    },
-    chartHours: {
-      fontSize: 11,
-      fontFamily: theme.fonts.medium,
-      color: theme.colors.text.primary,
-    },
-    subjectList: { gap: 0 },
-    subjectItem: { marginBottom: theme.spacing.md },
-    subjectItemMargin: { marginBottom: theme.spacing.lg },
-    subjectHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 8,
-    },
-    subjectNameContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    subjectDot: { width: 12, height: 12, borderRadius: 6 },
-    subjectName: {
-      fontSize: 14,
-      fontFamily: theme.fonts.medium,
-      color: theme.colors.text.primary,
-    },
-    subjectStats: { flexDirection: "row", alignItems: "center", gap: 8 },
-    subjectHours: {
-      fontSize: 14,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-    },
-    progressBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      backgroundColor: theme.colors.border + "40",
-      borderRadius: 6,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    progressBadgeText: {
-      fontSize: 11,
-      fontFamily: theme.fonts.medium,
-      color: theme.colors.text.secondary,
-    },
-    progressBar: {
-      height: 8,
-      backgroundColor: theme.colors.border + "40",
-      borderRadius: 4,
-      overflow: "hidden",
-    },
-    progressBarFill: { height: "100%", borderRadius: 4 },
-    achievementHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: theme.spacing.md,
-    },
-    achievementTitleContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    achievementBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      backgroundColor: theme.colors.border + "40",
-      borderRadius: 8,
-    },
-    achievementBadgeText: {
-      fontSize: 12,
-      fontFamily: theme.fonts.medium,
-      color: theme.colors.text.secondary,
-    },
-    achievementGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: theme.spacing.xs,
-    },
-    achievementCard: {
-      width:
-        (width -
-          theme.spacing.lg * 2 -
-          theme.spacing.md * 2 -
-          theme.spacing.sm) /
-        2,
-      padding: theme.spacing.sm,
-      backgroundColor: theme.colors.background,
-      borderRadius: 12,
-      borderWidth: 2,
-      borderColor: theme.colors.border,
-    },
-    achievementCardLocked: { opacity: 0.5 },
-    achievementIcon: { fontSize: 32, marginBottom: 8 },
-    achievementTitle: {
-      fontSize: 14,
-      fontFamily: theme.fonts.semiBold,
-      color: theme.colors.text.primary,
-      marginBottom: 4,
-    },
-    achievementDescription: {
-      fontSize: 11,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-      lineHeight: 16,
-    },
-    materialCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: theme.colors.surface,
-      padding: 16,
-      borderRadius: 16,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    materialIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: theme.colors.primary + "15",
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 16,
-    },
-    materialTitle: {
-      fontSize: 16,
-      fontFamily: theme.fonts.semiBold,
-      color: theme.colors.text.primary,
-    },
-    materialDate: {
-      fontSize: 12,
-      color: theme.colors.text.secondary,
-      marginTop: 2,
     },
   });

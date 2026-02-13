@@ -207,12 +207,10 @@ export const useContent = () => {
 
     try{
       if(uri){
-        const fileName = uri.split("/").pop() || "file.pdf";
-
         const result = await BrainwaveAPI.uploadSyllabus(
           user.id,
           uri,
-          fileName,
+          title,
           type || "application/pdf"
         );
 
