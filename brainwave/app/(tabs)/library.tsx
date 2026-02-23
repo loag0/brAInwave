@@ -304,7 +304,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     stickyHeader: {
       paddingHorizontal: theme.spacing.lg,
       paddingVertical: theme.spacing.md,
-      backgroundColor: theme.colors.secondary,
+      backgroundColor: isDark ? "#2d2d2d" : "#f5f5f5",
     },
     headerTitle: {
       fontSize: 28,
@@ -314,7 +314,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     },
     tabSwitcher: {
       flexDirection: "row",
-      backgroundColor: isDark ? "#2d2d2d" : "#efefef",
+      backgroundColor: isDark ? "#1a1a1a" : "#efefef",
       borderRadius: 14,
       padding: 4,
     },
@@ -353,7 +353,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       borderWidth: 1,
       borderColor: theme.colors.border,
       marginTop: 24,
-      marginBottom: -12
+      marginBottom: -12,
     },
     searchIcon: { marginRight: 12 },
     searchInput: {
