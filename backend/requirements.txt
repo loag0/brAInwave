@@ -4,5 +4,8 @@ python-dotenv
 sqlalchemy
 httpx
 google-genai
+google-cloud-firestore
+firebase-admin
 PyPDF2
 python-multipart
+pydantic
