@@ -143,10 +143,15 @@ export default function Home() {
         setLoadingMessage(`Uploading ${i + 1} of ${totalFiles}...`);
 
         const title = file.name || `Syllabus ${i + 1}`;
+        const cleanTitle = decodeURIComponent(title)
+        .replace(/%20/g, " ")
+        .replace(/\.[^/.]+$/, "") // Remove file extension
+        .replace(/[_-]+/g, " ")
+        .trim();
 
         await createMaterial(
-          title,
-          `Uploaded ${title}`,
+          cleanTitle,
+          `Uploaded ${cleanTitle}`,
           file.uri,
           file.mimeType || "application/octet-stream",
         );

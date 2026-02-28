@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { LocalDB } from "../database/localDb";
 import BrainwaveAPI from "@/api/brAInwaveApi";
 import { useAuth } from "../contexts/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
 
 export interface StudyPlan {
   id: string;
@@ -18,11 +19,12 @@ export const useContent = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [syncProgress, setSyncProgress] = useState({current: 0, total: 0});
+  const isSyncing = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const syncDirtyRecords = useCallback(
     async (currentMaterials: any[], currentTimetables: any[]) => {
-      if (!user?.id) return;
+      if (!user?.id || isSyncing.current) return;
 
       const dirtyMaterials = currentMaterials.filter((m) => m.is_dirty === 1);
       const dirtyTimetables = currentTimetables.filter((t) => t.is_dirty === 1);
@@ -30,6 +32,7 @@ export const useContent = () => {
       const totalToSync = dirtyMaterials.length + dirtyTimetables.length;
       if (totalToSync === 0) return;
 
+      isSyncing.current = true;
       setSyncProgress({current: 0, total: totalToSync});
       let completed = 0;
 
@@ -37,13 +40,14 @@ export const useContent = () => {
       for (const item of dirtyMaterials) {
         try {
           if (item.uri) {
-            await BrainwaveAPI.uploadSyllabus(
+            const result = await BrainwaveAPI.uploadSyllabus(
               user.id,
               item.uri,
               item.title,
               item.type,
             );
-            await LocalDB.markMaterialSynced(item.id, item.id);
+            const cloudId = result.id;
+            await LocalDB.markMaterialSynced(item.id, cloudId);
 
             completed++;
             setSyncProgress({current: completed, total: totalToSync});
@@ -58,13 +62,15 @@ export const useContent = () => {
       for (const table of dirtyTimetables) {
         try {
           if (table.uri) {
-            await BrainwaveAPI.uploadTimetable(
+            const result = await BrainwaveAPI.uploadTimetable(
               user.id,
               table.uri,
               table.title,
               table.type || "application/pdf",
             );
-            await LocalDB.markTimetableSynced(table.id, table.id, table.weely_template);
+
+            const cloudId = result.id;
+            await LocalDB.markTimetableSynced(table.id, cloudId, table.weekly_template);
           }
         } catch (e: any) {
           console.error(`Timetable Sync Failed [${table.title}]:`, e.message);
@@ -72,6 +78,9 @@ export const useContent = () => {
       }
 
       setTimeout(() => setSyncProgress({current: 0, total: 0}), 2000);
+
+      isSyncing.current = false;
+      setSyncProgress({current: 0, total: 0});
 
       setMaterials(await LocalDB.getAllMaterials(user.id));
       setTimetables(await LocalDB.getAllTimetables(user.id));
@@ -128,6 +137,23 @@ export const useContent = () => {
     },
     [user?.id, syncDirtyRecords],
   );
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (
+        state.isConnected &&
+        state.isInternetReachable &&
+        !isSyncing.current
+      ) {
+        console.log("Network reconnected, attempting sync...");
+        fetchData();
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user?.id, fetchData]);
 
   const generatePlanForDate = async (
     date: string,

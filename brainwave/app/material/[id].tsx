@@ -2,17 +2,14 @@ import React, { useEffect, useState } from "react";
 import {
   ScrollView,
   View,
-  Text,
   ActivityIndicator,
   StyleSheet,
-  Dimensions,
 } from "react-native";
 import { useLocalSearchParams, Stack } from "expo-router";
 import Markdown from "react-native-markdown-display";
 import { useTheme } from "../contexts/ThemeContext";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
 import { useAuth } from "../contexts/AuthContext";
+import brAInwaveApi from "@/api/brAInwaveApi";
 
 export default function MaterialDetail() {
   const { id } = useLocalSearchParams();
@@ -28,19 +25,18 @@ export default function MaterialDetail() {
     async function getSyllabus() {
       if (!user?.id || !id) return;
 
-      try {
-        // Fetch specifically from the user's materials collection
-        const docRef = doc(db, "users", user.id, "materials", id as string);
-        const docSnap = await getDoc(docRef);
+     try{
+      setLoading(true);
+      const response = await brAInwaveApi.getStudyPlan(user.id, id);
 
-        if (docSnap.exists()) {
-          setData(docSnap.data() as any);
-        }
-      } catch (e) {
-        console.error("Firestore Error:", e);
-      } finally {
-        setLoading(false);
+      if (response){
+        setData(response);
       }
+     } catch(e){
+      console.error("API Error:", e);
+     } finally {
+      setLoading(false);
+     }
     }
     getSyllabus();
   }, [id, user]);

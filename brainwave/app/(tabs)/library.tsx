@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,26 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  RefreshControl
+  RefreshControl,
+  ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useAuth } from "../contexts/AuthContext";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
 import { SearchIcon, CloseIcon } from "@/components/Icons"
 import { useContent } from "../hooks/useContent";
-
-// Types for Library items matching your Firestore structure
-interface Material {
-  id: string;
-  title: string;
-  createdAt: any;
-  aiPlan: string;
-}
 
 const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
   <View
@@ -66,12 +56,11 @@ const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
 
 export default function Library() {
   const { theme, isDark } = useTheme();
-  const { user } = useAuth();
+  //const { user } = useAuth();
   const router = useRouter();
-  const { refresh } = useContent(); 
+  const { refresh, materials, syncProgress } = useContent(); 
 
   const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
-  const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing ] = useState(false);
@@ -83,40 +72,6 @@ export default function Library() {
     await refresh(true);
     setRefreshing(false);
   }
-
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const docRef = doc(db, "users", user.id, "data", "materials")
-
-    const unsubscribe = onSnapshot(
-      docRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const list = data.syllabus_list || [];
-
-          const formattedMaterials = list.map((item: any, index: number) => ({
-            id: item.id || index.toString(),
-            title: item.title || "Untitled Syllabus",
-            createdAt: item.createdAt || item.timestamp,
-            aiPlan: item.aiPlan,
-          }));
-
-          setMaterials(formattedMaterials);
-        } else {
-          setMaterials([]);
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Firestore Library Error:", error);
-        setLoading(false);
-      },
-    );
-
-    return () => unsubscribe();
-  }, [user]);
 
   const filteredMaterials = useMemo(() => {
     return materials.filter((item) =>
@@ -167,6 +122,14 @@ export default function Library() {
         </View>
       </View>
 
+      {syncProgress.total > 0 && (
+        <View style={{padding: 12, backgroundColor: theme.colors.primary, alignItems: "center", flexDirection: "row", justifyContent: "center"}}>
+          <ActivityIndicator size="small" color="#fff" />
+          <Text style={{color: theme.colors.text.primary, fontSize: 14, fontWeight: "600", marginLeft: 10}}>
+            Syncing {syncProgress.current}/{syncProgress.total} items...
+          </Text>
+        </View>
+      )}
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -229,9 +192,9 @@ export default function Library() {
                       {item.title}
                     </Text>
                     <Text style={styles.materialDate}>
-                      {item.createdAt?.seconds
+                      {item.created_at
                         ? new Date(
-                            item.createdAt.seconds * 1000,
+                            item.created_at,
                           ).toLocaleDateString()
                         : "Just now"}
                     </Text>

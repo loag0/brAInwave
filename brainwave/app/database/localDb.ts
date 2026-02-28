@@ -16,12 +16,12 @@ export const LocalDB = {
       CREATE TABLE IF NOT EXISTS study_materials (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT,
-        remote_id INTEGER,
+        remote_id INTEGER UNIQUE,
         title TEXT,
         rawContent TEXT,
         aiPlan TEXT,
-        uri TEXT,     -- Added to store file path for syncing
-        type TEXT,    -- Added to store file type for syncing
+        uri TEXT,
+        type TEXT,
         is_dirty INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
