@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import os
 import json
 from typing import List, Optional
+from urllib.parse import unquote
 
 # 1. Setup environment and Database
 load_dotenv()
@@ -90,10 +91,14 @@ class PlanRequest(BaseModel):
 @app.post("/upload-syllabus")
 async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
+        fileName = unquote(file.filename or "Uploaded_syllabus")
+        cleanTitle = fileName.rsplit('.', 1)[0].replace('_', ' ')
         content = await file.read()
         mime_type = file.content_type or "text/plain"
         
-        prompt = """Analyze this syllabus and create a study plan...""" # Keep your prompt here
+        prompt = """
+        You are brAInwave, a smart study planning assistant for college students. Analyze this syllabus/study material and create a comprehensive, personalized study plan. Break down the content into manageable sections, suggest study techniques, and recommend a timeline for effective learning. Your study plan should include: 1. Key topics & concepts - Break down the syllabus into main topics. 2. Week-by-week breakdown - Create a realistic timeline 3. Time allocation - Suggest how long to spend on each topic. 4. Study techniques - Recommend the best methods to learn this material, like active recall, spaced repetition, etc. 5. Important dates - Note any deadlines, exams, or milestones. 6. Retention tips - Give advice for long-term learning, not just cramming 7. Progress checkpoints - Suggest ways to test understanding along the way. Make it friendly, encouraging, and realistic for a busy student. Keep the tone motivating but honest about the work required.
+        """
         
         response = client.models.generate_content(
             model="gemini-3-flash-preview",
@@ -111,8 +116,8 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
         # 1. Save to Local SQL (Python Backend)
         material = StudyMaterial(
             user_id=user_id,
-            title=file.filename,
-            rawContent=f"Uploaded {file.filename}",
+            title=cleanTitle,
+            rawContent=f"Uploaded {fileName}",
             aiPlan=studyPlan
         )
         db.add(material)
@@ -124,7 +129,7 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
         doc_ref.set({
             "syllabus_list": ArrayUnion([{
                 "id": material.id,
-                "title": file.filename,
+                "title": cleanTitle,
                 "aiPlan": studyPlan,
                 "timestamp": datetime.now(timezone.utc)
             }])
@@ -350,12 +355,12 @@ async def getStudyMaterial(user_id: str, material_id: int, db: Session = Depends
     material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user_id).first()
     if not material:
         raise HTTPException(status_code=404, detail="Study plan not found.")
-    return {"id": material.id, "title": material.title, "aiPlan": material.aiPlan}
+    return {"id": material.id, "title": material.title, "aiPlan": material.aiPlan, "createdAt": material.created_at}
 
 @app.get("/study-plans/{user_id}")
 async def listStudyPlans(user_id: str, db: Session = Depends(get_db)):
     materials = db.query(StudyMaterial).filter(StudyMaterial.user_id == user_id).order_by(StudyMaterial.created_at.desc()).all()
-    return {"count": len(materials), "plans": [{"id": m.id, "title": m.title} for m in materials]}
+    return {"count": len(materials), "plans": [{"id": m.id, "title": m.title, "createdAt": m.created_at} for m in materials]}
 
 @app.get("/daily-plan/{user_id}/{date}")
 async def getDailyPlan(user_id: str, date: str):
