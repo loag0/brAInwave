@@ -58,10 +58,9 @@ export default function Library() {
   const { theme, isDark } = useTheme();
   //const { user } = useAuth();
   const router = useRouter();
-  const { refresh, materials, syncProgress } = useContent(); 
+  const { refresh, materials, syncProgress, isLoading } = useContent(); 
 
   const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing ] = useState(false);
 
@@ -166,7 +165,7 @@ export default function Library() {
         )}
         {activeTab === "library" ? (
           <View style={styles.libraryContent}>
-            {loading ? (
+            {isLoading ? (
               // Show 4 skeletons while loading
               <View style={{ gap: 12 }}>
                 {[1, 2, 3, 4].map((key) => (
