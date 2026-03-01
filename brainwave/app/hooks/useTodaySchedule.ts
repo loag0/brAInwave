@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db as firestore } from "../../firebaseConfig";
 
 export function useTodaySchedule(
   plans: any[] = [],
@@ -50,35 +52,42 @@ export function useTodaySchedule(
       return;
     }
 
-    // --- 2️⃣ fallback to weekly timetable ---
+    // --- 2️⃣ fallback to weekly timetable from Firestore ---
     if (timetables.length === 0) {
-      console.log("No timetables available");
+      console.log("No timetables available in LocalDB");
       setSchedule([]);
       return;
     }
 
-    const rawTimetable = timetables[0];
+    const unsubTimetable = onSnapshot(
+      doc(firestore, "users", userId, "data", "timetable"),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const weeklyTemplate = data.weekly_template || {};
+          const dayData = weeklyTemplate[todayName.toLowerCase()] || [];
 
-    // handle structuredData being JSON string or object
-    let weeklyTemplate: any = {};
-    if (rawTimetable.structuredData) {
-      weeklyTemplate =
-        typeof rawTimetable.structuredData === "string"
-          ? JSON.parse(rawTimetable.structuredData).weekly_template || {}
-          : rawTimetable.structuredData.weekly_template || {};
-    } else if (rawTimetable.weekly_template) {
-      weeklyTemplate = rawTimetable.weekly_template;
-    }
+          if (dayData.length > 0) {
+            console.log("Fallback success: Found timetable for", todayName);
+            setSchedule(
+              dayData.map((c: any) => ({ ...c, isAiGenerated: false })),
+            );
+          } else {
+            console.log("No plan and no timetable entry for today");
+            setSchedule([]);
+          }
+        } else {
+          console.log("Timetable document not found in Firestore");
+          setSchedule([]);
+        }
+      },
+      (error) => {
+        console.error("Timetable fetch error: ", error);
+        setSchedule([]);
+      },
+    );
 
-    const dayData = weeklyTemplate[todayName.toLowerCase()] || [];
-
-    if (dayData.length > 0) {
-      console.log("Fallback success: Found timetable for", todayName);
-      setSchedule(dayData.map((c: any) => ({ ...c, isAiGenerated: false })));
-    } else {
-      console.log("No plan and no timetable entry for today");
-      setSchedule([]);
-    }
+    return () => unsubTimetable();
   }, [plans, timetables, userId, isLoading]);
 
   return schedule;

@@ -18,7 +18,7 @@ export const useContent = () => {
   const [timetables, setTimetables] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [syncProgress, setSyncProgress] = useState({current: 0, total: 0});
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const isSyncing = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +33,7 @@ export const useContent = () => {
       if (totalToSync === 0) return;
 
       isSyncing.current = true;
-      setSyncProgress({current: 0, total: totalToSync});
+      setSyncProgress({ current: 0, total: totalToSync });
       let completed = 0;
 
       //each file is wapped individually so the loop continues when one fails
@@ -47,10 +47,14 @@ export const useContent = () => {
               item.type,
             );
             const cloudId = result.id;
-            await LocalDB.markMaterialSynced(item.id, cloudId);
+            await LocalDB.markMaterialSynced(
+              item.id,
+              cloudId,
+              result.studyPlan,
+            );
 
             completed++;
-            setSyncProgress({current: completed, total: totalToSync});
+            setSyncProgress({ current: completed, total: totalToSync });
           }
         } catch (e: any) {
           // Individual error: This file failed, but the loop continues!
@@ -70,17 +74,21 @@ export const useContent = () => {
             );
 
             const cloudId = result.id;
-            await LocalDB.markTimetableSynced(table.id, cloudId, table.weekly_template);
+            await LocalDB.markTimetableSynced(
+              table.id,
+              cloudId,
+              table.weekly_template,
+            );
           }
         } catch (e: any) {
           console.error(`Timetable Sync Failed [${table.title}]:`, e.message);
         }
       }
 
-      setTimeout(() => setSyncProgress({current: 0, total: 0}), 2000);
+      setTimeout(() => setSyncProgress({ current: 0, total: 0 }), 2000);
 
       isSyncing.current = false;
-      setSyncProgress({current: 0, total: 0});
+      setSyncProgress({ current: 0, total: 0 });
 
       setMaterials(await LocalDB.getAllMaterials(user.id));
       setTimetables(await LocalDB.getAllTimetables(user.id));
@@ -231,21 +239,21 @@ export const useContent = () => {
 
     console.log("Attempting immediate cloud sync for: ", title);
 
-    try{
-      if(uri){
+    try {
+      if (uri) {
         const result = await BrainwaveAPI.uploadSyllabus(
           user.id,
           uri,
           title,
-          type || "application/pdf"
+          type || "application/pdf",
         );
 
         console.log("Cloud sync success: ", result.id);
-        await LocalDB.markMaterialSynced(localId, result.id);
+        await LocalDB.markMaterialSynced(localId, result.id, result.studyPlan);
 
         setMaterials(await LocalDB.getAllMaterials(user.id));
       }
-    } catch(syncError: any){
+    } catch (syncError: any) {
       console.error("Cloud sync failed directly: ", syncError.message);
     }
 

@@ -21,8 +21,24 @@ import Skeleton from "@/components/HomeSkeleton";
 import { useTodaySchedule } from "../hooks/useTodaySchedule";
 import { useTimetableUpload } from "../hooks/useTimetableUpload";
 import { useNextClass } from "../hooks/useNextClass";
-import { ensureNotificationPermission, scheduleNextClassNotification } from "@/utils/notifications";
-import { CloseIcon, SunIcon, AddIcon, TodayIcon, AssignmentIcon, CheckIcon, ScheduleIcon, CalendarIcon, UploadSyllabusIcon, AddAssignmentIcon, ChevronRightIcon, ICONS } from "@/components/Icons";
+import {
+  ensureNotificationPermission,
+  scheduleNextClassNotification,
+} from "@/utils/notifications";
+import {
+  CloseIcon,
+  SunIcon,
+  AddIcon,
+  TodayIcon,
+  AssignmentIcon,
+  CheckIcon,
+  ScheduleIcon,
+  CalendarIcon,
+  UploadSyllabusIcon,
+  AddAssignmentIcon,
+  ChevronRightIcon,
+  ICONS,
+} from "@/components/Icons";
 
 const { width } = Dimensions.get("window");
 
@@ -97,11 +113,11 @@ export default function Home() {
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
   const hasTimetable = timetables.length > 0;
-  
+
   const leadMinutes = user?.studyPreferences.notificationLeadMinutes ?? 10;
-    if(user?.studyPreferences.notifications?.studyReminders && useNextClass){
-      scheduleNextClassNotification(useNextClass, leadMinutes)
-    }
+  if (user?.studyPreferences.notifications?.studyReminders && useNextClass) {
+    scheduleNextClassNotification(useNextClass, leadMinutes);
+  }
 
   const styles = createStyles(theme, isDark);
   // 1. LISTEN TO FIRESTORE ON MOUNT
@@ -117,6 +133,8 @@ export default function Home() {
     user?.id,
     refresh,
     showAlert,
+    setIsLoading,
+    setLoadingMessage,
   );
 
   const handleUploadSyllabus = useCallback(async () => {
@@ -144,10 +162,10 @@ export default function Home() {
 
         const title = file.name || `Syllabus ${i + 1}`;
         const cleanTitle = decodeURIComponent(title)
-        .replace(/%20/g, " ")
-        .replace(/\.[^/.]+$/, "") // Remove file extension
-        .replace(/[_-]+/g, " ")
-        .trim();
+          .replace(/%20/g, " ")
+          .replace(/\.[^/.]+$/, "") // Remove file extension
+          .replace(/[_-]+/g, " ")
+          .trim();
 
         await createMaterial(
           cleanTitle,
@@ -161,12 +179,11 @@ export default function Home() {
         title: totalFiles > 1 ? "Files added" : "Successful Upload",
         message: "Your files have successfully been uploaded",
         icon: ICONS.SUCCESS,
-        iconColor: theme.colors.success
+        iconColor: theme.colors.success,
       });
-
     } catch (error: any) {
       showAlert?.({ title: "Error", message: "Upload failed twin." });
-      console.log(error.message)
+      console.log(error.message);
     } finally {
       setIsLoading(false);
       setLoadingMessage("Analyzing your schedule...");
@@ -189,7 +206,7 @@ export default function Home() {
   }, [refresh]);
 
   const { nextClass, countdown } = useNextClass(todaysSchedule);
-    const isOngoing = countdown === "Started";
+  const isOngoing = countdown === "Started";
 
   useEffect(() => {
     if (!user) return;
@@ -205,9 +222,17 @@ export default function Home() {
       );
     })();
 
-    console.log("DEBUG: Todays Schedule Data: ", JSON.stringify(todaysSchedule, null, 2));
+    console.log(
+      "DEBUG: Todays Schedule Data: ",
+      JSON.stringify(todaysSchedule, null, 2),
+    );
     console.log("DEBUG: Next class identified: ", nextClass);
-  }, [todaysSchedule, nextClass, user, user?.studyPreferences.notificationLeadMinutes]);
+  }, [
+    todaysSchedule,
+    nextClass,
+    user,
+    user?.studyPreferences.notificationLeadMinutes,
+  ]);
 
   function toggleAssignment(id: number) {
     setCheckedAssignments((prev) =>
@@ -242,9 +267,9 @@ export default function Home() {
     return theme.colors.text.secondary;
   }
 
-   if (contentLoading && timetables.length === 0) {
-     return <HomeSkeleton styles={styles} theme={theme} />;
-   }
+  if (contentLoading && timetables.length === 0) {
+    return <HomeSkeleton styles={styles} theme={theme} />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
@@ -341,13 +366,6 @@ export default function Home() {
                     : "Daily Schedule"}
                 </Text>
               </View>
-
-              {/*Only shows the view all button if there is a template OR an optimized plan*/}
-              {(hasTimetable || todaysSchedule.length > 0) && (
-                <TouchableOpacity onPress={() => router.push("/planner")}>
-                  <Text style={styles.viewAllText}>View All</Text>
-                </TouchableOpacity>
-              )}
             </View>
 
             <View style={styles.cardContent}>
@@ -370,7 +388,8 @@ export default function Home() {
                     />
                     <View style={styles.classInfo}>
                       <Text style={styles.className}>
-                        {item.subject ||
+                        {item.task ||
+                          item.subject ||
                           item.course ||
                           item.name ||
                           "Unknown Class"}
@@ -418,14 +437,31 @@ export default function Home() {
                       <Text
                         style={[
                           styles.emptyText,
-                          { marginTop: -15, fontSize: 10 },
+                          { marginTop: -15, fontSize: 13 },
                         ]}
                       >
-                        Enjoy your{" "}
-                        {new Date().toLocaleDateString("en-US", {
-                          weekday: "long",
-                        })}
+                        Got some free time? Head to the Planner to optimize your
+                        day with brAInwave!
                       </Text>
+                      <TouchableOpacity
+                        style={{
+                          marginTop: 10,
+                          backgroundColor: theme.colors.primary + "15",
+                          paddingHorizontal: 16,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                        }}
+                        onPress={() => router.push("/planner")}
+                      >
+                        <Text
+                          style={{
+                            color: theme.colors.primary,
+                            fontWeight: "600",
+                          }}
+                        >
+                          Plan My Day
+                        </Text>
+                      </TouchableOpacity>
                     </>
                   )}
                 </View>
@@ -705,7 +741,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       textAlign: "center",
       paddingVertical: 10,
     },
-    content: { padding: 24},
+    content: { padding: 24 },
     card: {
       backgroundColor: theme.colors.surface,
       borderRadius: 16,
@@ -750,7 +786,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: 12,
       alignItems: "center",
     },
-    heroSubTextOnly:{
+    heroSubTextOnly: {
       fontSize: 14,
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,

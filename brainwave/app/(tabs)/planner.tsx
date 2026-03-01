@@ -123,16 +123,86 @@ export default function Planner() {
     {},
   );
 
-  //This is for modal states and for the picker
+  //Modal States
   const [isModalVisible, setModalVisible] = useState(false);
-  const [newTask, setNewTask] = useState({ task: "", time: "12:00 PM" });
+  const [newTask, setNewTask] = useState({
+    task: "",
+    time: "12:00 PM",
+    duration: "1 hour",
+    difficulty: "unset",
+  });
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [timeValue, setTimeValue] = useState(new Date());
+
+  //AI Regeneration Options Modal State
+  const [isRegenerateModalVisible, setRegenerateModalVisible] = useState(false);
+  const [tempIntensity, setTempIntensity] = useState("Balanced"); // "Light", "Balanced", "Intense"
+  const [tempSessionLength, setTempSessionLength] = useState("medium"); // "short", "medium", "long"
+
+  //Difficulty Selection State
+  const [selectedDifficultyTask, setSelectedDifficultyTask] = useState<
+    string | null
+  >(null);
+
+  const handleSetDifficulty = async (difficulty: string) => {
+    if (!selectedDifficultyTask || !user?.id) return;
+
+    // Close modal instantly for offline-first responsiveness
+    setSelectedDifficultyTask(null);
+
+    // Optimistic UI update
+    setPlanItems((items) =>
+      items.map((item) =>
+        item.id === selectedDifficultyTask ? { ...item, difficulty } : item,
+      ),
+    );
+
+    const updatedTask = planItems.find(
+      (item) => item.id === selectedDifficultyTask,
+    );
+    const updatedItems = planItems.map((item) =>
+      item.id === selectedDifficultyTask ? { ...item, difficulty } : item,
+    );
+
+    // Save locally immediately
+    const itemsToSave = updatedItems.map((item) => {
+      const { isTemplate, ...rest } = item;
+      return rest;
+    });
+    LocalDB.upsertPlan(user.id, selectedDay, itemsToSave);
+
+    // Sync to firestore in background without blocking UI
+    try {
+      const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
+      setDoc(
+        planRef,
+        {
+          items: itemsToSave,
+        },
+        { merge: true },
+      ).catch((e) => {
+        console.error("Failed to sync difficulty setting to cloud", e);
+      });
+    } catch (e) {
+      console.error("Local save error", e);
+      // Revert optimism if local logic fails
+      setPlanItems((items) =>
+        items.map((item) =>
+          item.id === selectedDifficultyTask
+            ? { ...item, difficulty: updatedTask?.difficulty || "unset" }
+            : item,
+        ),
+      );
+    }
+  };
 
   const styles = createStyles(theme);
 
   const normalizeSubject = (value?: string) =>
-    value?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() ?? "";
+    value
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim() ?? "";
 
   const aiInsight = useMemo(() => {
     const priorities = user?.studyPreferences?.subjectPriorities || [];
@@ -175,11 +245,16 @@ export default function Planner() {
     const days = [];
     const now = new Date();
 
-    for (let i = 0; i < 5; i++) { // change the 5 to alter how many days the scroller shows
-      const date = new Date();
-      date.setDate(now.getDate() + i);
+    for (let i = 0; i < 5; i++) {
+      // change the 5 to alter how many days the scroller shows
+      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      date.setDate(date.getDate() + i);
 
-      const id = date.toISOString().split("T")[0];
+      // YYYY-MM-DD in local time to avoid UTC shift
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const id = `${year}-${month}-${day}`;
 
       let label = "";
       if (i === 0) label = "Today";
@@ -198,7 +273,7 @@ export default function Planner() {
 
   const [selectedDay, setSelectedDay] = useState(weekDays[0].id);
 
-  //Initial fetch from db for timetable 
+  //Initial fetch from db for timetable
   // this is then mirrored into Firestore by the backend
   useEffect(() => {
     if (!user?.id) return;
@@ -253,7 +328,7 @@ export default function Planner() {
               task: "Class Lecture",
               duration: "1 hour",
               completed: false,
-              difficulty: "medium",
+              difficulty: "unset",
               isTemplate: true,
             }),
           );
@@ -265,7 +340,7 @@ export default function Planner() {
       (error) => {
         console.error("Plan fetch error: ", error);
         setLoading(false);
-      }
+      },
     );
     return () => unsubPlan();
   }, [user?.id, selectedDay, weeklyTemplate]);
@@ -301,7 +376,7 @@ export default function Planner() {
         task: "Class Lecture",
         duration: "1 hour",
         completed: false,
-        difficulty: "medium",
+        difficulty: "unset",
         isTemplate: true,
       }));
 
@@ -326,6 +401,8 @@ export default function Planner() {
         return theme.colors.warning + "30";
       case "hard":
         return theme.colors.error + "30";
+      case "unset":
+        return "transparent";
       default:
         return theme.colors.border;
     }
@@ -339,31 +416,38 @@ export default function Planner() {
         return theme.colors.warning;
       case "hard":
         return theme.colors.error;
+      case "unset":
+        return theme.colors.text.secondary;
       default:
         return theme.colors.text.secondary;
     }
   };
 
-  const handleRegenerate = async () => {
+  const confirmRegeneration = async () => {
     if (!user?.id) return;
 
+    setRegenerateModalVisible(false);
     setIsOptimizing(true);
 
     try {
-      if (!user?.id) {
-        showAlert({
-          title: "Error",
-          message: "User info is not available",
-        });
-        return;
-      }
-      // This calls the API
-      // We pass the selectedDay so the AI knows which date to plan for
+      // Map intensity to a 'mode'
+      let overrideMode = "stay_consistent";
+      // Ensure the string values match Python backend ENUM assumptions if any,
+      // but otherwise the backend is robust enough to handle the mapping provided
+      if (tempIntensity === "Light") overrideMode = "catch_up";
+      if (tempIntensity === "Intense") overrideMode = "exam_prep";
+
+      const overridenPreferences = {
+        ...user.studyPreferences,
+        mode: overrideMode,
+        preferredSessionLength: tempSessionLength,
+      };
+
       const response = await brainwaveApi.generateDailyPlan(
         user.id,
         selectedDay,
-        user.studyPreferences,
-        [] // <-- custom tasks btw
+        overridenPreferences,
+        [], // <-- custom tasks btw
       );
 
       if (response.success) {
@@ -378,12 +462,13 @@ export default function Planner() {
       console.error("Regeneration failed:", error);
       showAlert({
         title: "Optimization Failed",
-        message: "We couldn't connect to the server. Please check your internet connection and try again",
+        message:
+          "We couldn't connect to the server. Please check your internet connection and try again",
         iconPath: ICONS.ERROR,
         iconColor: "#F44336",
         confirmText: "Retry",
         showCancel: true,
-        onConfirm: handleRegenerate,
+        onConfirm: confirmRegeneration,
       });
     } finally {
       setIsOptimizing(false);
@@ -405,8 +490,7 @@ export default function Planner() {
   };
 
   const handleAddTask = async () => {
-
-    if(!user?.id) return;
+    if (!user?.id) return;
 
     if (!newTask.task.trim()) {
       showAlert({
@@ -420,26 +504,45 @@ export default function Planner() {
       task: newTask.task,
       time: newTask.time,
       subject: "Personal",
-      duration: "1 hour",
+      duration: newTask.duration.trim() || "1 hour",
       completed: false,
-      difficulty: "easy",
-      isCustom: true
-    }
+      difficulty: newTask.difficulty || "unset",
+      isCustom: true,
+    };
 
-    try{
+    const currentItems = planItems.filter((item) => !item.isTemplate);
+    const updatedItems = [...currentItems, newTaskItem];
+
+    // Close modal instantly and clear state
+    setNewTask({
+      task: "",
+      time: "12:00 PM",
+      duration: "1 hour",
+      difficulty: "unset",
+    });
+    setModalVisible(false);
+
+    // Optimistic UI update and LocalDB save
+    setPlanItems(updatedItems);
+    LocalDB.upsertPlan(user.id, selectedDay, updatedItems);
+
+    try {
       const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
 
-      const currentItems = planItems.filter(item => !item.isTemplate);
-
-      await setDoc(planRef, {
-        items: [...currentItems, newTaskItem]
-      }, {merge: true});
-
-      setNewTask({ task: "", time: "12:00 PM" });
-      setModalVisible(false);
-    } catch(e){
+      // Don't wait for server response so offline users don't hang
+      setDoc(
+        planRef,
+        {
+          items: updatedItems,
+        },
+        { merge: true },
+      ).catch((e) => console.error("Cloud sync pending...", e));
+    } catch (e) {
       console.error("Error adding task: ", e);
-      showAlert({ title: "Oooooops!", message: "Gomen. Could not add the task desu" })
+      showAlert({
+        title: "Oooooops!",
+        message: "Gomen. Could not add the task desu",
+      });
     }
   };
 
@@ -482,7 +585,7 @@ export default function Planner() {
           <View>
             <Text style={styles.headerTitle}>Study planner</Text>
             <Text style={styles.headerSubtitle}>
-              AI-optimized Planner for your success
+              AI-optimized planner for your success
             </Text>
           </View>
         </View>
@@ -557,7 +660,7 @@ export default function Planner() {
             </Text>
             {!isLoading && planItems.length > 0 && (
               <TouchableOpacity
-                onPress={handleRegenerate}
+                onPress={() => setRegenerateModalVisible(true)}
                 disabled={isOptimizing}
                 style={{ paddingVertical: 4, paddingHorizontal: 8 }}
               >
@@ -692,23 +795,37 @@ export default function Planner() {
                       )}
                     </View>
 
-                    <View
-                      style={[
-                        styles.difficultyBadge,
-                        {
-                          backgroundColor: getDifficultyColor(item.difficulty),
-                        },
-                      ]}
-                    >
-                      <Text
+                    {item.isTemplate ? null : (
+                      <TouchableOpacity
                         style={[
-                          styles.difficultyText,
-                          { color: getDifficultyTextColor(item.difficulty) },
+                          styles.difficultyBadge,
+                          {
+                            backgroundColor: getDifficultyColor(
+                              item.difficulty,
+                            ),
+                            ...(item.difficulty === "unset"
+                              ? {
+                                  borderWidth: 1,
+                                  borderColor: theme.colors.border,
+                                  borderStyle: "dashed",
+                                }
+                              : {}),
+                          },
                         ]}
+                        onPress={() => setSelectedDifficultyTask(item.id)}
                       >
-                        {item.difficulty}
-                      </Text>
-                    </View>
+                        <Text
+                          style={[
+                            styles.difficultyText,
+                            { color: getDifficultyTextColor(item.difficulty) },
+                          ]}
+                        >
+                          {item.difficulty === "unset"
+                            ? "Tap to set difficulty"
+                            : item.difficulty}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );
@@ -747,6 +864,56 @@ export default function Planner() {
                   }
                 />
 
+                <Text style={styles.inputLabel}>Duration</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ width: '100%', alignSelf: "stretch"}}
+                  contentContainerStyle={{ gap: 10, marginBottom: 15, flexDirection: "row", flexWrap: "wrap" }}
+                >
+                  {["30 mins", "1 hour", "1.5 hours", "2 hours", "3 hours"].map(
+                    (dur) => (
+                      <TouchableOpacity
+                        key={dur}
+                        style={[
+                          styles.difficultyOption,
+                          {
+                            paddingHorizontal: 16,
+                            paddingVertical: 10,
+                            backgroundColor:
+                              newTask.duration === dur
+                                ? theme.colors.primary + "20"
+                                : theme.colors.background,
+                            borderColor:
+                              newTask.duration === dur
+                                ? theme.colors.primary
+                                : theme.colors.border,
+                            borderWidth: 1,
+                          },
+                        ]}
+                        onPress={() =>
+                          setNewTask({ ...newTask, duration: dur })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.difficultyOptionText,
+                            {
+                              fontSize: 14,
+                              color:
+                                newTask.duration === dur
+                                  ? theme.colors.primary
+                                  : theme.colors.text.secondary,
+                            },
+                          ]}
+                        >
+                          {dur}
+                        </Text>
+                      </TouchableOpacity>
+                    ),
+                  )}
+                </ScrollView>
+
                 <Text style={styles.inputLabel}>Set Time</Text>
                 <TouchableOpacity
                   style={styles.timePickerButton}
@@ -770,6 +937,55 @@ export default function Planner() {
                   />
                 )}
 
+                <Text style={[styles.inputLabel, { marginTop: 15 }]}>
+                  Difficulty
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 10,
+                    width: "100%",
+                    marginBottom: 15,
+                  }}
+                >
+                  {["easy", "medium", "hard"].map((lvl) => (
+                    <TouchableOpacity
+                      key={lvl}
+                      style={[
+                        styles.difficultyOption,
+                        {
+                          flex: 1,
+                          paddingVertical: 10,
+                          backgroundColor:
+                            newTask.difficulty === lvl
+                              ? getDifficultyColor(lvl)
+                              : theme.colors.background,
+                          borderColor: getDifficultyColor(lvl),
+                          borderWidth: 1,
+                        },
+                      ]}
+                      onPress={() =>
+                        setNewTask({ ...newTask, difficulty: lvl })
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.difficultyOptionText,
+                          {
+                            fontSize: 14,
+                            color:
+                              newTask.difficulty === lvl
+                                ? getDifficultyTextColor(lvl)
+                                : theme.colors.text.secondary,
+                          },
+                        ]}
+                      >
+                        {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
                 <View style={styles.modalButtons}>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.cancelButton]}
@@ -788,6 +1004,206 @@ export default function Planner() {
             </TouchableWithoutFeedback>
           </TouchableOpacity>
         </Modal>
+        {/* Difficulty Selection Modal */}
+        <Modal
+          visible={selectedDifficultyTask !== null}
+          animationType="fade"
+          transparent={true}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setSelectedDifficultyTask(null)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, { paddingBottom: 20 }]}>
+                <Text style={styles.modalTitle}>Set Task Difficulty</Text>
+
+                <View style={{ width: "100%", gap: 12, marginTop: 10 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.difficultyOption,
+                      { backgroundColor: theme.colors.success + "20" },
+                    ]}
+                    onPress={() => handleSetDifficulty("easy")}
+                  >
+                    <Text
+                      style={[
+                        styles.difficultyOptionText,
+                        { color: theme.colors.success },
+                      ]}
+                    >
+                      Easy
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.difficultyOption,
+                      { backgroundColor: theme.colors.warning + "20" },
+                    ]}
+                    onPress={() => handleSetDifficulty("medium")}
+                  >
+                    <Text
+                      style={[
+                        styles.difficultyOptionText,
+                        { color: theme.colors.warning },
+                      ]}
+                    >
+                      Medium
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.difficultyOption,
+                      { backgroundColor: theme.colors.error + "20" },
+                    ]}
+                    onPress={() => handleSetDifficulty("hard")}
+                  >
+                    <Text
+                      style={[
+                        styles.difficultyOptionText,
+                        { color: theme.colors.error },
+                      ]}
+                    >
+                      Hard
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </Modal>
+        {/* AI Options Modal */}
+        <Modal
+          visible={isRegenerateModalVisible}
+          animationType="slide"
+          transparent={true}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setRegenerateModalVisible(false)}
+          >
+            <TouchableWithoutFeedback>
+              <View style={[styles.modalContent, { paddingBottom: 30 }]}>
+                <Text style={styles.modalTitle}>AI Optimization</Text>
+                <Text
+                  style={{
+                    color: theme.colors.text.secondary,
+                    textAlign: "center",
+                    marginBottom: 20,
+                  }}
+                >
+                  How should brAInwave plan your day?
+                </Text>
+
+                <Text style={styles.inputLabel}>Intensity</Text>
+                <View
+                  style={[
+                    styles.presetRow,
+                    {
+                      justifyContent: "space-between",
+                      width: "100%",
+                      marginBottom: 15,
+                    },
+                  ]}
+                >
+                  {["Light", "Balanced", "Intense"].map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[
+                        styles.intensityOption,
+                        {
+                          borderColor:
+                            tempIntensity === opt
+                              ? theme.colors.primary
+                              : theme.colors.border,
+                        },
+                        tempIntensity === opt && {
+                          backgroundColor: theme.colors.primary + "15",
+                        },
+                      ]}
+                      onPress={() => setTempIntensity(opt)}
+                    >
+                      <Text
+                        style={{
+                          color:
+                            tempIntensity === opt
+                              ? theme.colors.primary
+                              : theme.colors.text.secondary,
+                          fontWeight: tempIntensity === opt ? "600" : "400",
+                        }}
+                      >
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.inputLabel}>Session Length</Text>
+                <View
+                  style={[
+                    styles.presetRow,
+                    { justifyContent: "space-between", width: "100%" },
+                  ]}
+                >
+                  {[
+                    { label: "Short", val: "short" },
+                    { label: "Medium", val: "medium" },
+                    { label: "Long", val: "long" },
+                  ].map((opt) => (
+                    <TouchableOpacity
+                      key={opt.val}
+                      style={[
+                        styles.intensityOption,
+                        {
+                          borderColor:
+                            tempSessionLength === opt.val
+                              ? theme.colors.primary
+                              : theme.colors.border,
+                        },
+                        tempSessionLength === opt.val && {
+                          backgroundColor: theme.colors.primary + "15",
+                        },
+                      ]}
+                      onPress={() => setTempSessionLength(opt.val)}
+                    >
+                      <Text
+                        style={{
+                          color:
+                            tempSessionLength === opt.val
+                              ? theme.colors.primary
+                              : theme.colors.text.secondary,
+                          fontWeight:
+                            tempSessionLength === opt.val ? "600" : "400",
+                        }}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={[styles.modalButtons, { marginTop: 30 }]}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => setRegenerateModalVisible(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.confirmButton]}
+                    onPress={confirmRegeneration}
+                  >
+                    <Text style={styles.confirmButtonText}>Generate</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </TouchableOpacity>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -795,6 +1211,24 @@ export default function Planner() {
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
+    intensityOption: {
+      flex: 1,
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: "center",
+      marginHorizontal: 4,
+    },
+    difficultyOption: {
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    difficultyOptionText: {
+      fontFamily: theme.fonts.bold,
+      fontSize: 16,
+    },
     container: {
       flex: 1,
       backgroundColor: theme.colors.background,
@@ -1094,6 +1528,12 @@ const createStyles = (theme: Theme) =>
       marginBottom: 5,
       marginLeft: 4,
       textTransform: "uppercase",
+    },
+    presetRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      width: "100%",
+      marginBottom: 15,
     },
     timePickerButton: {
       flexDirection: "row",

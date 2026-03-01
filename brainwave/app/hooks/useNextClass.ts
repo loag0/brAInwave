@@ -8,9 +8,13 @@ function parseStartDate(item: any) {
   const now = new Date();
 
   try {
-    // Split "12:00 PM" or "12:00"
-    let [time, modifier] = startTimeStr.split(" ");
-    let [hours, minutes] = time.split(":").map((n: any) => parseInt(n, 10));
+    // Extract time digits and AM/PM modifier robustly (e.g., "1:21PM" or "1:21 PM")
+    const timeMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+    if (!timeMatch) return null;
+
+    let [, hourStr, minStr, modifier] = timeMatch;
+    let hours = parseInt(hourStr, 10);
+    const minutes = parseInt(minStr, 10);
 
     // Handle AM/PM
     if (modifier?.toLowerCase() === "pm" && hours < 12) hours += 12;
@@ -44,6 +48,20 @@ function formatCountdown(target: Date) {
   return `${mins}m`;
 }
 
+function parseDurationMinutes(durationStr?: string): number {
+  if (!durationStr) return 60; // default 1 hour
+  const str = durationStr.toLowerCase();
+  let total = 0;
+
+  const hrMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:hr|hour)/);
+  if (hrMatch) total += parseFloat(hrMatch[1]) * 60;
+
+  const minMatch = str.match(/(\d+)\s*(?:min|m(?!o))/);
+  if (minMatch) total += parseInt(minMatch[1], 10);
+
+  return total > 0 ? total : 60;
+}
+
 export function useNextClass(schedule: any[]) {
   return useMemo(() => {
     if (!schedule?.length) return { nextClass: null, countdown: null };
@@ -54,14 +72,16 @@ export function useNextClass(schedule: any[]) {
       .map((item) => {
         const startDate = parseStartDate(item);
         if (!startDate) return null;
-        return { ...item, startDate };
+
+        const durationMins = parseDurationMinutes(item.duration);
+        const endDate = new Date(startDate.getTime() + durationMins * 60000);
+
+        return { ...item, startDate, endDate };
       })
       .filter((item): item is any => item !== null)
-      // Change: Include classes that started up to 10 mins ago
-      // so you don't lose the "Current" class immediately.
+      // Only keep classes that haven't formally ended
       .filter((item) => {
-        const fiftyMinutesAgo = new Date(now.getTime() - 50 * 60000);
-        return item.startDate > fiftyMinutesAgo;
+        return item.endDate > now;
       })
       .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
@@ -69,8 +89,8 @@ export function useNextClass(schedule: any[]) {
 
     const next = upcoming[0];
 
-    // If the class has already started but is in our 10-min window
-    const isOngoing = next.startDate <= now;
+    // If the class has already started but hasn't ended yet
+    const isOngoing = next.startDate <= now && next.endDate > now;
 
     return {
       nextClass: next,

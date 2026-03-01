@@ -34,18 +34,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         const jwt = await firebaseUser.getIdToken();
         setToken(jwt);
 
-        // 1. HYDRATE IMMEDIATELY FROM SQLITE
-        const cachedUser = LocalDB.getUser(firebaseUser.uid) as any;
-        if (cachedUser) {
-          setUser({
-            ...cachedUser,
-            studyPreferences: JSON.parse(cachedUser.studyPreferences),
-            hasFinishedSetup: !!cachedUser.hasFinishedSetup,
-          });
-          setIsLoading(false); // UI moves to Home immediately
-        }
-
         try {
+          // 1. HYDRATE IMMEDIATELY FROM SQLITE
+          try {
+            const cachedUser = LocalDB.getUser(firebaseUser.uid) as any;
+            if (cachedUser) {
+              setUser({
+                ...cachedUser,
+                studyPreferences: JSON.parse(cachedUser.studyPreferences),
+                hasFinishedSetup: !!cachedUser.hasFinishedSetup,
+              });
+              setIsLoading(false); // UI moves to Home immediately
+            }
+          } catch (localDbError) {
+            console.log("LocalDB Error:", localDbError);
+          }
+
           // 2. BACKGROUND FETCH FROM FIRESTORE
           const userDocRef = doc(firestore, "users", firebaseUser.uid);
           const userSnap = await getDoc(userDocRef);
@@ -53,16 +57,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           if (userSnap.exists()) {
             const data = userSnap.data() as User;
             setUser(data);
-            LocalDB.saveUser(data); // Update local cache
+            try {
+              LocalDB.saveUser(data); // Update local cache
+            } catch (saveError) {
+              console.log("Failed to save to LocalDB:", saveError);
+            }
           }
         } catch (error) {
-          console.log("Offline mode: Using cached profile.", error);
+          console.log(
+            "Offline mode: Using cached profile or fetching failed.",
+            error,
+          );
+        } finally {
+          setIsLoading(false);
         }
       } else {
         setUser(null);
         setToken(null);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     return unsubscribe;
@@ -98,7 +111,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       return userCredential;
     } finally {
       setIsLoading(false);

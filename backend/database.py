@@ -1,6 +1,5 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, timezone
 
 DATABASE_URL = "sqlite:///./brainwave.db"
@@ -20,8 +19,9 @@ class StudyMaterial(Base):
     title = Column(String, index=True)
     rawContent = Column(Text)
     aiPlan = Column(Text)
+    file_uri = Column(String, nullable=True)
+    file_type = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    is_dirty = Column(Integer, default=1)
     is_deleted = Column(Integer, default=0)
     
 class Timetable(Base):
