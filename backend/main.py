@@ -118,7 +118,9 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
             user_id=user_id,
             title=cleanTitle,
             rawContent=f"Uploaded {fileName}",
-            aiPlan=studyPlan
+            aiPlan=studyPlan,
+            file_uri=fileName,  # Or whatever uri is meant to be passed
+            file_type=mime_type
         )
         db.add(material)
         db.commit()
@@ -131,6 +133,8 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
                 "id": material.id,
                 "title": cleanTitle,
                 "aiPlan": studyPlan,
+                "file_uri": fileName,
+                "file_type": mime_type,
                 "timestamp": datetime.now(timezone.utc)
             }])
         }, merge=True)
@@ -267,6 +271,7 @@ async def generateDailyPlan(request: PlanRequest):
     except Exception as e:
         print(f"Error generating plan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
 async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTasks=None):
     customContext = json.dumps(customTasks) if customTasks else "None"
     

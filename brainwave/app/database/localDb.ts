@@ -20,8 +20,8 @@ export const LocalDB = {
         title TEXT,
         rawContent TEXT,
         aiPlan TEXT,
-        uri TEXT,
-        type TEXT,
+        file_uri TEXT,
+        file_type TEXT,
         is_dirty INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
@@ -32,8 +32,8 @@ export const LocalDB = {
         remote_id INTEGER,
         title TEXT,
         structuredData TEXT,
-        uri TEXT,     -- Added for syncing
-        type TEXT,    -- Added for syncing
+        uri TEXT,
+        type TEXT,
         is_dirty INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
@@ -68,22 +68,30 @@ export const LocalDB = {
     );
   },
 
+  getMaterialById: (userId: string, id: string) => {
+    return db.getFirstSync(
+      `SELECT title, aiPlan, remote_id FROM study_materials 
+      WHERE user_id = ? AND (id = ? OR remote_id = ?)`,
+      [userId, id, id],
+    ) as { title: string; aiPlan: string; remote_id: number } | undefined;
+  },
+
   getPlanByDate: (userId: string, date: string) => {
     const row = db.getFirstSync(
       `SELECT * FROM daily_plans WHERE user_id = ? AND date = ?`,
-      [userId, date]
+      [userId, date],
     ) as any;
-    if(!row) return null;
+    if (!row) return null;
     return {
       ...row,
       tasks: row.items_json ? JSON.parse(row.items_json) : [],
-    }
+    };
   },
 
   getAllPlans: (userId: string) => {
     const results = db.getAllSync(
       `SELECT * FROM daily_plans WHERE user_id = ? ORDER BY date DESC`,
-      [userId]
+      [userId],
     );
     return results.map((row: any) => ({
       ...row,
@@ -110,17 +118,18 @@ export const LocalDB = {
   },
 
   syncPlansFromServer: (userId: string, plans: any[]) => {
-  // 1️⃣ delete all existing plans for this user first
-  db.runSync(`DELETE FROM daily_plans WHERE user_id = ?`, [userId]);
+    // 1️⃣ delete all existing plans for this user first
+    db.runSync(`DELETE FROM daily_plans WHERE user_id = ?`, [userId]);
 
-  // 2️⃣ insert fresh plans from server
-  for (const p of plans){
-    const itemsJson = JSON.stringify(p.tasks || p.items || []);
-    db.runSync(
-      `INSERT INTO daily_plans (user_id, date, items_json) VALUES (?, ?, ?)`,
-      [userId, p.date || p.id, itemsJson]
-    );
-  }},
+    // 2️⃣ insert fresh plans from server
+    for (const p of plans) {
+      const itemsJson = JSON.stringify(p.tasks || p.items || []);
+      db.runSync(
+        `INSERT INTO daily_plans (user_id, date, items_json) VALUES (?, ?, ?)`,
+        [userId, p.date || p.id, itemsJson],
+      );
+    }
+  },
 
   createMaterialLocally: (
     userId: string,
@@ -146,11 +155,18 @@ export const LocalDB = {
     }
   },
 
-  markMaterialSynced: (localId: number, remoteId: number) => {
-    db.runSync(
-      `UPDATE study_materials SET is_dirty = 0, remote_id = ? WHERE id = ?`,
-      [remoteId, localId],
-    );
+  markMaterialSynced: (localId: number, remoteId: number, aiPlan?: string) => {
+    if (aiPlan) {
+      db.runSync(
+        `UPDATE study_materials SET is_dirty = 0, remote_id = ?, aiPlan = ? WHERE id = ?`,
+        [remoteId, aiPlan, localId],
+      );
+    } else {
+      db.runSync(
+        `UPDATE study_materials SET is_dirty = 0, remote_id = ? WHERE id = ?`,
+        [remoteId, localId],
+      );
+    }
   },
 
   // TIMETABLES

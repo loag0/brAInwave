@@ -11,7 +11,7 @@ import Toast from "react-native-toast-message";
 import * as Haptics from "expo-haptics";
 import { useTimer } from "../contexts/TimerContext";
 import { useTheme } from "../contexts/ThemeContext";
-import MinutePicker from "@/components/MinutePicker"
+import MinutePicker from "@/components/MinutePicker";
 import { Theme } from "../types";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Notifications from "expo-notifications";
@@ -19,6 +19,7 @@ import { SchedulableTriggerInputTypes } from "expo-notifications";
 import Svg, { Circle } from "react-native-svg";
 import { ChevronDownIcon, StopIcon, PauseIcon } from "@/components/Icons";
 import { useNavigation, useRouter } from "expo-router";
+import { ensureNotificationPermission } from "@/utils/notifications";
 
 const CIRCLE_LENGTH = 1000;
 const R = 159;
@@ -60,8 +61,12 @@ export default function FocusScreen() {
   useKeepAwake();
 
   useEffect(() => {
+    ensureNotificationPermission();
+  }, []);
+
+  useEffect(() => {
     const parent = navigation.getParent()?.getParent();
-    if(!parent) return;
+    if (!parent) return;
 
     parent.setOptions({
       tabBarStyle: isRunning
@@ -81,11 +86,11 @@ export default function FocusScreen() {
     const progress =
       totalTargetSeconds > 0 ? remainingSeconds / totalTargetSeconds : 0;
 
-      Animated.timing(progressAnim, {
-        toValue: progress,
-        duration: 900,
-        useNativeDriver: true,
-      }).start();
+    Animated.timing(progressAnim, {
+      toValue: progress,
+      duration: 900,
+      useNativeDriver: true,
+    }).start();
   }, [remainingSeconds, progressAnim, totalTargetSeconds]);
 
   const strokeDashOffset = progressAnim.interpolate({
@@ -107,19 +112,31 @@ export default function FocusScreen() {
         const totalSeconds = minutes * 60 + seconds;
         if (totalSeconds <= 0) return;
 
-        const id = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Focus session complete",
-            body: "Time for a well-deserved break",
-            sound: true,
-          },
-          trigger: {
-            type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds: totalSeconds,
-          },
-        });
+        // Check/request permissions
+        const hasPermission = await ensureNotificationPermission();
 
-        setNotificationId(id);
+        if (hasPermission) {
+          const id = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: "Focus session complete",
+              body: "Time for a well-deserved break",
+              sound: true,
+            },
+            trigger: {
+              type: SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: totalSeconds,
+            },
+          });
+          setNotificationId(id);
+        } else {
+          Toast.show({
+            type: "info",
+            text1: "Notifications disabled",
+            text2: "You won't be alerted when the timer ends.",
+            position: "bottom",
+          });
+        }
+
         setIsRunning(true);
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -149,7 +166,7 @@ export default function FocusScreen() {
 
   const handleMinimize = () => {
     router.push("/(tabs)");
-  }
+  };
 
   return (
     <View
@@ -331,7 +348,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       justifyContent: "center",
       flexDirection: "row",
       position: "relative",
-      gap: 20
+      gap: 20,
     },
     mainBtn: {
       minWidth: 50,

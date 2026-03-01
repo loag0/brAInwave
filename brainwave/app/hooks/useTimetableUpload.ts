@@ -6,6 +6,8 @@ export function useTimetableUpload(
   userId?: string,
   refresh?: (force?: boolean) => Promise<void>,
   showAlert?: any,
+  setIsLoading?: (loading: boolean) => void,
+  setLoadingMessage?: (msg: string) => void,
 ) {
   const upload = async () => {
     if (!userId) {
@@ -27,6 +29,9 @@ export function useTimetableUpload(
     const title = `Schedule ${new Date().toLocaleDateString()}`;
     const mimeType = file.mimeType || "application/octet-stream";
 
+    setIsLoading?.(true);
+    setLoadingMessage?.("Uploading Timetable...");
+
     //Create a local copy first so the user has a timetable tracked offline
     const localId = LocalDB.createTimetableLocally(
       userId,
@@ -46,7 +51,11 @@ export function useTimetableUpload(
       );
 
       // Mark the local timetable as synced
-      LocalDB.markTimetableSynced(localId, response.id, response.weekly_template);
+      LocalDB.markTimetableSynced(
+        localId,
+        response.id,
+        response.weekly_template,
+      );
 
       await refresh?.(true);
 
@@ -62,6 +71,9 @@ export function useTimetableUpload(
         message:
           "We saved your timetable locally and will sync it when you're back online.",
       });
+    } finally {
+      setIsLoading?.(false);
+      setLoadingMessage?.("Analyzing...");
     }
   };
 

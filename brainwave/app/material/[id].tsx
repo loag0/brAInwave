@@ -1,15 +1,11 @@
 import React, { useEffect, useState } from "react";
-import {
-  ScrollView,
-  View,
-  ActivityIndicator,
-  StyleSheet,
-} from "react-native";
+import { ScrollView, View, ActivityIndicator, StyleSheet } from "react-native";
 import { useLocalSearchParams, Stack } from "expo-router";
 import Markdown from "react-native-markdown-display";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import brAInwaveApi from "@/api/brAInwaveApi";
+import { LocalDB } from "../database/localDb";
 
 export default function MaterialDetail() {
   const { id } = useLocalSearchParams();
@@ -24,19 +20,31 @@ export default function MaterialDetail() {
   useEffect(() => {
     async function getSyllabus() {
       if (!user?.id || !id) return;
-
-     try{
       setLoading(true);
-      const response = await brAInwaveApi.getStudyPlan(user.id, id);
 
-      if (response){
-        setData(response);
+      try {
+        const localData = await LocalDB.getMaterialById(user.id, id as string);
+
+        if (localData && localData.aiPlan) {
+          setData({
+            title: localData.title,
+            aiPlan: localData.aiPlan,
+          });
+          setLoading(false);
+          return;
+        }
+
+        const remoteId = localData?.remote_id || id;
+        const response = await brAInwaveApi.getStudyPlan(user.id, remoteId);
+
+        if (response) {
+          setData(response);
+        }
+      } catch (e) {
+        console.error("Error fetching study plan:", e);
+      } finally {
+        setLoading(false);
       }
-     } catch(e){
-      console.error("API Error:", e);
-     } finally {
-      setLoading(false);
-     }
     }
     getSyllabus();
   }, [id, user]);
@@ -44,7 +52,12 @@ export default function MaterialDetail() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* 1. Dynamic Header Title */}
-      <Stack.Screen options={{ title: data?.title || "Study Plan" }} />
+      <Stack.Screen
+        options={{
+          title: data?.title || "Study Plan",
+          headerTitleStyle: { fontFamily: theme.fonts.bold },
+        }}
+      />
 
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={theme.colors.primary} />
