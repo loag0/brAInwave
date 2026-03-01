@@ -1,41 +1,5 @@
 import { useMemo } from "react";
-
-function parseStartDate(item: any) {
-  const raw = item.time || item.start;
-  if (!raw) return null;
-
-  const startTimeStr = raw.split("-")[0].trim();
-  const now = new Date();
-
-  try {
-    // Extract time digits and AM/PM modifier robustly (e.g., "1:21PM" or "1:21 PM")
-    const timeMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
-    if (!timeMatch) return null;
-
-    let [, hourStr, minStr, modifier] = timeMatch;
-    let hours = parseInt(hourStr, 10);
-    const minutes = parseInt(minStr, 10);
-
-    // Handle AM/PM
-    if (modifier?.toLowerCase() === "pm" && hours < 12) hours += 12;
-    if (modifier?.toLowerCase() === "am" && hours === 12) hours = 0;
-
-    // Create date based on LOCAL time, not UTC
-    const target = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      hours,
-      minutes || 0,
-      0,
-    );
-
-    return isNaN(target.getTime()) ? null : target;
-  } catch (e: any) {
-    console.log("useNextClass date error: ", e.message);
-    return null;
-  }
-}
+import { parseStartDate, parseDurationMinutes } from "@/utils/notifications";
 
 function formatCountdown(target: Date) {
   const diff = target.getTime() - Date.now();
@@ -46,20 +10,6 @@ function formatCountdown(target: Date) {
 
   if (hrs > 0) return `${hrs}h ${mins}m`;
   return `${mins}m`;
-}
-
-function parseDurationMinutes(durationStr?: string): number {
-  if (!durationStr) return 60; // default 1 hour
-  const str = durationStr.toLowerCase();
-  let total = 0;
-
-  const hrMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:hr|hour)/);
-  if (hrMatch) total += parseFloat(hrMatch[1]) * 60;
-
-  const minMatch = str.match(/(\d+)\s*(?:min|m(?!o))/);
-  if (minMatch) total += parseInt(minMatch[1], 10);
-
-  return total > 0 ? total : 60;
 }
 
 export function useNextClass(schedule: any[]) {

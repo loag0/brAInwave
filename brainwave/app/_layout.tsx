@@ -22,6 +22,17 @@ import { AlertProvider } from "./contexts/AlertContext";
 import { TimerProvider } from "./contexts/TimerContext";
 import { LocalDB } from "./database/localDb";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import * as Notifications from "expo-notifications";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 SplashScreen.preventAutoHideAsync();
 

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -23,7 +24,8 @@ import { useTimetableUpload } from "../hooks/useTimetableUpload";
 import { useNextClass } from "../hooks/useNextClass";
 import {
   ensureNotificationPermission,
-  scheduleNextClassNotification,
+  scheduleDailyNotifications,
+  formatTimeTo24h,
 } from "@/utils/notifications";
 import {
   CloseIcon,
@@ -37,7 +39,6 @@ import {
   UploadSyllabusIcon,
   AddAssignmentIcon,
   ChevronRightIcon,
-  ICONS,
 } from "@/components/Icons";
 
 const { width } = Dimensions.get("window");
@@ -112,12 +113,9 @@ export default function Home() {
   const [loadingMessage, setLoadingMessage] = useState("Analyzing...");
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
-  const hasTimetable = timetables.length > 0;
+  //const hasTimetable = timetables.length > 0;
 
   const leadMinutes = user?.studyPreferences.notificationLeadMinutes ?? 10;
-  if (user?.studyPreferences.notifications?.studyReminders && useNextClass) {
-    scheduleNextClassNotification(useNextClass, leadMinutes);
-  }
 
   const styles = createStyles(theme, isDark);
   // 1. LISTEN TO FIRESTORE ON MOUNT
@@ -127,6 +125,12 @@ export default function Home() {
     timetables,
     user?.id,
     contentLoading,
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
   );
 
   const { upload } = useTimetableUpload(
@@ -152,74 +156,60 @@ export default function Home() {
     if (result.canceled || !result.assets) return;
 
     setIsLoading(true);
-    const totalFiles = result.assets.length;
+    setLoadingMessage("Importing...");
 
     try {
-      for (let i = 0; i < totalFiles; i++) {
-        const file = result.assets[i];
-        // Update the message dynamically
-        setLoadingMessage(`Uploading ${i + 1} of ${totalFiles}...`);
-
-        const title = file.name || `Syllabus ${i + 1}`;
-        const cleanTitle = decodeURIComponent(title)
+      for (const asset of result.assets) {
+        setLoadingMessage(`Importing ${asset.name}...`);
+        const cleanTitle = decodeURIComponent(asset.name)
           .replace(/%20/g, " ")
           .replace(/\.[^/.]+$/, "") // Remove file extension
-          .replace(/[_-]+/g, " ")
           .trim();
 
         await createMaterial(
           cleanTitle,
-          `Uploaded ${cleanTitle}`,
-          file.uri,
-          file.mimeType || "application/octet-stream",
+          "",
+          asset.uri,
+          asset.mimeType || "application/pdf",
         );
       }
 
       showAlert?.({
-        title: totalFiles > 1 ? "Files added" : "Successful Upload",
-        message: "Your files have successfully been uploaded",
-        icon: ICONS.SUCCESS,
-        iconColor: theme.colors.success,
+        title: "Success",
+        message: "Syllabus imported and planning initiated!",
       });
-    } catch (error: any) {
-      showAlert?.({ title: "Error", message: "Upload failed twin." });
-      console.log(error.message);
+    } catch (e) {
+      console.error(e);
+      showAlert?.({ title: "Import Failed", message: "Failed to read file." });
     } finally {
       setIsLoading(false);
-      setLoadingMessage("Analyzing your schedule...");
     }
-  }, [user?.id, createMaterial, showAlert, theme]);
+  }, [user?.id, createMaterial, showAlert, setIsLoading, setLoadingMessage]);
 
-  const displayMessage = isManualLoading
+  const loadingText = !contentLoading
     ? loadingMessage
     : `Syncing records (${syncProgress.current}/${syncProgress.total})...`;
 
-  const onRefresh = useCallback(async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    try {
-      if (refresh) await refresh(true);
-    } catch (error) {
-      console.error("Refresh failed", error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refresh]);
+    await refresh(true);
+    setRefreshing(false);
+  };
 
   const { nextClass, countdown } = useNextClass(todaysSchedule);
   const isOngoing = countdown === "Started";
 
   useEffect(() => {
     if (!user) return;
-    if (!nextClass) return;
-
+    // Schedule daily notifications whenever todaysSchedule changes
+    // This ensures that opening the home page also refreshes the daily reminder schedule.
     (async () => {
       const allowed = await ensureNotificationPermission();
       if (!allowed) return;
 
-      await scheduleNextClassNotification(
-        nextClass,
-        user.studyPreferences.notificationLeadMinutes,
-      );
+      if (user?.studyPreferences.notifications?.studyReminders) {
+        await scheduleDailyNotifications(todaysSchedule, leadMinutes);
+      }
     })();
 
     console.log(
@@ -232,6 +222,7 @@ export default function Home() {
     nextClass,
     user,
     user?.studyPreferences.notificationLeadMinutes,
+    leadMinutes,
   ]);
 
   function toggleAssignment(id: number) {
@@ -252,10 +243,13 @@ export default function Home() {
   const tasksRemaining = todaysSchedule.filter((t) => !t.completed).length;
   const hasNextClass = nextClass !== null && nextClass !== undefined;
 
+  const nextTitle =
+    nextClass?.task || nextClass?.title || nextClass?.subject || "Next task";
+
   const heroSubText = hasNextClass
     ? isOngoing
-      ? `${nextClass?.subject || nextClass?.title} has already started!`
-      : `${nextClass?.subject || nextClass?.title} starts in ${countdown}`
+      ? `${nextTitle} has already started!`
+      : `${nextTitle} starts in ${countdown}`
     : tasksRemaining > 0
       ? `You still have ${tasksRemaining} tasks to do hb. Get moovin'!`
       : "No more classes today. Review those notes fn";
@@ -287,7 +281,7 @@ export default function Home() {
               },
             ]}
           >
-            {displayMessage}
+            {loadingText}
           </Text>
         </View>
       )}
@@ -366,6 +360,12 @@ export default function Home() {
                     : "Daily Schedule"}
                 </Text>
               </View>
+
+              {todaysSchedule.length > 0 && (
+                <TouchableOpacity onPress={() => router.push("/planner")}>
+                  <Text style={styles.viewAllText}>View All</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.cardContent}>
@@ -400,7 +400,9 @@ export default function Home() {
                           color={theme.colors.text.secondary}
                         />
                         <Text style={styles.classTime}>
-                          {item.time || item.duration || "No time"}
+                          {item.time
+                            ? formatTimeTo24h(item.time)
+                            : item.duration || "No time"}
                         </Text>
                         {item.room && (
                           <>
@@ -414,56 +416,43 @@ export default function Home() {
                 ))
               ) : (
                 <View style={{ alignItems: "center", paddingVertical: 15 }}>
-                  {!hasTimetable ? (
-                    // 2. No timetable uploaded yet
-                    <Text style={styles.emptyText}>
-                      No timetable yet. Upload one to get started!
+                  <SunIcon size={32} color={theme.colors.warning} />
+                  <Text
+                    style={[
+                      styles.emptyText,
+                      {
+                        color: theme.colors.text.primary,
+                        fontWeight: "600",
+                      },
+                    ]}
+                  >
+                    You're free today!
+                  </Text>
+                  <Text
+                    style={[styles.emptyText, { marginTop: -15, fontSize: 13 }]}
+                  >
+                    Got some free time? Head to the Planner to optimize your day
+                    with brAInwave!
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      marginTop: 10,
+                      backgroundColor: theme.colors.primary + "15",
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                    }}
+                    onPress={() => router.push("/planner")}
+                  >
+                    <Text
+                      style={{
+                        color: theme.colors.primary,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Plan My Day
                     </Text>
-                  ) : (
-                    // 3. Timetable exists, but today is empty (Weekend/Free Day)
-                    <>
-                      <SunIcon size={32} color={theme.colors.warning} />
-                      <Text
-                        style={[
-                          styles.emptyText,
-                          {
-                            color: theme.colors.text.primary,
-                            fontWeight: "600",
-                          },
-                        ]}
-                      >
-                        You're free today!
-                      </Text>
-                      <Text
-                        style={[
-                          styles.emptyText,
-                          { marginTop: -15, fontSize: 13 },
-                        ]}
-                      >
-                        Got some free time? Head to the Planner to optimize your
-                        day with brAInwave!
-                      </Text>
-                      <TouchableOpacity
-                        style={{
-                          marginTop: 10,
-                          backgroundColor: theme.colors.primary + "15",
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                        }}
-                        onPress={() => router.push("/planner")}
-                      >
-                        <Text
-                          style={{
-                            color: theme.colors.primary,
-                            fontWeight: "600",
-                          }}
-                        >
-                          Plan My Day
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
+                  </TouchableOpacity>
                 </View>
               )}
             </View>

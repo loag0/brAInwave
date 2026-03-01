@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
+import { sortTasksByTime } from "@/utils/notifications";
 
 export function useTodaySchedule(
   plans: any[] = [],
@@ -46,9 +47,10 @@ export function useTodaySchedule(
     });
 
     if (todaysPlan?.tasks?.length > 0) {
-      setSchedule(
+      const sorted = sortTasksByTime(
         todaysPlan.tasks.map((t: any) => ({ ...t, isAiGenerated: true })),
       );
+      setSchedule(sorted);
       return;
     }
 
@@ -69,9 +71,10 @@ export function useTodaySchedule(
 
           if (dayData.length > 0) {
             console.log("Fallback success: Found timetable for", todayName);
-            setSchedule(
+            const sorted = sortTasksByTime(
               dayData.map((c: any) => ({ ...c, isAiGenerated: false })),
             );
+            setSchedule(sorted);
           } else {
             console.log("No plan and no timetable entry for today");
             setSchedule([]);

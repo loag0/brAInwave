@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,15 +7,16 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SearchIcon, CloseIcon } from "@/components/Icons"
+import { SearchIcon, CloseIcon } from "@/components/Icons";
 import { useContent } from "../hooks/useContent";
+import { useFocusEffect } from "@react-navigation/native";
 
 const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
   <View
@@ -58,11 +59,11 @@ export default function Library() {
   const { theme, isDark } = useTheme();
   //const { user } = useAuth();
   const router = useRouter();
-  const { refresh, materials, syncProgress, isLoading } = useContent(); 
+  const { refresh, materials, syncProgress, isLoading } = useContent();
 
   const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
   const [searchQuery, setSearchQuery] = useState("");
-  const [refreshing, setRefreshing ] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const styles = createStyles(theme, isDark);
 
@@ -70,7 +71,13 @@ export default function Library() {
     setRefreshing(true);
     await refresh(true);
     setRefreshing(false);
-  }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
 
   const filteredMaterials = useMemo(() => {
     return materials.filter((item) =>
@@ -122,9 +129,24 @@ export default function Library() {
       </View>
 
       {syncProgress.total > 0 && (
-        <View style={{padding: 12, backgroundColor: theme.colors.surface, alignItems: "center", flexDirection: "row", justifyContent: "center"}}>
+        <View
+          style={{
+            padding: 12,
+            backgroundColor: theme.colors.surface,
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "center",
+          }}
+        >
           <ActivityIndicator size="small" color={theme.colors.primary} />
-          <Text style={{color: theme.colors.text.primary, fontSize: 14, fontWeight: "600", marginLeft: 10}}>
+          <Text
+            style={{
+              color: theme.colors.text.primary,
+              fontSize: 14,
+              fontWeight: "600",
+              marginLeft: 10,
+            }}
+          >
             Syncing {syncProgress.current}/{syncProgress.total} items...
           </Text>
         </View>
@@ -192,9 +214,7 @@ export default function Library() {
                     </Text>
                     <Text style={styles.materialDate}>
                       {item.created_at
-                        ? new Date(
-                            item.created_at,
-                          ).toLocaleDateString()
+                        ? new Date(item.created_at).toLocaleDateString("en-GB")
                         : "Just now"}
                     </Text>
                   </View>
