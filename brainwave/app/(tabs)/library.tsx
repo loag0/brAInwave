@@ -12,11 +12,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SearchIcon, CloseIcon } from "@/components/Icons";
+import { SearchIcon, CloseIcon, UploadSyllabusIcon, ChevronRightIcon } from "@/components/Icons";
 import { useContent } from "../hooks/useContent";
 import { useFocusEffect } from "@react-navigation/native";
+import Svg, { Path, SvgProps } from "react-native-svg";
 
 const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
   <View
@@ -55,6 +55,11 @@ const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
   </View>
 );
 
+interface IconProps extends SvgProps {
+  size?: number;
+  color?: string;
+}
+
 export default function Library() {
   const { theme, isDark } = useTheme();
   //const { user } = useAuth();
@@ -66,6 +71,19 @@ export default function Library() {
   const [refreshing, setRefreshing] = useState(false);
 
   const styles = createStyles(theme, isDark);
+
+  const SearchQueryIcon: React.FC<IconProps> = ({ size, color }) => (
+    <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+      <Path
+        d={
+          searchQuery
+            ? "M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"
+            : "M260-160q-91 0-155.5-63T40-377q0-78 47-139t123-78q25-92 100-149t170-57q117 0 198.5 81.5T760-520q69 8 114.5 59.5T920-340q0 75-52.5 127.5T740-160H520q-33 0-56.5-23.5T440-240v-206l-64 62-56-56 160-160 160 160-56 56-64-62v206h220q42 0 71-29t29-71q0-42-29-71t-71-29h-60v-80q0-83-58.5-141.5T480-720q-83 0-141.5 58.5T280-520h-20q-58 0-99 41t-41 99q0 58 41 99t99 41h100v80H260Zm220-280Z"
+        }
+        fill={color}
+      />
+    </Svg>
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -202,8 +220,7 @@ export default function Library() {
                   onPress={() => router.push(`/material/${item.id}`)}
                 >
                   <View style={styles.materialIcon}>
-                    <Ionicons
-                      name="document-text"
+                    <UploadSyllabusIcon
                       size={24}
                       color={theme.colors.primary}
                     />
@@ -218,20 +235,16 @@ export default function Library() {
                         : "Just now"}
                     </Text>
                   </View>
-                  <Ionicons
-                    name="chevron-forward"
+                  <ChevronRightIcon
                     size={20}
-                    color={theme.colors.border}
+                    color={theme.colors.text.secondary}
                   />
                 </TouchableOpacity>
               ))
             ) : (
               <View style={styles.emptyState}>
                 <View style={styles.emptyIconCircle}>
-                  <Ionicons
-                    name={
-                      searchQuery ? "search-outline" : "cloud-upload-outline"
-                    }
+                  <SearchQueryIcon
                     size={40}
                     color={theme.colors.text.secondary}
                   />
@@ -335,7 +348,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       borderWidth: 1,
       borderColor: theme.colors.border,
       marginTop: 24,
-      marginBottom: -12,
     },
     searchIcon: { marginRight: 12 },
     searchInput: {

@@ -405,8 +405,26 @@ export const DeleteIcon: React.FC<IconProps> = ({ size, color }) => (
 export const ExportIcon: React.FC<IconProps> = ({ size, color }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
-      d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"
+      d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h120v80H240v400h480v-400H600v-80h120q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm200-240v-447l-64 64-56-57 160-160 160 160-56 57-64-64v447h-80Z"
       fill={color}
     />
   </Svg>
 );
+
+export const PlayIcon: React.FC<IconProps> = ({ size, color }) => (
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z"
+      fill={color}
+    />
+  </Svg>
+);
+
+export const TimerIcon: React.FC<IconProps> = ({ size, color}) => (
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="M360-840v-80h240v80H360Zm80 440h80v-240h-80v240Zm40 320q-74 0-139.5-28.5T226-186q-49-49-77.5-114.5T120-440q0-74 28.5-139.5T226-694q49-49 114.5-77.5T480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80Zm0-80q116 0 198-82t82-198q0-116-82-198t-198-82q-116 0-198 82t-82 198q0 116 82 198t198 82Zm0-280Z"
+      fill={color}
+      />
+  </Svg>
+)

@@ -75,6 +75,15 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRunning, showAlert]);
 
+  const setDuration = (mins: number) => {
+    if (isRunning) return;
+    const total = mins * 60;
+    setTotalSeconds(total);
+    setMinutes(mins);
+    setSeconds(0);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
   const startSession = (mins: number) => {
     const total = mins * 60;
     setTotalSeconds(total);
@@ -84,17 +93,13 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  useEffect(() => {
-    if (!isRunning) {
-      setTotalSeconds(minutes * 60 + seconds);
-    }
-  }, [minutes, seconds, isRunning]);
-
   const resetTimer = () => {
     setIsRunning(false);
-    setMinutes(25);
-    setSeconds(0);
-    setTotalSeconds(25 * 60);
+    // Reset to the beginning of the CURRENTLY set totalSeconds
+    setMinutes(Math.floor(totalSeconds / 60));
+    setSeconds(totalSeconds % 60);
+    expectedEndTimeRef.current = null;
+    if (intervalRef.current) clearInterval(intervalRef.current);
   };
 
   return (
@@ -111,6 +116,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
         setIsKeepAwake,
         resetTimer,
         startSession,
+        setDuration,
         totalSeconds,
       }}
     >
