@@ -2,9 +2,11 @@ import React from "react";
 import { View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 import { useTimer } from "../app/contexts/TimerContext";
+import { useTheme } from "@/app/contexts/ThemeContext";
 
 export const PomoTabIcon = ({ color, focused, size = 20 }: any) => {
   const { isRunning, progress } = useTimer();
+  const { theme } = useTheme();
 
   // Constants for the Progress Circle
   const strokeWidth = 3;
@@ -46,7 +48,7 @@ export const PomoTabIcon = ({ color, focused, size = 20 }: any) => {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={color}
+          stroke={theme.colors.primary}
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={(circumference * (1 - progress))}

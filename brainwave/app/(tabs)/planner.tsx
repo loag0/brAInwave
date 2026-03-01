@@ -25,7 +25,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { useFocusEffect } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
 import brainwaveApi from "@/api/brAInwaveApi";
@@ -36,6 +35,7 @@ import {
   SunIcon,
   InsightIcon,
   DeleteIcon,
+  TimerIcon,
   ICONS,
 } from "@/components/Icons";
 import { useContent } from "../hooks/useContent";
@@ -1050,27 +1050,9 @@ export default function Planner() {
 
                   {/* Actions Column on the Right */}
                   <View style={styles.taskActions}>
-                    {isTaskActive(item) ? (
+                    {isTaskActive(item) && (
                       <PulseDot />
-                    ) : (
-                      <View
-                        style={[
-                          styles.actionButton,
-                          item.completed && {
-                            backgroundColor: theme.colors.primary + "20",
-                          },
-                        ]}
-                      >
-                        {item.completed && (
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={22}
-                            color={theme.colors.primary}
-                          />
-                        )}
-                      </View>
                     )}
-
                     <TouchableOpacity
                       onPress={() => handleDeleteTask(item.id)}
                       style={[styles.actionButton, { marginTop: 8 }]}
@@ -1192,8 +1174,7 @@ export default function Planner() {
                   style={styles.timePickerButton}
                   onPress={() => setShowTimePicker(true)}
                 >
-                  <Ionicons
-                    name="time-outline"
+                  <TimerIcon
                     size={20}
                     color={theme.colors.primary}
                   />

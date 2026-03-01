@@ -98,6 +98,8 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
         
         prompt = """
         You are brAInwave, a smart study planning assistant for college students. Analyze this syllabus/study material and create a comprehensive, personalized study plan. Break down the content into manageable sections, suggest study techniques, and recommend a timeline for effective learning. Your study plan should include: 1. Key topics & concepts - Break down the syllabus into main topics. 2. Week-by-week breakdown - Create a realistic timeline 3. Time allocation - Suggest how long to spend on each topic. 4. Study techniques - Recommend the best methods to learn this material, like active recall, spaced repetition, etc. 5. Important dates - Note any deadlines, exams, or milestones. 6. Retention tips - Give advice for long-term learning, not just cramming 7. Progress checkpoints - Suggest ways to test understanding along the way. Make it friendly, encouraging, and realistic for a busy student. Keep the tone motivating but honest about the work required.
+        
+        CRITICAL: Do NOT use LaTeX for mathematical or logical symbols. Use standard Unicode characters only (e.g., ∀, ∃, Δ, →, ∑, √). Ensure all math is readable as plain text.
         """
         
         response = client.models.generate_content(

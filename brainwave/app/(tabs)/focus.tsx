@@ -17,7 +17,12 @@ import { useKeepAwake } from "expo-keep-awake";
 import * as Notifications from "expo-notifications";
 import { SchedulableTriggerInputTypes } from "expo-notifications";
 import Svg, { Circle } from "react-native-svg";
-import { ChevronDownIcon, StopIcon, PauseIcon } from "@/components/Icons";
+import {
+  ChevronDownIcon,
+  StopIcon,
+  PauseIcon,
+  PlayIcon,
+} from "@/components/Icons";
 import { useNavigation, useRouter } from "expo-router";
 import { ensureNotificationPermission } from "@/utils/notifications";
 
@@ -53,9 +58,9 @@ export default function FocusScreen() {
     isRunning,
     setIsRunning,
     resetTimer,
-    setMinutes,
-    setSeconds,
-    totalTargetSeconds,
+    startSession,
+    setDuration,
+    totalSeconds,
   } = useTimer();
 
   useKeepAwake();
@@ -83,15 +88,14 @@ export default function FocusScreen() {
   const remainingSeconds = minutes * 60 + seconds;
 
   useEffect(() => {
-    const progress =
-      totalTargetSeconds > 0 ? remainingSeconds / totalTargetSeconds : 0;
+    const progress = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
 
     Animated.timing(progressAnim, {
       toValue: progress,
       duration: 900,
       useNativeDriver: true,
     }).start();
-  }, [remainingSeconds, progressAnim, totalTargetSeconds]);
+  }, [remainingSeconds, progressAnim, totalSeconds]);
 
   const strokeDashOffset = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -100,8 +104,7 @@ export default function FocusScreen() {
 
   const handlePreset = async (mins: number) => {
     const safeMins = Math.min(Math.max(mins, 1), 180);
-    setMinutes(safeMins);
-    setSeconds(0);
+    setDuration(safeMins);
     setPickerVisible(false);
     setTimePickerVisible(false);
   };
@@ -137,7 +140,13 @@ export default function FocusScreen() {
           });
         }
 
-        setIsRunning(true);
+        if (remainingSeconds === totalSeconds) {
+          // Starting a fresh session
+          startSession(minutes);
+        } else {
+          // Resuming a paused session
+          setIsRunning(true);
+        }
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -233,6 +242,10 @@ export default function FocusScreen() {
             <TouchableOpacity onPress={toggleTimer} style={styles.stopBtn}>
               <PauseIcon size={44} color={theme.colors.primary} />
             </TouchableOpacity>
+          ) : remainingSeconds < totalSeconds && remainingSeconds > 0 ? (
+            <TouchableOpacity onPress={toggleTimer} style={styles.stopBtn}>
+              <PlayIcon size={44} color={theme.colors.primary} />
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={[
@@ -245,7 +258,8 @@ export default function FocusScreen() {
             </TouchableOpacity>
           )}
 
-          {isRunning && (
+          {(isRunning ||
+            (remainingSeconds < totalSeconds && remainingSeconds > 0)) && (
             <TouchableOpacity onPress={handleStop} style={styles.stopBtn}>
               <StopIcon size={44} color={theme.colors.primary} />
             </TouchableOpacity>
