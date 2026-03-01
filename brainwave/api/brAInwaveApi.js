@@ -72,7 +72,7 @@ class BrAInwaveAPI {
       });
       return response.data;
     } catch (error) {
-      if(error.response){
+      if (error.response) {
         console.log("Server Error Data:", error.response.data);
       }
       throw error;
@@ -119,6 +119,17 @@ class BrAInwaveAPI {
       return response.data;
     } catch (error) {
       throw new Error(`Failed to delete study plan: ${error.message}`);
+    }
+  }
+
+  async deleteTask(userId, date, taskId) {
+    try {
+      const response = await axios.delete(
+        `${API_BASE_URL}/daily-plan/${userId}/${date}/${taskId}`,
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to delete task: ${error.message}`);
     }
   }
 

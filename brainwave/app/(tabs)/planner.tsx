@@ -1,5 +1,11 @@
 // app/(tabs)/Planner.tsx - Study Planner Page
-import React, { useState, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -12,20 +18,35 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  RefreshControl,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
 import brainwaveApi from "@/api/brAInwaveApi";
 import { useAlert } from "../contexts/AlertContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { PlannerIcon, SunIcon, InsightIcon, ICONS } from "@/components/Icons";
+import {
+  PlannerIcon,
+  SunIcon,
+  InsightIcon,
+  DeleteIcon,
+  ICONS,
+} from "@/components/Icons";
 import { useContent } from "../hooks/useContent";
 import { LocalDB } from "../database/localDb";
+import {
+  scheduleDailyNotifications,
+  sortTasksByTime,
+  parseStartDate,
+  parseDurationMinutes,
+  formatTimeTo24h,
+} from "@/utils/notifications";
 
 const PlannerSkeleton = ({ theme }: { theme: any }) => {
   const styles = createStyles(theme);
@@ -113,7 +134,7 @@ export default function Planner() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { plans } = useContent();
+  const { plans, refresh } = useContent();
 
   //This is for state management
   const [planItems, setPlanItems] = useState<any[]>([]);
@@ -127,7 +148,7 @@ export default function Planner() {
   const [isModalVisible, setModalVisible] = useState(false);
   const [newTask, setNewTask] = useState({
     task: "",
-    time: "12:00 PM",
+    time: "12:00",
     duration: "1 hour",
     difficulty: "unset",
   });
@@ -143,6 +164,111 @@ export default function Planner() {
   const [selectedDifficultyTask, setSelectedDifficultyTask] = useState<
     string | null
   >(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    if (!user?.id) return;
+    setLoading(true); // Show skeleton
+    setRefreshing(true);
+    try {
+      if (refresh) await refresh(true);
+    } catch (e) {
+      console.error("Refresh failed:", e);
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (refresh) refresh();
+    }, [refresh]),
+  );
+
+  const isTaskActive = (item: any) => {
+    const start = parseStartDate(item);
+    if (!start) return false;
+    const now = new Date();
+    // Only apply to today's tasks
+    if (selectedDay !== weekDays[0].id) return false;
+
+    const durationMins = parseDurationMinutes(item.duration);
+    const end = new Date(start.getTime() + durationMins * 60000);
+    return now >= start && now <= end;
+  };
+
+  const isTaskPast = (item: any) => {
+    if (item.completed) return false; // Don't dim if completed, that's handled by completed style
+    const start = parseStartDate(item);
+    if (!start) return false;
+    const now = new Date();
+    // Only apply to today's tasks
+    if (selectedDay !== weekDays[0].id) return false;
+
+    const durationMins = parseDurationMinutes(item.duration);
+    const end = new Date(start.getTime() + durationMins * 60000);
+    return now > end;
+  };
+
+  const PulseDot = () => {
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.4,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    }, [pulseAnim]);
+
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          backgroundColor: "#4CAF5015",
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#4CAF5030",
+        }}
+      >
+        <Animated.View
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: "#4CAF50",
+            opacity: pulseAnim,
+          }}
+        />
+        <Text
+          style={{
+            color: "#4CAF50",
+            fontSize: 10,
+            fontWeight: "800",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          Active
+        </Text>
+      </View>
+    );
+  };
 
   const handleSetDifficulty = async (difficulty: string) => {
     if (!selectedDifficultyTask || !user?.id) return;
@@ -309,8 +435,9 @@ export default function Planner() {
         if (docSnap.exists()) {
           // If there is a generated plan, show that and mirror it into LocalDB
           const items = docSnap.data().items || [];
-          setPlanItems(items);
-          LocalDB.upsertPlan(user.id, selectedDay, items);
+          const sorted = sortTasksByTime(items);
+          setPlanItems(sorted);
+          LocalDB.upsertPlan(user.id, selectedDay, sorted);
         } else {
           // FALLBACK: if there is no plan, then just show classes from the template
           const dateObj = new Date(selectedDay);
@@ -333,7 +460,7 @@ export default function Planner() {
             }),
           );
 
-          setPlanItems(formattedItems);
+          setPlanItems(sortTasksByTime(formattedItems));
         }
         setLoading(false);
       },
@@ -355,7 +482,7 @@ export default function Planner() {
     );
 
     if (localPlan?.tasks?.length) {
-      setPlanItems(localPlan.tasks);
+      setPlanItems(sortTasksByTime(localPlan.tasks));
       setLoading(false);
       return;
     }
@@ -380,18 +507,33 @@ export default function Planner() {
         isTemplate: true,
       }));
 
-      setPlanItems(formattedItems);
+      setPlanItems(sortTasksByTime(formattedItems));
       setLoading(false);
     }
   }, [user?.id, selectedDay, plans, weeklyTemplate, planItems.length]);
 
-  const toggleTaskCompletion = (id: string | number) => {
-    setPlanItems((items) =>
-      items.map((item) =>
-        item.id === id ? { ...item, completed: !item.completed } : item,
-      ),
-    );
-  };
+  // Schedule notifications when plan items change for today
+  useEffect(() => {
+    if (
+      !user?.id ||
+      !planItems.length ||
+      !user?.studyPreferences?.notifications?.studyReminders
+    )
+      return;
+
+    const todayId = weekDays[0].id;
+    if (selectedDay === todayId) {
+      const leadMinutes = user?.studyPreferences.notificationLeadMinutes ?? 10;
+      scheduleDailyNotifications(planItems, leadMinutes);
+    }
+  }, [
+    planItems,
+    selectedDay,
+    weekDays,
+    user?.id,
+    user?.studyPreferences?.notifications?.studyReminders,
+    user?.studyPreferences?.notificationLeadMinutes,
+  ]);
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -483,7 +625,7 @@ export default function Planner() {
       const formattedTime = selectedDate.toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
-        hour12: true,
+        hour12: false,
       });
       setNewTask({ ...newTask, time: formattedTime });
     }
@@ -510,40 +652,112 @@ export default function Planner() {
       isCustom: true,
     };
 
-    const currentItems = planItems.filter((item) => !item.isTemplate);
-    const updatedItems = [...currentItems, newTaskItem];
+    const taskDate = parseStartDate(newTaskItem);
+    const todayId = weekDays[0].id;
+
+    if (selectedDay === todayId && !editingTaskId) {
+      if (taskDate && taskDate < new Date()) {
+        showAlert({
+          title: "Back to the Future ahh",
+          message:
+            "You can't add a task for a time that has already passed bromine 😭✌️!",
+        });
+        return;
+      }
+    }
+
+    let updatedItems;
+    if (editingTaskId) {
+      updatedItems = planItems.map((item) =>
+        item.id === editingTaskId
+          ? {
+              ...item,
+              task: newTask.task,
+              time: newTask.time,
+              duration: newTask.duration,
+              difficulty: newTask.difficulty,
+            }
+          : item,
+      );
+    } else {
+      const currentItems = planItems.filter((item) => !item.isTemplate);
+      updatedItems = [...currentItems, newTaskItem];
+    }
+
+    const sortedItems = sortTasksByTime(updatedItems);
 
     // Close modal instantly and clear state
     setNewTask({
       task: "",
-      time: "12:00 PM",
+      time: "12:00",
       duration: "1 hour",
       difficulty: "unset",
     });
+    setEditingTaskId(null);
     setModalVisible(false);
 
-    // Optimistic UI update and LocalDB save
-    setPlanItems(updatedItems);
-    LocalDB.upsertPlan(user.id, selectedDay, updatedItems);
+    // Filter out template properties before saving
+    const itemsToSave = sortedItems.map((item: any) => {
+      const { isTemplate, ...rest } = item;
+      return rest;
+    });
 
+    // Optimistic Update
+    setPlanItems(sortedItems);
+    LocalDB.upsertPlan(user.id, selectedDay, itemsToSave);
+
+    // Sync to Firestore
     try {
       const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
-
-      // Don't wait for server response so offline users don't hang
-      setDoc(
+      await setDoc(
         planRef,
         {
-          items: updatedItems,
+          items: itemsToSave,
         },
         { merge: true },
-      ).catch((e) => console.error("Cloud sync pending...", e));
+      );
     } catch (e) {
-      console.error("Error adding task: ", e);
-      showAlert({
-        title: "Oooooops!",
-        message: "Gomen. Could not add the task desu",
-      });
+      console.error("Failed to add task to cloud, will retry later", e);
     }
+  };
+
+  const handleDeleteTask = async (taskId: string | number) => {
+    if (!user?.id) return;
+
+    showAlert({
+      title: "Delete Task?",
+      message:
+        "Are you sure you want to remove this task from your plan? THIS ACTION IS PERMANENT!",
+      showCancel: true,
+      confirmText: "Delete",
+      cancelText: "Keep it",
+      onConfirm: async () => {
+        // Optimistic UI update
+        const updatedItems = planItems.filter(
+          (item) => item.id.toString() !== taskId.toString(),
+        );
+        setPlanItems(updatedItems);
+        LocalDB.upsertPlan(user.id, selectedDay, updatedItems);
+
+        try {
+          // 1. Delete from Firestore
+          const planRef = doc(
+            firestore,
+            "users",
+            user.id,
+            "plans",
+            selectedDay,
+          );
+          setDoc(planRef, { items: updatedItems }, { merge: true });
+
+          // 2. Delete from Backend
+          await brainwaveApi.deleteTask(user.id, selectedDay, taskId);
+        } catch (e) {
+          console.error("Error deleting task:", e);
+          // If it fails, the next fetch will restore it, or we could revert here
+        }
+      },
+    });
   };
 
   return (
@@ -579,6 +793,13 @@ export default function Planner() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
@@ -689,16 +910,15 @@ export default function Planner() {
             </View>
           ) : (
             planItems.map((item) => {
-              // Identify if this task is for the Top Priority Subject
               const isHighPriority =
                 user?.studyPreferences?.subjectPriorities?.[0] === item.subject;
-
               return (
                 <View
                   key={item.id}
                   style={[
                     styles.planCard,
                     item.completed && styles.planCardCompleted,
+                    isTaskPast(item) && { opacity: 0.4 },
                     styles.planCardMargin,
                     // APPLY RED GLOW: Only if Rank #1 and NOT completed
                     isHighPriority &&
@@ -714,30 +934,31 @@ export default function Planner() {
                   ]}
                 >
                   <TouchableOpacity
-                    style={styles.checkboxContainer}
-                    onPress={() => toggleTaskCompletion(item.id)}
+                    style={styles.planContent}
+                    onPress={() => {
+                      if (item.isTemplate) return;
+                      setEditingTaskId(item.id);
+                      setNewTask({
+                        task: item.task,
+                        time: item.time,
+                        duration: item.duration || "1 hour",
+                        difficulty: item.difficulty || "unset",
+                      });
+                      // Parse time for the picker
+                      const start = parseStartDate(item);
+                      if (start) setTimeValue(start);
+                      setModalVisible(true);
+                    }}
                   >
-                    <Ionicons
-                      name={
-                        item.completed ? "checkmark-circle" : "ellipse-outline"
-                      }
-                      size={24}
-                      color={
-                        item.completed
-                          ? theme.colors.primary
-                          : theme.colors.border
-                      }
-                    />
-                  </TouchableOpacity>
-
-                  <View style={styles.planContent}>
                     <View style={styles.planTimeContainer}>
                       <View style={styles.timeRow}>
                         <PlannerIcon
                           color={theme.colors.text.secondary}
                           size={12}
                         />
-                        <Text style={styles.timeText}>{item.time}</Text>
+                        <Text style={styles.timeText}>
+                          {formatTimeTo24h(item.time)}
+                        </Text>
                         <View style={styles.durationBadge}>
                           <Text style={styles.durationText}>
                             {item.duration || "60 min"}
@@ -796,7 +1017,7 @@ export default function Planner() {
                     </View>
 
                     {item.isTemplate ? null : (
-                      <TouchableOpacity
+                      <View
                         style={[
                           styles.difficultyBadge,
                           {
@@ -812,7 +1033,6 @@ export default function Planner() {
                               : {}),
                           },
                         ]}
-                        onPress={() => setSelectedDifficultyTask(item.id)}
                       >
                         <Text
                           style={[
@@ -824,8 +1044,42 @@ export default function Planner() {
                             ? "Tap to set difficulty"
                             : item.difficulty}
                         </Text>
-                      </TouchableOpacity>
+                      </View>
                     )}
+                  </TouchableOpacity>
+
+                  {/* Actions Column on the Right */}
+                  <View style={styles.taskActions}>
+                    {isTaskActive(item) ? (
+                      <PulseDot />
+                    ) : (
+                      <View
+                        style={[
+                          styles.actionButton,
+                          item.completed && {
+                            backgroundColor: theme.colors.primary + "20",
+                          },
+                        ]}
+                      >
+                        {item.completed && (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={22}
+                            color={theme.colors.primary}
+                          />
+                        )}
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      onPress={() => handleDeleteTask(item.id)}
+                      style={[styles.actionButton, { marginTop: 8 }]}
+                    >
+                      <DeleteIcon
+                        size={20}
+                        color={theme.colors.error || "#FF4B4B"}
+                      />
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -837,7 +1091,16 @@ export default function Planner() {
         <View style={styles.addTaskContainer}>
           <TouchableOpacity
             style={styles.addTaskButton}
-            onPress={() => setModalVisible(true)}
+            onPress={() => {
+              setEditingTaskId(null);
+              setNewTask({
+                task: "",
+                time: "12:00",
+                duration: "1 hour",
+                difficulty: "unset",
+              });
+              setModalVisible(true);
+            }}
           >
             <Text style={styles.addTaskText}>+ Add custom task</Text>
           </TouchableOpacity>
@@ -848,11 +1111,16 @@ export default function Planner() {
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => setModalVisible(false)}
+            onPress={() => {
+              setModalVisible(false);
+              setEditingTaskId(null);
+            }}
           >
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Add Custom Task</Text>
+                <Text style={styles.modalTitle}>
+                  {editingTaskId ? "Edit Task" : "Add Custom Task"}
+                </Text>
                 <Text style={styles.inputLabel}>Task Name</Text>
                 <TextInput
                   style={[styles.input, !newTask.task && styles.inputError]}
@@ -868,8 +1136,13 @@ export default function Planner() {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  style={{ width: '100%', alignSelf: "stretch"}}
-                  contentContainerStyle={{ gap: 10, marginBottom: 15, flexDirection: "row", flexWrap: "wrap" }}
+                  style={{ width: "100%", alignSelf: "stretch" }}
+                  contentContainerStyle={{
+                    gap: 10,
+                    marginBottom: 15,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                  }}
                 >
                   {["30 mins", "1 hour", "1.5 hours", "2 hours", "3 hours"].map(
                     (dur) => (
@@ -931,7 +1204,7 @@ export default function Planner() {
                   <DateTimePicker
                     value={timeValue}
                     mode="time"
-                    is24Hour={false}
+                    is24Hour={true}
                     display="spinner" // Use 'default' for Android/iOS specific style
                     onChange={onTimeChange}
                   />
@@ -989,7 +1262,10 @@ export default function Planner() {
                 <View style={styles.modalButtons}>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => setModalVisible(false)}
+                    onPress={() => {
+                      setModalVisible(false);
+                      setEditingTaskId(null);
+                    }}
                   >
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
@@ -997,7 +1273,9 @@ export default function Planner() {
                     style={[styles.modalButton, styles.confirmButton]}
                     onPress={handleAddTask}
                   >
-                    <Text style={styles.confirmButtonText}>Add Task</Text>
+                    <Text style={styles.confirmButtonText}>
+                      {editingTaskId ? "Update" : "Add Task"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1456,6 +1734,19 @@ const createStyles = (theme: Theme) =>
     difficultyText: {
       fontSize: 12,
       fontFamily: theme.fonts.medium,
+    },
+    taskActions: {
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 8,
+    },
+    actionButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: "center",
+      alignItems: "center",
     },
     addTaskContainer: {
       padding: theme.spacing.lg,

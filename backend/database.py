@@ -32,7 +32,6 @@ class Timetable(Base):
     title = Column(String, index=True)
     structuredData = Column(Text)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    is_dirty = Column(Integer, default=1)
     is_deleted = Column(Integer, default=0)
 
 def init_db():

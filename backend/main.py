@@ -387,6 +387,28 @@ async def deleteStudyMaterial(user_id: str, material_id: int, db: Session = Depe
     db.commit()
     return {"status": "success"}
 
+@app.delete("/daily-plan/{user_id}/{date}/{task_id}")
+async def deleteDailyTask(user_id: str, date: str, task_id: str):
+    try:
+        planRef = fs_db.collection("users").document(user_id).collection("plans").document(date)
+        plan = planRef.get()
+        if not plan.exists:
+            raise HTTPException(status_code=404, detail="Daily plan not found.")
+        
+        data = plan.to_dict()
+        items = data.get("items", [])
+        
+        # Filter out the task to delete
+        updated_items = [item for item in items if item.get("id") != task_id]
+        
+        if len(updated_items) == len(items):
+            raise HTTPException(status_code=404, detail="Task not found in daily plan.")
+            
+        planRef.set({"items": updated_items}, merge=True)
+        return {"status": "success", "message": "Task deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/")
 def readRoot():
     return {"message": "brAInwave API running", "version": "1.0.0"}
