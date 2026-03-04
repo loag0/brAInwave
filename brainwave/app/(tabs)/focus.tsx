@@ -11,6 +11,7 @@ import Toast from "react-native-toast-message";
 import * as Haptics from "expo-haptics";
 import { useTimer } from "../contexts/TimerContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAlert } from "../contexts/AlertContext";
 import MinutePicker from "@/components/MinutePicker";
 import { Theme } from "../types";
 import { useKeepAwake } from "expo-keep-awake";
@@ -22,6 +23,7 @@ import {
   StopIcon,
   PauseIcon,
   PlayIcon,
+  ICONS
 } from "@/components/Icons";
 import { useNavigation, useRouter } from "expo-router";
 import { ensureNotificationPermission } from "@/utils/notifications";
@@ -41,6 +43,7 @@ Notifications.setNotificationHandler({
 
 export default function FocusScreen() {
   const { theme, isDark } = useTheme();
+  const { showAlert } = useAlert();
   const router = useRouter();
   const navigation = useNavigation();
   const [isPickerVisible, setPickerVisible] = useState(false);
@@ -163,6 +166,24 @@ export default function FocusScreen() {
   };
 
   const handleStop = async () => {
+    if (isRunning) {
+      const confirmed = await new Promise((resolve) => {
+        showAlert({
+          title: "Stop Session?",
+          message:
+            "Stopping now will break your focus streak! This session won't be recorded.",
+          confirmText: "Stop Anyway",
+          cancelText: "Keep Going",
+          showCancel: true,
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+          iconPath: ICONS.ERROR,
+          iconColor: theme.colors.error,
+        });
+      });
+      if (!confirmed) return;
+    }
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     resetTimer();
     setIsRunning(false);

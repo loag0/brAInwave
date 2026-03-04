@@ -47,14 +47,14 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView>
       <ThemeProvider>
-        <AlertProvider>
-          <TimerProvider>
-            <AuthProvider>
+        <AuthProvider>
+          <AlertProvider>
+            <TimerProvider>
               <NavigationHandler fontsLoaded={fontsLoaded} />
               <Toast />
-            </AuthProvider>
-          </TimerProvider>
-        </AlertProvider>
+            </TimerProvider>
+          </AlertProvider>
+        </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );
@@ -154,7 +154,20 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
             headerTintColor: theme.colors.text.primary,
             headerTitleStyle: { fontFamily: theme.fonts.bold },
             headerShadowVisible: false,
-            animation: "slide_from_bottom", // High-end feel for opening a document
+            animation: "slide_from_bottom",
+            presentation: "card",
+          }}
+        />
+        <Stack.Screen
+          name="assignment/[id]"
+          options={{
+            headerShown: true, // Show header so user can go back
+            title: "Assignment Plan",
+            headerStyle: { backgroundColor: theme.colors.background },
+            headerTintColor: theme.colors.text.primary,
+            headerTitleStyle: { fontFamily: theme.fonts.bold },
+            headerShadowVisible: false,
+            animation: "slide_from_bottom",
             presentation: "card",
           }}
         />

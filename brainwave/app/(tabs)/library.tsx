@@ -13,8 +13,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { useRouter } from "expo-router";
-import { SearchIcon, CloseIcon, UploadSyllabusIcon, ChevronRightIcon } from "@/components/Icons";
+import {
+  SearchIcon,
+  CloseIcon,
+  UploadSyllabusIcon,
+  ChevronRightIcon,
+} from "@/components/Icons";
 import { useContent } from "../hooks/useContent";
+import { useAuth } from "../contexts/AuthContext";
+import { LocalDB } from "../database/localDb";
 import { useFocusEffect } from "@react-navigation/native";
 import Svg, { Path, SvgProps } from "react-native-svg";
 
@@ -62,13 +69,17 @@ interface IconProps extends SvgProps {
 
 export default function Library() {
   const { theme, isDark } = useTheme();
-  //const { user } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const { refresh, materials, syncProgress, isLoading } = useContent();
 
   const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+
+  // Insights Data State
+  const [streakCount, setStreakCount] = useState(0);
+  const [weeklyActivity, setWeeklyActivity] = useState<any[]>([]);
 
   const styles = createStyles(theme, isDark);
 
@@ -87,14 +98,30 @@ export default function Library() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refresh(true);
+    if (activeTab === "library") {
+      await refresh(true);
+    } else {
+      loadInsights();
+    }
     setRefreshing(false);
   };
 
+  const loadInsights = useCallback(() => {
+    if (!user?.id) return;
+    const streak = LocalDB.getStreakCount(user.id);
+    const activity = LocalDB.getWeeklyActivity(user.id);
+    setStreakCount(streak);
+    setWeeklyActivity(activity);
+  }, [user?.id]);
+
   useFocusEffect(
     useCallback(() => {
-      refresh();
-    }, [refresh]),
+      if (activeTab === "library") {
+        refresh();
+      } else {
+        loadInsights();
+      }
+    }, [refresh, activeTab, loadInsights]),
   );
 
   const filteredMaterials = useMemo(() => {
@@ -262,15 +289,121 @@ export default function Library() {
           </View>
         ) : (
           <View style={styles.content}>
-            <Text
-              style={{
-                color: theme.colors.text.secondary,
-                textAlign: "center",
-                marginTop: 40,
-              }}
+            {/* Streak Card */}
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.colors.primary + "10",
+                  borderColor: theme.colors.primary + "30",
+                },
+              ]}
             >
-              Analytics charts go here...
-            </Text>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+              >
+                <View
+                  style={[
+                    styles.iconBox,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                >
+                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                    <Path d="M12,2C12,2 10.5,5.5 10.5,8C10.5,10.21 12.29,12 14.5,12C16.71,12 18.5,10.21 18.5,8C18.5,5.5 17,2 17,2C17,2 22,8 22,13C22,18.52 17.52,23 12,23C6.48,23 2,18.52 2,13C2,8 7,2 7,2C7,2 6,5 6,8C6,10.21 7.79,12 10,12C12.21,12 14,10.21 14,8C14,5.5 12,2 12,2Z" />
+                  </Svg>
+                </View>
+                <View>
+                  <Text
+                    style={[styles.cardLabel, { color: theme.colors.primary }]}
+                  >
+                    Current Streak
+                  </Text>
+                  <Text style={styles.streakValue}>{streakCount} Days</Text>
+                </View>
+              </View>
+              <Text style={styles.insightText}>
+                {streakCount > 0
+                  ? "You're on fire! Keep it up to hit your goals."
+                  : "Start a focus session today to begin your streak!"}
+              </Text>
+            </View>
+
+            {/* Activity Chart */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Daily Study Time (Min)</Text>
+              <View style={styles.chartContainer}>
+                {(() => {
+                  const days = [
+                    "Sun",
+                    "Mon",
+                    "Tue",
+                    "Wed",
+                    "Thu",
+                    "Fri",
+                    "Sat",
+                  ];
+                  const activityMap = new Map();
+                  weeklyActivity.forEach((item) => {
+                    const d = new Date(item.date);
+                    activityMap.set(d.getDay(), item.minutes_studied);
+                  });
+
+                  return days.map((day, idx) => {
+                    const mins = activityMap.get(idx) || 0;
+                    const height = Math.min(100, (mins / 300) * 100); // 5h max height
+                    return (
+                      <View key={day} style={styles.chartBar}>
+                        <View style={styles.chartBarContainer}>
+                          {mins > 0 && (
+                            <Text style={styles.chartBarLabel}>{mins}m</Text>
+                          )}
+                          <View
+                            style={[
+                              styles.chartBarFill,
+                              {
+                                height: `${Math.max(5, height)}%`,
+                                opacity: mins > 0 ? 1 : 0.3,
+                              },
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.chartDay}>{day}</Text>
+                      </View>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
+
+            {/* Summary Stats */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={[styles.card, { flex: 1 }]}>
+                <Text style={styles.statLabel}>Avg. Focus</Text>
+                <Text style={styles.statValue}>
+                  {weeklyActivity.length > 0
+                    ? Math.round(
+                        weeklyActivity.reduce(
+                          (acc, curr) => acc + curr.minutes_studied,
+                          0,
+                        ) / 7,
+                      )
+                    : 0}
+                  m
+                </Text>
+              </View>
+              <View style={[styles.card, { flex: 1 }]}>
+                <Text style={styles.statLabel}>Total Time</Text>
+                <Text style={styles.statValue}>
+                  {(
+                    weeklyActivity.reduce(
+                      (acc, curr) => acc + curr.minutes_studied,
+                      0,
+                    ) / 60
+                  ).toFixed(1)}
+                  h
+                </Text>
+              </View>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -449,5 +582,51 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 11,
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
+    },
+    chartBarLabel: {
+      position: "absolute",
+      top: -18,
+      fontSize: 10,
+      fontFamily: theme.fonts.bold,
+      color: theme.colors.text.secondary,
+      width: "100%",
+      textAlign: "center",
+      opacity: 0.8,
+    },
+    iconBox: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cardLabel: {
+      fontSize: 12,
+      fontFamily: theme.fonts.bold,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+    streakValue: {
+      fontSize: 24,
+      fontFamily: theme.fonts.bold,
+      color: theme.colors.text.primary,
+    },
+    insightText: {
+      fontSize: 14,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+      marginTop: 12,
+      lineHeight: 20,
+    },
+    statLabel: {
+      fontSize: 12,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.secondary,
+      marginBottom: 4,
+    },
+    statValue: {
+      fontSize: 20,
+      fontFamily: theme.fonts.bold,
+      color: theme.colors.text.primary,
     },
   });

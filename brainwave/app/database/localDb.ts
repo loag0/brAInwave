@@ -45,6 +45,29 @@ export const LocalDB = {
         items_json TEXT,
         generated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS completion_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        date TEXT,
+        minutes_studied INTEGER DEFAULT 0,
+        UNIQUE(user_id, date)
+      );
+
+      CREATE TABLE IF NOT EXISTS assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        remote_id INTEGER UNIQUE,
+        title TEXT,
+        subject TEXT,
+        due_date TEXT,
+        priority TEXT,
+        rawContent TEXT,
+        file_uri TEXT,
+        file_type TEXT,
+        is_dirty INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
   },
 
@@ -146,6 +169,20 @@ export const LocalDB = {
   },
 
   syncMaterialsFromServer: (userId: string, materials: any[]) => {
+    const remoteIds = materials.map((m) => m.id);
+    if (remoteIds.length > 0) {
+      const placeholders = remoteIds.map(() => "?").join(",");
+      db.runSync(
+        `DELETE FROM study_materials WHERE user_id = ? AND is_dirty = 0 AND remote_id NOT IN (${placeholders})`,
+        [userId, ...remoteIds],
+      );
+    } else {
+      db.runSync(
+        `DELETE FROM study_materials WHERE user_id = ? AND is_dirty = 0`,
+        [userId],
+      );
+    }
+
     for (const m of materials) {
       db.runSync(
         `INSERT OR REPLACE INTO study_materials (user_id, remote_id, title, rawContent, aiPlan, is_dirty) 
@@ -167,6 +204,13 @@ export const LocalDB = {
         [remoteId, localId],
       );
     }
+  },
+
+  deleteMaterial: (userId: string, id: string | number) => {
+    db.runSync(
+      `DELETE FROM study_materials WHERE user_id = ? AND (id = ? OR remote_id = ?)`,
+      [userId, id, id],
+    );
   },
 
   // TIMETABLES
@@ -198,6 +242,19 @@ export const LocalDB = {
   },
 
   syncTimetablesFromServer: (userId: string, tables: any[]) => {
+    const remoteIds = tables.map((t) => t.id);
+    if (remoteIds.length > 0) {
+      const placeholders = remoteIds.map(() => "?").join(",");
+      db.runSync(
+        `DELETE FROM timetables WHERE user_id = ? AND is_dirty = 0 AND remote_id NOT IN (${placeholders})`,
+        [userId, ...remoteIds],
+      );
+    } else {
+      db.runSync(`DELETE FROM timetables WHERE user_id = ? AND is_dirty = 0`, [
+        userId,
+      ]);
+    }
+
     for (const t of tables) {
       db.runSync(
         `INSERT OR REPLACE INTO timetables (user_id, remote_id, title, structuredData, is_dirty)
@@ -226,5 +283,185 @@ export const LocalDB = {
         [remoteId, localId],
       );
     }
+  },
+
+  deleteTimetable: (userId: string, id: string | number) => {
+    db.runSync(
+      `DELETE FROM timetables WHERE user_id = ? AND (id = ? OR remote_id = ?)`,
+      [userId, id, id],
+    );
+  },
+
+  // COMPLETION & STREAKS
+  logStudyTime: (userId: string, date: string, minutes: number) => {
+    db.runSync(
+      `INSERT INTO completion_logs (user_id, date, minutes_studied) 
+       VALUES (?, ?, ?) 
+       ON CONFLICT(user_id, date) DO UPDATE SET minutes_studied = minutes_studied + ?`,
+      [userId, date, minutes, minutes],
+    );
+  },
+
+  getWeeklyActivity: (userId: string) => {
+    const results = db.getAllSync(
+      `SELECT date, minutes_studied FROM completion_logs 
+       WHERE user_id = ? AND date >= date('now', '-7 days')
+       ORDER BY date ASC`,
+      [userId],
+    );
+    return results;
+  },
+
+  getStreakCount: (userId: string) => {
+    const rows = db.getAllSync(
+      `SELECT date FROM completion_logs 
+       WHERE user_id = ? AND minutes_studied > 0
+       ORDER BY date DESC`,
+      [userId],
+    ) as { date: string }[];
+
+    if (rows.length === 0) return 0;
+
+    let streak = 0;
+    const now = new Date();
+    let checkDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Check if the most recent entry is today or yesterday
+    const lastDate = new Date(rows[0].date);
+    const diffDays = Math.floor(
+      (checkDate.getTime() - lastDate.getTime()) / 86400000,
+    );
+
+    if (diffDays > 1) return 0; // Streak broken
+
+    // Iterate backwards through sorted unique dates
+    for (let i = 0; i < rows.length; i++) {
+      const recordDate = new Date(rows[i].date);
+
+      // If this is the first item and it's today/yesterday, or if it's strictly the next day back
+      if (i > 0) {
+        const prevDate = new Date(rows[i - 1].date);
+        const dayDifference = Math.floor(
+          (prevDate.getTime() - recordDate.getTime()) / 86400000,
+        );
+        if (dayDifference === 1) {
+          streak++;
+        } else {
+          break;
+        }
+      } else {
+        // First item count
+        streak = 1;
+      }
+    }
+
+    return streak;
+  },
+
+  // ASSIGNMENTS
+  getAllAssignments: (userId: string) => {
+    return db.getAllSync(
+      `SELECT * FROM assignments WHERE user_id = ? ORDER BY due_date ASC`,
+      [userId],
+    );
+  },
+
+  getAssignmentById: (userId: string, id: string) => {
+    return db.getFirstSync(
+      `SELECT * FROM assignments WHERE user_id = ? AND (id = ? OR remote_id = ?)`,
+      [userId, id, id],
+    );
+  },
+
+  createAssignmentLocally: (
+    userId: string,
+    title: string,
+    subject: string,
+    dueDate: string,
+    priority: string,
+    rawContent: string,
+    uri?: string,
+    type?: string,
+  ) => {
+    const result = db.runSync(
+      `INSERT INTO assignments (user_id, title, subject, due_date, priority, rawContent, file_uri, file_type, is_dirty) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        userId,
+        title,
+        subject,
+        dueDate,
+        priority,
+        rawContent,
+        uri || null,
+        type || null,
+      ],
+    );
+    return result.lastInsertRowId;
+  },
+
+  syncAssignmentsFromServer: (userId: string, assignments: any[]) => {
+    const remoteIds = assignments.map((a) => a.id);
+    if (remoteIds.length > 0) {
+      const placeholders = remoteIds.map(() => "?").join(",");
+      db.runSync(
+        `DELETE FROM assignments WHERE user_id = ? AND is_dirty = 0 AND remote_id NOT IN (${placeholders})`,
+        [userId, ...remoteIds],
+      );
+    } else {
+      db.runSync(`DELETE FROM assignments WHERE user_id = ? AND is_dirty = 0`, [
+        userId,
+      ]);
+    }
+
+    for (const a of assignments) {
+      db.runSync(
+        `INSERT OR REPLACE INTO assignments (user_id, remote_id, title, subject, due_date, priority, rawContent, is_dirty) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+        [
+          userId,
+          a.id,
+          a.title,
+          a.subject,
+          a.due_date,
+          a.priority,
+          a.rawContent,
+        ],
+      );
+    }
+  },
+
+  markAssignmentSynced: (
+    localId: number,
+    remoteId: number,
+    extraData?: any,
+  ) => {
+    if (extraData) {
+      db.runSync(
+        `UPDATE assignments SET is_dirty = 0, remote_id = ?, title = ?, subject = ?, due_date = ?, priority = ?, rawContent = ? 
+         WHERE id = ?`,
+        [
+          remoteId,
+          extraData.title,
+          extraData.subject,
+          extraData.due_date,
+          extraData.priority,
+          extraData.rawContent,
+          localId,
+        ],
+      );
+    } else {
+      db.runSync(
+        `UPDATE assignments SET is_dirty = 0, remote_id = ? WHERE id = ?`,
+        [remoteId, localId],
+      );
+    }
+  },
+
+  deleteAssignment: (userId: string, id: string) => {
+    db.runSync(
+      `DELETE FROM assignments WHERE user_id = ? AND (id = ? OR remote_id = ?)`,
+      [userId, id, id],
+    );
   },
 };

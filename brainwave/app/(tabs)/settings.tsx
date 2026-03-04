@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -15,7 +15,21 @@ import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
 import { useRouter } from "expo-router";
 import Svg, { Path } from "react-native-svg";
-import { ChevronRightIcon, BrainIcon, FireIcon, SunIcon, StarIcon, NotificationIcon, ChevronDownIcon, BookIcon, EnvelopeIcon, LockIcon, MobileIcon, SettingsIcon, LogoutIcon } from "@/components/Icons";
+import {
+  ChevronRightIcon,
+  BrainIcon,
+  FireIcon,
+  SunIcon,
+  StarIcon,
+  NotificationIcon,
+  ChevronDownIcon,
+  BookIcon,
+  EnvelopeIcon,
+  LockIcon,
+  MobileIcon,
+  SettingsIcon,
+  LogoutIcon,
+} from "@/components/Icons";
 
 interface IconProps {
   color: string;
@@ -38,10 +52,10 @@ export default function Settings() {
   const MoonIcon: React.FC<IconProps> = ({ color, size }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
       <Path
-        d={isDark ? 
-          "M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Zm0-80q88 0 158-48.5T740-375q-20 5-40 8t-40 3q-123 0-209.5-86.5T364-660q0-20 3-40t8-40q-78 32-126.5 102T200-480q0 116 82 198t198 82Zm-10-270Z" 
-          : 
-          "M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm283-100q-100 0-170-70t-70-170q0-100 70-170t170-70q100 0 170 70t70 170q0 100-70 170t-170 70Zm0-80q66 0 113-47t47-113q0-66-47-113t-113-47q-66 0-113 47t-47 113q0 66 47 113t113 47Zm0-160Z"
+        d={
+          isDark
+            ? "M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q14 0 27.5 1t26.5 3q-41 29-65.5 75.5T444-660q0 90 63 153t153 63q55 0 101-24.5t75-65.5q2 13 3 26.5t1 27.5q0 150-105 255T480-120Zm0-80q88 0 158-48.5T740-375q-20 5-40 8t-40 3q-123 0-209.5-86.5T364-660q0-20 3-40t8-40q-78 32-126.5 102T200-480q0 116 82 198t198 82Zm-10-270Z"
+            : "M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm283-100q-100 0-170-70t-70-170q0-100 70-170t170-70q100 0 170 70t70 170q0 100-70 170t-170 70Zm0-80q66 0 113-47t47-113q0-66-47-113t-113-47q-66 0-113 47t-47 113q0 66 47 113t113 47Zm0-160Z"
         }
         fill={color}
       />
@@ -78,9 +92,9 @@ export default function Settings() {
       };
       await updateProfileData({ studyPreferences: updatedPreferences });
     } finally {
-      setTimeout(() => setIsUpdatingFocus(false), 500)
+      setTimeout(() => setIsUpdatingFocus(false), 500);
     }
-  }
+  };
 
   const handleSessionUpdate = async (length: "short" | "medium" | "long") => {
     if(!user || user.studyPreferences.preferredSessionLength === length) return;
@@ -93,11 +107,13 @@ export default function Settings() {
       };
       await updateProfileData({ studyPreferences: updatedPreferences });
     } finally {
-      setTimeout(() => setIsUpdatingSession(false), 500)
+      setTimeout(() => setIsUpdatingSession(false), 500);
     }
   };
 
-  const handleModeUpdate = async (mode: "stay_consistent" | "exam_prep" | "catch_up") => {
+  const handleModeUpdate = async (
+    mode: "stay_consistent" | "exam_prep" | "catch_up",
+  ) => {
     if (!user?.id) return;
     setIsUpdatingMode(true);
 
@@ -162,7 +178,10 @@ export default function Settings() {
                   }
                 >
                   <View style={styles.menuItemLeft}>
-                    <NotificationIcon color={theme.colors.text.secondary} size={18} />
+                    <NotificationIcon
+                      color={theme.colors.text.secondary}
+                      size={18}
+                    />
                     <View style={styles.menuItemText}>
                       <Text style={styles.menuItemTitle}>
                         Class Notification
@@ -529,7 +548,10 @@ export default function Settings() {
                     </Text>
                   </View>
                 </View>
-                <ChevronRightIcon color={theme.colors.text.secondary} size={24} />
+                <ChevronRightIcon
+                  color={theme.colors.text.secondary}
+                  size={24}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -566,7 +588,10 @@ export default function Settings() {
                   <EnvelopeIcon color={theme.colors.text.secondary} size={18} />
                   <Text style={styles.menuItemTitle}>Email preferences</Text>
                 </View>
-                <ChevronRightIcon color={theme.colors.text.secondary} size={28} />
+                <ChevronRightIcon
+                  color={theme.colors.text.secondary}
+                  size={28}
+                />
               </TouchableOpacity>
 
               <Separator theme={theme} />
@@ -576,7 +601,10 @@ export default function Settings() {
                   <LockIcon color={theme.colors.text.secondary} size={18} />
                   <Text style={styles.menuItemTitle}>Privacy & Security</Text>
                 </View>
-                <ChevronRightIcon color={theme.colors.text.secondary} size={28} />
+                <ChevronRightIcon
+                  color={theme.colors.text.secondary}
+                  size={28}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -621,64 +649,6 @@ const Separator: React.FC<SeparatorProps> = ({ theme }) => (
     }}
   />
 );
-
-// Setting Item Component (for toggles)
-interface SettingItemProps {
-  theme: Theme;
-  label: string;
-  description: string;
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-}
-
-const SettingItem: React.FC<SettingItemProps> = ({
-  theme,
-  label,
-  description,
-  value,
-  onValueChange,
-}) => {
-  const itemStyles = StyleSheet.create({
-    container: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    textContainer: {
-      flex: 1,
-      marginRight: 12,
-    },
-    label: {
-      fontSize: 14,
-      fontFamily: theme.fonts.medium,
-      color: theme.colors.text.primary,
-      marginBottom: 2,
-    },
-    description: {
-      fontSize: 12,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-    },
-  });
-
-  return (
-    <View style={itemStyles.container}>
-      <View style={itemStyles.textContainer}>
-        <Text style={itemStyles.label}>{label}</Text>
-        <Text style={itemStyles.description}>{description}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{
-          false: theme.colors.border,
-          true: theme.colors.primary,
-        }}
-        thumbColor={value ? "#fff" : "#f4f3f4"}
-      />
-    </View>
-  );
-};
 
 const createStyles = (theme: Theme, isDark: boolean) =>
   StyleSheet.create({
@@ -777,7 +747,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: 12,
     },
     helperText: {
-      alignSelf:"center",
+      alignSelf: "center",
       fontSize: 12,
       color: theme.colors.text.secondary,
       marginTop: 2,

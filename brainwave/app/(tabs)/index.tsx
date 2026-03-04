@@ -33,13 +33,14 @@ import {
   AddIcon,
   TodayIcon,
   AssignmentIcon,
-  CheckIcon,
   ScheduleIcon,
   CalendarIcon,
   UploadSyllabusIcon,
   AddAssignmentIcon,
   ChevronRightIcon,
+  FireIcon,
 } from "@/components/Icons";
+import { LocalDB } from "../database/localDb";
 
 const { width } = Dimensions.get("window");
 
@@ -96,14 +97,15 @@ export default function Home() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const [refreshing, setRefreshing] = useState(false);
-  const [assignments] = useState<any[]>([]);
 
   const {
     timetables,
     plans,
+    assignments,
     isLoading: contentLoading,
     refresh,
     createMaterial,
+    createAssignment,
     syncProgress,
   } = useContent();
 
@@ -112,7 +114,7 @@ export default function Home() {
   const isBackgroundSyncing = syncProgress.total > 0;
   const [loadingMessage, setLoadingMessage] = useState("Analyzing...");
   const [showUploadMenu, setShowUploadMenu] = useState(false);
-  const [checkedAssignments, setCheckedAssignments] = useState<number[]>([]);
+  const [streakCount, setStreakCount] = useState(0);
   //const hasTimetable = timetables.length > 0;
 
   const leadMinutes = user?.studyPreferences.notificationLeadMinutes ?? 10;
@@ -130,7 +132,10 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [refresh]),
+      if (user?.id) {
+        setStreakCount(LocalDB.getStreakCount(user.id));
+      }
+    }, [refresh, user?.id]),
   );
 
   const { upload } = useTimetableUpload(
@@ -186,6 +191,37 @@ export default function Home() {
     }
   }, [user?.id, createMaterial, showAlert, setIsLoading, setLoadingMessage]);
 
+  const handleUploadAssignment = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "text/plain"],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsLoading(true);
+        setLoadingMessage("Analyzing Assignment...");
+        const asset = result.assets[0];
+        await createAssignment(
+          asset.name,
+          asset.uri,
+          asset.mimeType || "application/pdf",
+        );
+        setIsLoading(false);
+        showAlert?.({
+          title: "Assignment Uploaded",
+          message: "Our AI is busy building your master plan!",
+        });
+      }
+    } catch (err: any) {
+      setIsLoading(false);
+      showAlert?.({
+        title: "Upload Failed",
+        message: err.message || "Failed to upload assignment.",
+      });
+    }
+  }, [createAssignment, showAlert]);
+
   const loadingText = !contentLoading
     ? loadingMessage
     : `Syncing records (${syncProgress.current}/${syncProgress.total})...`;
@@ -224,12 +260,6 @@ export default function Home() {
     user?.studyPreferences.notificationLeadMinutes,
     leadMinutes,
   ]);
-
-  function toggleAssignment(id: number) {
-    setCheckedAssignments((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  }
 
   const aiTips = [
     "Lock in your hardest subject while your energy is high.",
@@ -300,9 +330,19 @@ export default function Home() {
         {/* Header Section */}
         <View style={styles.headerBg}>
           <View style={styles.headerContent}>
-            <Text style={styles.welcomeText}>
-              Welcome back, {user?.name?.split(" ")[0] || "User"}!
-            </Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Text style={styles.welcomeText}>
+                Welcome back, {user?.name?.split(" ")[0] || "User"}!
+              </Text>
+              {streakCount > 0 && (
+                <View style={styles.streakBadge}>
+                  <FireIcon size={14} color="#FF9500" />
+                  <Text style={styles.streakText}>{streakCount}</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.dateText}>
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
@@ -465,59 +505,64 @@ export default function Home() {
                 <AssignmentIcon color={theme.colors.text.secondary} size={24} />
                 <Text style={styles.cardTitle}>Assignments</Text>
               </View>
-              <Text style={styles.viewAllText}>View All</Text>
             </View>
             <View style={styles.cardContent}>
               {assignments.length === 0 ? (
                 <Text style={styles.emptyText}>No upcoming assignments.</Text>
               ) : (
                 assignments.map((a, idx) => (
-                  <View
+                  <TouchableOpacity
                     key={a.id || idx}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/assignment/[id]",
+                        params: { id: a.id },
+                      })
+                    }
                     style={[
                       styles.assignmentItem,
                       idx !== assignments.length - 1 && styles.itemMargin,
                     ]}
                   >
-                    <TouchableOpacity
-                      style={styles.checkbox}
-                      onPress={() => toggleAssignment(a.id)}
-                    >
-                      {checkedAssignments.includes(a.id) && (
-                        <CheckIcon size={18} color={theme.colors.primary} />
-                      )}
-                    </TouchableOpacity>
                     <View style={styles.assignmentInfo}>
-                      <Text
-                        style={[
-                          styles.assignmentTitle,
-                          checkedAssignments.includes(a.id) &&
-                            styles.assignmentTitleChecked,
-                        ]}
-                      >
+                      <Text numberOfLines={1} style={styles.assignmentTitle}>
                         {a.title}
                       </Text>
                       <Text style={styles.assignmentSubject}>{a.subject}</Text>
                       <View
-                        style={[
-                          styles.badge,
-                          {
-                            backgroundColor:
-                              getPriorityColor(a.priority) + "20",
-                          },
-                        ]}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          marginTop: 4,
+                          gap: 8,
+                        }}
                       >
-                        <Text
+                        <View
                           style={[
-                            styles.badgeText,
-                            { color: getPriorityColor(a.priority) },
+                            styles.badge,
+                            {
+                              backgroundColor:
+                                getPriorityColor(a.priority) + "20",
+                            },
                           ]}
                         >
-                          Due {a.due}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.badgeText,
+                              { color: getPriorityColor(a.priority) },
+                            ]}
+                          >
+                            Due {a.due_date}
+                          </Text>
+                        </View>
+                        <ChevronRightIcon
+                          size={16}
+                          color={theme.colors.text.accent}
+                        />
                       </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))
               )}
             </View>
@@ -541,13 +586,7 @@ export default function Home() {
           onSelectOption={(opt: string) => {
             if (opt === "schedule") upload();
             if (opt === "syllabus") handleUploadSyllabus();
-            if (opt === "assignment") {
-              showAlert?.({
-                title: "Assignments coming soon",
-                message:
-                  "You'll be able to track coursework and due dates from here.",
-              });
-            }
+            if (opt === "assignment") handleUploadAssignment();
           }}
         />
       )}
@@ -779,6 +818,23 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 14,
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
+      flex: 1,
+    },
+    streakBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: isDark ? "#3d2b00" : "#fff2d9",
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#FF950040",
+      gap: 4,
+    },
+    streakText: {
+      fontSize: 12,
+      fontFamily: theme.fonts.bold,
+      color: "#FF9500",
     },
     tipPill: {
       flexDirection: "row",
