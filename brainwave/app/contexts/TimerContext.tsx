@@ -7,12 +7,17 @@ import React, {
 } from "react";
 import * as Haptics from "expo-haptics";
 import { useAlert } from "./AlertContext";
+import { useAuth } from "./AuthContext";
+import { LocalDB } from "../database/localDb";
+import { doc, setDoc, increment } from "firebase/firestore";
+import { db as firestore } from "../../firebaseConfig";
 import { AppState } from "react-native";
 
 const TimerContext = createContext<any>(null);
 
 export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
   const { showAlert } = useAlert();
+  const { user } = useAuth();
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(25 * 60); // Total duration
@@ -36,9 +41,31 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
       setSeconds(0);
       expectedEndTimeRef.current = null;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const studyMins = Math.round(totalSeconds / 60);
+      const today = new Date().toISOString().split("T")[0];
+
+      if (user?.id) {
+        // Log locally for streaks/charts
+        LocalDB.logStudyTime(user.id, today, studyMins);
+
+        // Sync to cloud
+        const activityRef = doc(firestore, "users", user.id, "activity", today);
+        setDoc(
+          activityRef,
+          {
+            minutes: increment(studyMins),
+            lastUpdated: new Date().toISOString(),
+            userId: user.id,
+            date: today,
+          },
+          { merge: true },
+        ).catch((e) => console.error("Cloud activity sync failed", e));
+      }
+
       showAlert({
         title: "Session Complete! 🏆",
-        message: "You earned 25 XP.",
+        message: `Nice work! You focused for ${studyMins} minutes.`,
         confirmText: "LFG!",
       });
     } else {

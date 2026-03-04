@@ -17,19 +17,30 @@ export const useContent = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [timetables, setTimetables] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const isSyncing = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const syncDirtyRecords = useCallback(
-    async (currentMaterials: any[], currentTimetables: any[]) => {
+    async (
+      currentMaterials: any[],
+      currentTimetables: any[],
+      currentAssignments: any[],
+    ) => {
       if (!user?.id || isSyncing.current) return;
 
       const dirtyMaterials = currentMaterials.filter((m) => m.is_dirty === 1);
       const dirtyTimetables = currentTimetables.filter((t) => t.is_dirty === 1);
+      const dirtyAssignments = currentAssignments.filter(
+        (a) => a.is_dirty === 1,
+      );
 
-      const totalToSync = dirtyMaterials.length + dirtyTimetables.length;
+      const totalToSync =
+        dirtyMaterials.length +
+        dirtyTimetables.length +
+        dirtyAssignments.length;
       if (totalToSync === 0) return;
 
       isSyncing.current = true;
@@ -59,6 +70,12 @@ export const useContent = () => {
         } catch (e: any) {
           // Individual error: This file failed, but the loop continues!
           console.error(`Syllabus Sync Failed [${item.title}]:`, e.message);
+          if (e.response && e.response.status >= 500) {
+            console.log(
+              `Deleting failed syllabus [${item.title}] to prevent retry loop.`,
+            );
+            LocalDB.deleteMaterial(user.id, item.id);
+          }
         }
       }
 
@@ -82,6 +99,44 @@ export const useContent = () => {
           }
         } catch (e: any) {
           console.error(`Timetable Sync Failed [${table.title}]:`, e.message);
+          if (e.response && e.response.status >= 500) {
+            console.log(
+              `Deleting failed timetable [${table.title}] to prevent retry loop.`,
+            );
+            LocalDB.deleteTimetable(user.id, table.id);
+          }
+        }
+      }
+
+      // Sync Assignments - Wrapped individually
+      for (const ass of dirtyAssignments) {
+        try {
+          if (ass.file_uri) {
+            const result = await BrainwaveAPI.uploadAssignment(
+              user.id,
+              ass.file_uri,
+              ass.title,
+              ass.file_type || "application/pdf",
+            );
+
+            await LocalDB.markAssignmentSynced(ass.id, result.id, {
+              title: result.assignment.title,
+              subject: result.assignment.subject,
+              due_date: result.assignment.due_date,
+              priority: result.assignment.priority,
+              rawContent: result.assignment.rawContent || ass.rawContent, // Fallback if backend doesnt return it in the meta object
+            });
+            completed++;
+            setSyncProgress({ current: completed, total: totalToSync });
+          }
+        } catch (e: any) {
+          console.error(`Assignment Sync Failed [${ass.title}]:`, e.message);
+          if (e.response && e.response.status >= 500) {
+            console.log(
+              `Deleting failed assignment [${ass.title}] to prevent retry loop.`,
+            );
+            LocalDB.deleteAssignment(user.id, ass.id);
+          }
         }
       }
 
@@ -104,17 +159,23 @@ export const useContent = () => {
       const localMaterials = await LocalDB.getAllMaterials(user.id);
       const localTimetables = await LocalDB.getAllTimetables(user.id);
       const localPlans = await LocalDB.getAllPlans(user.id);
+      const localAssignments = await LocalDB.getAllAssignments(user.id);
 
-      setMaterials(await localMaterials);
-      setTimetables(await localTimetables);
-      setPlans(await localPlans);
+      setMaterials(localMaterials);
+      setTimetables(localTimetables);
+      setPlans(localPlans);
+      setAssignments(localAssignments);
 
       setIsLoading(true);
       setError(null);
 
       try {
         // 2. sync dirty records in background
-        await syncDirtyRecords(localMaterials, localTimetables);
+        await syncDirtyRecords(
+          localMaterials,
+          localTimetables,
+          localAssignments,
+        );
 
         // 3. pull from backend if forced or timer expired
         const lastSync = await AsyncStorage.getItem("lastPlansSync");
@@ -128,14 +189,40 @@ export const useContent = () => {
           const remotePlans = await BrainwaveAPI.listDailyPlans(user.id);
           if (remotePlans?.plans) {
             LocalDB.syncPlansFromServer(user.id, remotePlans.plans);
-            await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
           }
+
+          const remoteMaterials = await BrainwaveAPI.listStudyPlans(user.id);
+          if (remoteMaterials?.studyPlans) {
+            LocalDB.syncMaterialsFromServer(
+              user.id,
+              remoteMaterials.studyPlans,
+            );
+          }
+
+          const remoteTimetables = await BrainwaveAPI.listTimetables(user.id);
+          if (remoteTimetables?.timetables) {
+            LocalDB.syncTimetablesFromServer(
+              user.id,
+              remoteTimetables.timetables,
+            );
+          }
+
+          const remoteAssignments = await BrainwaveAPI.listAssignments(user.id);
+          if (remoteAssignments?.assignments) {
+            LocalDB.syncAssignmentsFromServer(
+              user.id,
+              remoteAssignments.assignments,
+            );
+          }
+
+          await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
         }
 
         // 4. update app state after full sync
         setMaterials(await LocalDB.getAllMaterials(user.id));
         setTimetables(await LocalDB.getAllTimetables(user.id));
         setPlans(await LocalDB.getAllPlans(user.id));
+        setAssignments(await LocalDB.getAllAssignments(user.id));
       } catch (err: any) {
         console.log("Fetch Error: ", err.message);
         setError("Failed to sync with cloud.");
@@ -187,6 +274,7 @@ export const useContent = () => {
         date,
         preferences || {},
         customTasks || [],
+        {},
       );
 
       if (dailyPlan?.items) {
@@ -265,10 +353,66 @@ export const useContent = () => {
     timetables,
     syncProgress,
     plans,
+    assignments,
     isLoading,
     error,
     refresh: fetchData,
     generatePlanForDate,
     createMaterial,
+    createAssignment: async (title: string, uri: string, type: string) => {
+      if (!user?.id) return null;
+      const localId = await LocalDB.createAssignmentLocally(
+        user.id,
+        title,
+        "Analyzing...",
+        "Pending",
+        "medium",
+        "brAInwave is analyzing your assignment...",
+        uri,
+        type,
+      );
+      setAssignments(await LocalDB.getAllAssignments(user.id));
+
+      // Try immediate sync
+      try {
+        const result = await BrainwaveAPI.uploadAssignment(
+          user.id,
+          uri,
+          title,
+          type,
+        );
+        await LocalDB.markAssignmentSynced(localId, result.id, {
+          title: result.assignment.title,
+          subject: result.assignment.subject,
+          due_date: result.assignment.due_date,
+          priority: result.assignment.priority,
+          rawContent: result.assignment.rawContent || "",
+        });
+        setAssignments(await LocalDB.getAllAssignments(user.id));
+      } catch (err) {
+        console.error("Immediate assignment sync failed:", err);
+      }
+      return localId;
+    },
+    deleteAssignment: async (id: string, remoteId?: number) => {
+      if (!user?.id) return false;
+
+      try {
+        // Delete locally first
+        LocalDB.deleteAssignment(user.id, id);
+
+        // Update state
+        setAssignments(await LocalDB.getAllAssignments(user.id));
+
+        // If it was already synced to the cloud, delete it there too
+        if (remoteId) {
+          await BrainwaveAPI.deleteAssignment(user.id, remoteId);
+        }
+        return true;
+      } catch (e) {
+        console.error("Error deleting assignment:", e);
+        return false;
+      }
+    },
   };
 };

@@ -20,6 +20,7 @@ import {
   Easing,
   RefreshControl,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -132,6 +133,7 @@ const PlannerSkeleton = ({ theme }: { theme: any }) => {
 
 export default function Planner() {
   const { theme } = useTheme();
+  const router = useRouter();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { plans, refresh } = useContent();
@@ -151,14 +153,19 @@ export default function Planner() {
     time: "12:00",
     duration: "1 hour",
     difficulty: "unset",
+    subject: "Personal",
+    deadline: "",
   });
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
   const [timeValue, setTimeValue] = useState(new Date());
+  const [deadlineValue, setDeadlineValue] = useState(new Date());
 
   //AI Regeneration Options Modal State
   const [isRegenerateModalVisible, setRegenerateModalVisible] = useState(false);
   const [tempIntensity, setTempIntensity] = useState("Balanced"); // "Light", "Balanced", "Intense"
   const [tempSessionLength, setTempSessionLength] = useState("medium"); // "short", "medium", "long"
+  const [aiUserNote, setAiUserNote] = useState("");
 
   //Difficulty Selection State
   const [selectedDifficultyTask, setSelectedDifficultyTask] = useState<
@@ -166,6 +173,67 @@ export default function Planner() {
   >(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const BUILT_IN_TAGS = useMemo(() => ["Personal", "Exam Prep"], []);
+
+  // Extract subjects from timetable for the tag picker
+  const availableTags = useMemo(() => {
+    const subjectSet = new Set<string>();
+    // Get subjects from the weekly template
+    if (weeklyTemplate) {
+      Object.values(weeklyTemplate).forEach((dayItems: any) => {
+        if (Array.isArray(dayItems)) {
+          dayItems.forEach((item: any) => {
+            const name = item.subject || item.course || item.name;
+            if (name) {
+              const cleaned = name
+                .replace(
+                  /\b(LAB|LECTURE|LEC|TUTORIAL|TUT|PRACTICAL|PRAC)\b/gi,
+                  "",
+                )
+                .trim();
+              if (cleaned) subjectSet.add(cleaned);
+            }
+          });
+        }
+      });
+    }
+    // Also extract from current plan items
+    planItems.forEach((item: any) => {
+      if (item.subject && !BUILT_IN_TAGS.includes(item.subject)) {
+        subjectSet.add(item.subject);
+      }
+    });
+    return [...BUILT_IN_TAGS, ...Array.from(subjectSet)];
+  }, [BUILT_IN_TAGS, weeklyTemplate, planItems]);
+
+  // Priority scoring: combines urgency and difficulty
+  const computePriorityScore = (task: any) => {
+    const difficultyMap: Record<string, number> = {
+      easy: 20,
+      medium: 50,
+      hard: 80,
+      unset: 35,
+    };
+    const diffScore = difficultyMap[task.difficulty] ?? 35;
+    if (!task.deadline) return diffScore * 0.4;
+    const daysLeft = Math.max(
+      0,
+      (new Date(task.deadline).getTime() - Date.now()) / 86400000,
+    );
+    const urgencyScore = Math.min(100, Math.max(0, 100 - daysLeft * 15));
+    return urgencyScore * 0.6 + diffScore * 0.4;
+  };
+
+  const getPriorityBadge = (task: any) => {
+    if (!task.deadline) return null;
+    const score = computePriorityScore(task);
+    if (score >= 70)
+      return { label: "Urgent", color: "#FF4B4B", bg: "#FF4B4B15" };
+    if (score >= 40)
+      return { label: "Moderate", color: "#FFA726", bg: "#FFA72615" };
+    return { label: "Low", color: "#4CAF50", bg: "#4CAF5015" };
+  };
 
   const onRefresh = async () => {
     if (!user?.id) return;
@@ -277,18 +345,10 @@ export default function Planner() {
     setSelectedDifficultyTask(null);
 
     // Optimistic UI update
-    setPlanItems((items) =>
-      items.map((item) =>
-        item.id === selectedDifficultyTask ? { ...item, difficulty } : item,
-      ),
-    );
-
-    const updatedTask = planItems.find(
-      (item) => item.id === selectedDifficultyTask,
-    );
     const updatedItems = planItems.map((item) =>
       item.id === selectedDifficultyTask ? { ...item, difficulty } : item,
     );
+    setPlanItems(updatedItems);
 
     // Save locally immediately
     const itemsToSave = updatedItems.map((item) => {
@@ -315,7 +375,7 @@ export default function Planner() {
       setPlanItems((items) =>
         items.map((item) =>
           item.id === selectedDifficultyTask
-            ? { ...item, difficulty: updatedTask?.difficulty || "unset" }
+            ? { ...item, difficulty: "unset" }
             : item,
         ),
       );
@@ -565,6 +625,32 @@ export default function Planner() {
     }
   };
 
+  const getIntensityColor = (intensity: string) => {
+    switch (intensity) {
+      case "Light":
+        return theme.colors.success;
+      case "Balanced":
+        return theme.colors.warning;
+      case "Intense":
+        return theme.colors.error;
+      default:
+        return theme.colors.primary;
+    }
+  };
+
+  const getSessionLengthColor = (length: string) => {
+    switch (length) {
+      case "short":
+        return theme.colors.success;
+      case "medium":
+        return theme.colors.warning;
+      case "long":
+        return theme.colors.error;
+      default:
+        return theme.colors.primary;
+    }
+  };
+
   const confirmRegeneration = async () => {
     if (!user?.id) return;
 
@@ -572,10 +658,8 @@ export default function Planner() {
     setIsOptimizing(true);
 
     try {
-      // Map intensity to a 'mode'
-      let overrideMode = "stay_consistent";
-      // Ensure the string values match Python backend ENUM assumptions if any,
-      // but otherwise the backend is robust enough to handle the mapping provided
+      // Map intensity to a 'mode'. Use user preference if 'Balanced'
+      let overrideMode = user.studyPreferences.mode || "stay_consistent";
       if (tempIntensity === "Light") overrideMode = "catch_up";
       if (tempIntensity === "Intense") overrideMode = "exam_prep";
 
@@ -590,6 +674,7 @@ export default function Planner() {
         selectedDay,
         overridenPreferences,
         [], // <-- custom tasks btw
+        aiUserNote.trim() || undefined,
       );
 
       if (response.success) {
@@ -607,7 +692,7 @@ export default function Planner() {
         message:
           "We couldn't connect to the server. Please check your internet connection and try again",
         iconPath: ICONS.ERROR,
-        iconColor: "#F44336",
+        iconColor: theme.colors.error,
         confirmText: "Retry",
         showCancel: true,
         onConfirm: confirmRegeneration,
@@ -641,50 +726,57 @@ export default function Planner() {
       });
       return;
     }
-    const newTaskItem = {
-      id: Date.now().toString(),
+    const dayPlan = plans.find(
+      (p) => p.date === selectedDay || p.id === selectedDay,
+    );
+
+    // If no daily plan exists in store yet, use current planItems (timetable fallback) as base
+    const baseItems = dayPlan?.items || planItems;
+
+    const newTaskItem: any = {
+      id: editingTaskId || Date.now().toString(),
       task: newTask.task,
       time: newTask.time,
-      subject: "Personal",
+      subject: newTask.subject || "Personal",
       duration: newTask.duration.trim() || "1 hour",
       completed: false,
       difficulty: newTask.difficulty || "unset",
-      isCustom: true,
+      isCustom: !editingTaskId,
     };
-
-    const taskDate = parseStartDate(newTaskItem);
-    const todayId = weekDays[0].id;
-
-    if (selectedDay === todayId && !editingTaskId) {
-      if (taskDate && taskDate < new Date()) {
-        showAlert({
-          title: "Back to the Future ahh",
-          message:
-            "You can't add a task for a time that has already passed bromine 😭✌️!",
-        });
-        return;
-      }
+    if (newTask.deadline) {
+      newTaskItem.deadline = newTask.deadline;
     }
 
-    let updatedItems;
-    if (editingTaskId) {
-      updatedItems = planItems.map((item) =>
-        item.id === editingTaskId
-          ? {
-              ...item,
-              task: newTask.task,
-              time: newTask.time,
-              duration: newTask.duration,
-              difficulty: newTask.difficulty,
-            }
-          : item,
-      );
-    } else {
-      const currentItems = planItems.filter((item) => !item.isTemplate);
-      updatedItems = [...currentItems, newTaskItem];
-    }
+    const updatedItems = editingTaskId
+      ? baseItems.map((it: any) => (it.id === editingTaskId ? newTaskItem : it))
+      : [...baseItems, newTaskItem];
 
+    // Optimistically update the UI state directly
     const sortedItems = sortTasksByTime(updatedItems);
+    setPlanItems(sortedItems);
+
+    try {
+      // 1. Save locally
+      await LocalDB.upsertPlan(user.id, selectedDay, sortedItems);
+
+      // 2. Sync to Firestore
+      const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
+      await setDoc(planRef, { items: sortedItems }, { merge: true });
+
+      if (!editingTaskId) {
+        showAlert({
+          title: "Added!",
+          message: `${newTask.task} added to your ${selectedDay} plan`,
+          iconPath: ICONS.SUCCESS,
+        });
+      }
+    } catch (e) {
+      console.error("Save failed:", e);
+      showAlert({
+        title: "Save Error",
+        message: "Failed to save your changes locally or to the cloud.",
+      });
+    }
 
     // Close modal instantly and clear state
     setNewTask({
@@ -692,33 +784,11 @@ export default function Planner() {
       time: "12:00",
       duration: "1 hour",
       difficulty: "unset",
+      subject: "Personal",
+      deadline: "",
     });
     setEditingTaskId(null);
     setModalVisible(false);
-
-    // Filter out template properties before saving
-    const itemsToSave = sortedItems.map((item: any) => {
-      const { isTemplate, ...rest } = item;
-      return rest;
-    });
-
-    // Optimistic Update
-    setPlanItems(sortedItems);
-    LocalDB.upsertPlan(user.id, selectedDay, itemsToSave);
-
-    // Sync to Firestore
-    try {
-      const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
-      await setDoc(
-        planRef,
-        {
-          items: itemsToSave,
-        },
-        { merge: true },
-      );
-    } catch (e) {
-      console.error("Failed to add task to cloud, will retry later", e);
-    }
   };
 
   const handleDeleteTask = async (taskId: string | number) => {
@@ -936,17 +1006,21 @@ export default function Planner() {
                   <TouchableOpacity
                     style={styles.planContent}
                     onPress={() => {
-                      if (item.isTemplate) return;
+                      // Removed: if (item.isTemplate) return;
                       setEditingTaskId(item.id);
                       setNewTask({
                         task: item.task,
                         time: item.time,
                         duration: item.duration || "1 hour",
                         difficulty: item.difficulty || "unset",
+                        subject: item.subject || "Personal",
+                        deadline: item.deadline || "",
                       });
                       // Parse time for the picker
                       const start = parseStartDate(item);
                       if (start) setTimeValue(start);
+                      if (item.deadline)
+                        setDeadlineValue(new Date(item.deadline));
                       setModalVisible(true);
                     }}
                   >
@@ -976,13 +1050,14 @@ export default function Planner() {
                       {item.task}
                     </Text>
 
-                    {/* Subject and High Priority Tag Row */}
+                    {/* Subject / Tag + Priority Badges Row */}
                     <View
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 8,
                         marginBottom: 4,
+                        flexWrap: "wrap",
                       }}
                     >
                       <Text style={styles.subjectText}>{item.subject}</Text>
@@ -1013,6 +1088,47 @@ export default function Planner() {
                             {item.completed ? "Priority Met" : "High Priority"}
                           </Text>
                         </View>
+                      )}
+                      {(() => {
+                        const badge = getPriorityBadge(item);
+                        if (!badge || item.completed) return null;
+                        return (
+                          <View
+                            style={{
+                              backgroundColor: badge.bg,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                              borderWidth: 1,
+                              borderColor: badge.color + "40",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                color: badge.color,
+                                fontWeight: "800",
+                              }}
+                            >
+                              {badge.label}
+                            </Text>
+                          </View>
+                        );
+                      })()}
+                      {item.deadline && !item.completed && (
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            color: theme.colors.text.secondary,
+                            fontStyle: "italic",
+                          }}
+                        >
+                          Due{" "}
+                          {new Date(item.deadline).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </Text>
                       )}
                     </View>
 
@@ -1050,9 +1166,7 @@ export default function Planner() {
 
                   {/* Actions Column on the Right */}
                   <View style={styles.taskActions}>
-                    {isTaskActive(item) && (
-                      <PulseDot />
-                    )}
+                    {isTaskActive(item) && <PulseDot />}
                     <TouchableOpacity
                       onPress={() => handleDeleteTask(item.id)}
                       style={[styles.actionButton, { marginTop: 8 }]}
@@ -1080,6 +1194,8 @@ export default function Planner() {
                 time: "12:00",
                 duration: "1 hour",
                 difficulty: "unset",
+                subject: "Personal",
+                deadline: "",
               });
               setModalVisible(true);
             }}
@@ -1106,13 +1222,75 @@ export default function Planner() {
                 <Text style={styles.inputLabel}>Task Name</Text>
                 <TextInput
                   style={[styles.input, !newTask.task && styles.inputError]}
-                  placeholder="e.g., Gym, Grocery Shopping..."
+                  placeholder="e.g., Gym, Study for finals..."
                   placeholderTextColor={theme.colors.text.secondary}
                   value={newTask.task}
                   onChangeText={(text) =>
                     setNewTask({ ...newTask, task: text })
                   }
                 />
+
+                <Text style={styles.inputLabel}>Subject</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ width: "100%", alignSelf: "stretch" }}
+                  contentContainerStyle={{
+                    gap: 8,
+                    marginBottom: 15,
+                    flexDirection: "row",
+                  }}
+                >
+                  {availableTags.map((tag) => (
+                    <TouchableOpacity
+                      key={tag}
+                      style={[
+                        styles.difficultyOption,
+                        {
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          backgroundColor:
+                            newTask.subject === tag
+                              ? tag === "Exam Prep"
+                                ? theme.colors.error + "20"
+                                : theme.colors.primary + "20"
+                              : theme.colors.background,
+                          borderColor:
+                            newTask.subject === tag
+                              ? tag === "Exam Prep"
+                                ? theme.colors.error
+                                : theme.colors.primary
+                              : theme.colors.border,
+                          borderWidth: 1,
+                        },
+                      ]}
+                      onPress={() =>
+                        setNewTask({
+                          ...newTask,
+                          subject: tag,
+                          deadline: tag !== "Exam Prep" ? "" : newTask.deadline,
+                        })
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.difficultyOptionText,
+                          {
+                            fontSize: 13,
+                            color:
+                              newTask.subject === tag
+                                ? tag === "Exam Prep"
+                                  ? theme.colors.error
+                                  : theme.colors.primary
+                                : theme.colors.text.secondary,
+                          },
+                        ]}
+                      >
+                        {tag}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
 
                 <Text style={styles.inputLabel}>Duration</Text>
                 <ScrollView
@@ -1174,10 +1352,7 @@ export default function Planner() {
                   style={styles.timePickerButton}
                   onPress={() => setShowTimePicker(true)}
                 >
-                  <TimerIcon
-                    size={20}
-                    color={theme.colors.primary}
-                  />
+                  <TimerIcon size={20} color={theme.colors.primary} />
                   <Text style={styles.timePickerText}>{newTask.time}</Text>
                 </TouchableOpacity>
 
@@ -1239,6 +1414,70 @@ export default function Planner() {
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                {/* Deadline picker - only for Assignment / Exam Prep */}
+                {(newTask.subject === "Assignment" ||
+                  newTask.subject === "Exam Prep") && (
+                  <>
+                    {newTask.subject === "Assignment" ? (
+                      <Text style={styles.inputLabel}>Deadline</Text>
+                    ) : (
+                      <Text style={styles.inputLabel}>Exam Date</Text>
+                    )}
+                    <TouchableOpacity
+                      style={styles.timePickerButton}
+                      onPress={() => setShowDeadlinePicker(true)}
+                    >
+                      <TimerIcon size={20} color={theme.colors.primary} />
+                      <Text style={styles.timePickerText}>
+                        {newTask.deadline
+                          ? new Date(newTask.deadline).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              },
+                            )
+                          : "Tap to set deadline"}
+                      </Text>
+                      {newTask.deadline ? (
+                        <TouchableOpacity
+                          onPress={() =>
+                            setNewTask({ ...newTask, deadline: "" })
+                          }
+                          style={{ marginLeft: "auto" }}
+                        >
+                          <Text
+                            style={{ color: theme.colors.error, fontSize: 12 }}
+                          >
+                            Clear
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </TouchableOpacity>
+                    {showDeadlinePicker && (
+                      <DateTimePicker
+                        value={deadlineValue}
+                        mode="date"
+                        minimumDate={new Date()}
+                        display="spinner"
+                        onChange={(event, selectedDate) => {
+                          setShowDeadlinePicker(false);
+                          if (selectedDate) {
+                            setDeadlineValue(selectedDate);
+                            setNewTask({
+                              ...newTask,
+                              deadline: selectedDate
+                                .toISOString()
+                                .split("T")[0],
+                            });
+                          }
+                        }}
+                      />
+                    )}
+                  </>
+                )}
 
                 <View style={styles.modalButtons}>
                   <TouchableOpacity
@@ -1375,13 +1614,12 @@ export default function Planner() {
                       style={[
                         styles.intensityOption,
                         {
-                          borderColor:
+                          borderColor: getIntensityColor(opt),
+                          backgroundColor:
                             tempIntensity === opt
-                              ? theme.colors.primary
-                              : theme.colors.border,
-                        },
-                        tempIntensity === opt && {
-                          backgroundColor: theme.colors.primary + "15",
+                              ? getIntensityColor(opt) + "20"
+                              : theme.colors.background,
+                          borderWidth: 1,
                         },
                       ]}
                       onPress={() => setTempIntensity(opt)}
@@ -1390,9 +1628,10 @@ export default function Planner() {
                         style={{
                           color:
                             tempIntensity === opt
-                              ? theme.colors.primary
+                              ? getIntensityColor(opt)
                               : theme.colors.text.secondary,
-                          fontWeight: tempIntensity === opt ? "600" : "400",
+                          fontWeight: tempIntensity === opt ? "400" : "300",
+                          fontSize: 13,
                         }}
                       >
                         {opt}
@@ -1418,13 +1657,12 @@ export default function Planner() {
                       style={[
                         styles.intensityOption,
                         {
-                          borderColor:
+                          borderColor: getSessionLengthColor(opt.val),
+                          backgroundColor:
                             tempSessionLength === opt.val
-                              ? theme.colors.primary
-                              : theme.colors.border,
-                        },
-                        tempSessionLength === opt.val && {
-                          backgroundColor: theme.colors.primary + "15",
+                              ? getSessionLengthColor(opt.val) + "20"
+                              : theme.colors.background,
+                          borderWidth: 1,
                         },
                       ]}
                       onPress={() => setTempSessionLength(opt.val)}
@@ -1433,10 +1671,11 @@ export default function Planner() {
                         style={{
                           color:
                             tempSessionLength === opt.val
-                              ? theme.colors.primary
+                              ? getSessionLengthColor(opt.val)
                               : theme.colors.text.secondary,
                           fontWeight:
-                            tempSessionLength === opt.val ? "600" : "400",
+                            tempSessionLength === opt.val ? "700" : "500",
+                          fontSize: 13,
                         }}
                       >
                         {opt.label}
@@ -1445,10 +1684,68 @@ export default function Planner() {
                   ))}
                 </View>
 
-                <View style={[styles.modalButtons, { marginTop: 30 }]}>
+                <Text style={[styles.inputLabel, { marginTop: 15 }]}>
+                  Instructions (optional)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { minHeight: 70, textAlignVertical: "top" },
+                    aiUserNote.length >= 200 && {
+                      borderColor: theme.colors.error,
+                    },
+                  ]}
+                  placeholder="e.g., Focus more on math..."
+                  placeholderTextColor={theme.colors.text.secondary}
+                  value={aiUserNote}
+                  onChangeText={(text) => {
+                    if (text.length >= 200 && aiUserNote.length < 200) {
+                      showAlert({
+                        title: "Note length limit",
+                        message:
+                          "The custom AI note is limited to 200 characters.",
+                        iconPath: ICONS.ERROR,
+                        iconColor: theme.colors.error,
+                      });
+                    }
+                    setAiUserNote(text.slice(0, 200));
+                  }}
+                  multiline
+                  maxLength={200}
+                />
+
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontFamily: theme.fonts.regular,
+                    color: theme.colors.text.secondary,
+                    textAlign: "center",
+                    marginTop: 15,
+                    fontStyle: "italic",
+                    opacity: 0.7,
+                  }}
+                >
+                  Tip: fine-tune your energy pattern and subject priorities in{" "}
+                  <TouchableOpacity onPress={() => router.push("/settings")}>
+                    <Text
+                      style={{
+                        color: theme.colors.primary,
+                        fontSize: 12,
+                        marginTop: 9.8,
+                      }}
+                    >
+                      Settings
+                    </Text>
+                  </TouchableOpacity>
+                </Text>
+
+                <View style={[styles.modalButtons, { marginTop: 20 }]}>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => setRegenerateModalVisible(false)}
+                    onPress={() => {
+                      setRegenerateModalVisible(false);
+                      setAiUserNote("");
+                    }}
                   >
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>

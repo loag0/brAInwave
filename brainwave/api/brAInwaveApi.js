@@ -79,6 +79,38 @@ class BrAInwaveAPI {
     }
   }
 
+  async uploadAssignment(userId, fileUri, fileName, fileType) {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: fileUri,
+      name: fileName || "assignment.pdf",
+      type: fileType || "application/pdf",
+    });
+
+    try {
+      const response = await axios({
+        method: "post",
+        url: `${API_BASE_URL}/upload-assignment`,
+        params: { user_id: userId },
+        data: formData,
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "ngrok-skip-browser-warning": "true",
+          Accept: "application/json",
+        },
+        transformRequest: (data) => {
+          return data;
+        },
+      });
+      return response.data;
+    } catch (error) {
+      if (error.response) {
+        console.log("Assignment Upload Error:", error.response.data);
+      }
+      throw error;
+    }
+  }
+
   // Backend now expects /{user_id}/{planId}
   async getStudyPlan(userId, planId) {
     try {
@@ -108,6 +140,46 @@ class BrAInwaveAPI {
       throw new Error(
         error.response?.data?.detail || "failed to fetch daily plans",
       );
+    }
+  }
+
+  async listTimetables(userId) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/timetables/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to list timetables: ${error.message}`);
+    }
+  }
+
+  async getAssignment(userId, assignmentId) {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/assignment/${userId}/${assignmentId}`,
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to get assignment: ${error.message}`);
+    }
+  }
+
+  async listAssignments(userId) {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/assignments/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to list assignments: ${error.message}`);
+    }
+  }
+
+  async deleteAssignment(userId, assignmentId) {
+    try {
+      const response = await axios.delete(
+        `${API_BASE_URL}/assignment/${userId}/${assignmentId}`,
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to delete assignment: ${error.message}`);
     }
   }
 
@@ -141,26 +213,31 @@ class BrAInwaveAPI {
    * @param {Array} customTasks
    */
 
-  async generateDailyPlan(userId, date, preferences, customTasks = []) {
+  async generateDailyPlan(
+    userId,
+    date,
+    preferences,
+    customTasks = [],
+    userNote,
+  ) {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/generate-plan`,
-        {
-          user_id: userId,
-          date: date,
+      const body = {
+        user_id: userId,
+        date: date,
 
-          isMorningPerson: preferences.isMorningPerson,
-          preferredSessionLength: preferences.preferredSessionLength,
-          mode: preferences.mode,
-          subjectPriorities: preferences.subjectPriorities,
-          customTasks: customTasks,
-        },
-        {
-          headers: { "Content-Type": "application/json" },
-          "ngrok-skip-browser-warning": true,
-          timeout: 45000,
-        },
-      );
+        isMorningPerson: preferences.isMorningPerson,
+        preferredSessionLength: preferences.preferredSessionLength,
+        mode: preferences.mode,
+        subjectPriorities: preferences.subjectPriorities,
+        customTasks: customTasks,
+      };
+      if (userNote) body.userNote = userNote;
+
+      const response = await axios.post(`${API_BASE_URL}/generate-plan`, body, {
+        headers: { "Content-Type": "application/json" },
+        "ngrok-skip-browser-warning": true,
+        timeout: 45000,
+      });
       return response.data;
     } catch (error) {
       console.error(

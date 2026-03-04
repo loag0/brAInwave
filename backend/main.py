@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import firestore, credentials
-from database import SessionLocal, StudyMaterial, Timetable, init_db
+from database import SessionLocal, StudyMaterial, Timetable, Assignment, init_db
 from dotenv import load_dotenv
 import os
 import json
@@ -85,6 +85,7 @@ class PlanRequest(BaseModel):
     # Tasks
     classes: Optional[List[ClassItem]] = None
     customTasks: Optional[List[CustomTask]] = None
+    userNote: Optional[str] = None
 
 # --- Routes ---
 
@@ -146,6 +147,131 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
     except Exception as e:
         print(f"Syllabus error: {e}") # Log this so you can see it in your terminal
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/upload-assignment")
+async def processAssignment(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        fileName = unquote(file.filename or "Uploaded_assignment")
+        content = await file.read()
+        mime_type = file.content_type or "application/pdf"
+        
+        # 1. Extract metadata
+        meta_prompt = """
+        Analyze this assignment document and extract the following information in JSON format:
+        - title: A descriptive title for the assignment.
+        - subject: The academic subject (e.g., Computer Science, History).
+        - due_date: The deadline in YYYY-MM-DD format. If not found, use a date 7 days from now.
+        - priority: One of 'low', 'medium', or 'high' based on the complexity or weight described.
+        """
+        
+        meta_response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            contents=[
+                types.Part.from_text(text=meta_prompt),
+                types.Part.from_bytes(data=content, mime_type=mime_type)
+            ]
+        )
+        
+        if not meta_response.text:
+            raise HTTPException(status_code=500, detail="Failed to extract assignment metadata")
+        
+        meta_data = json.loads(meta_response.text)
+        
+        # 2. Generate Master Plan (Markdown)
+        guide_prompt = """
+        You are brAInwave, a specialized academic consultant. Create a comprehensive 'Master Plan' study guide for this specific assignment. 
+        The plan must be in beautiful Markdown format and include:
+        - Assignment Overview: What needs to be done.
+        - Strategic Checklist: Step-by-step actionable tasks to complete the assignment.
+        - Research & Resources: What theories, books, or data sources might be helpful.
+        - Structural Guide: How to structure the final output (e.g., Intro, Body, Conclusion).
+        - Pro Tips: Advice on avoiding common pitfalls or maximizing marks.
+        
+        Make it encouraging and professional.
+        """
+        
+        guide_response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=[
+                types.Part.from_text(text=guide_prompt),
+                types.Part.from_bytes(data=content, mime_type=mime_type)
+            ]
+        )
+        
+        master_plan = guide_response.text
+        
+        # 3. Save to SQL
+        new_assignment = Assignment(
+            user_id=user_id,
+            title=meta_data.get("title", "Unknown Assignment"),
+            subject=meta_data.get("subject", "General"),
+            due_date=meta_data.get("due_date"),
+            priority=meta_data.get("priority", "medium"),
+            rawContent=master_plan,
+            file_uri=fileName,
+            file_type=mime_type
+        )
+        db.add(new_assignment)
+        db.commit()
+        db.refresh(new_assignment)
+        
+        # 4. Sync to Firestore
+        doc_ref = fs_db.collection("users").document(user_id).collection("data").document("assignments")
+        doc_ref.set({
+            "assignment_list": ArrayUnion([{
+                "id": new_assignment.id,
+                "title": new_assignment.title,
+                "subject": new_assignment.subject,
+                "due_date": new_assignment.due_date,
+                "priority": new_assignment.priority,
+                "rawContent": master_plan,
+                "timestamp": datetime.now(timezone.utc)
+            }])
+        }, merge=True)
+        
+        # 5. Return with rawContent for immediate frontend use
+        meta_data["rawContent"] = master_plan
+        return {"status": "success", "id": new_assignment.id, "assignment": meta_data}
+
+    except Exception as e:
+        print(f"Assignment upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/assignments/{user_id}")
+async def listAssignments(user_id: str, db: Session = Depends(get_db)):
+    assignments = db.query(Assignment).filter(Assignment.user_id == user_id).order_by(Assignment.due_date.asc()).all()
+    return {"assignments": assignments}
+
+@app.get("/assignment/{user_id}/{assignment_id}")
+async def getAssignment(user_id: str, assignment_id: int, db: Session = Depends(get_db)):
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id, Assignment.user_id == user_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+    return assignment
+
+@app.delete("/assignment/{user_id}/{assignment_id}")
+async def deleteAssignment(user_id: str, assignment_id: int, db: Session = Depends(get_db)):
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id, Assignment.user_id == user_id).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+    
+    # Remove from Firestore
+    doc_ref = fs_db.collection("users").document(user_id).collection("data").document("assignments")
+    doc_data = doc_ref.get()
+    
+    if doc_data.exists:
+        data_dict = doc_data.to_dict()
+        assign_list = data_dict.get("assignment_list", [])
+        # Filter out the deleted assignment
+        updated_list = [a for a in assign_list if a.get("id") != assignment_id]
+        doc_ref.set({"assignment_list": updated_list}, merge=True)
+    
+    # Remove from SQL
+    db.delete(assignment)
+    db.commit()
+    
+    return {"status": "success", "message": "Assignment deleted successfully"}
     
 @app.post("/upload-timetable")
 async def uploadTimetable(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -258,7 +384,8 @@ async def generateDailyPlan(request: PlanRequest):
             date=request.date, 
             dayOfWeek=dayOfWeekName.capitalize(), 
             prefs=prefs, 
-            customTasks=customTaskList
+            customTasks=customTaskList,
+            userNote=request.userNote
         )
         
         # 5. Save the generated plan back to Firestore
@@ -274,7 +401,7 @@ async def generateDailyPlan(request: PlanRequest):
         print(f"Error generating plan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
-async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTasks=None):
+async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTasks=None, userNote=None):
     customContext = json.dumps(customTasks) if customTasks else "None"
     
     lengthMap = {"short": "25-45", "medium": "45-75", "long": "90-120"}
@@ -282,6 +409,10 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
     
     priorityList = prefs.get('subjectPriorities', [])
     priorityContext = ", ".join(priorityList) if priorityList else "Balanced"
+
+    userInstruction = ""
+    if userNote and userNote.strip():
+        userInstruction = f"\n\n--- USER'S ADDITIONAL INSTRUCTIONS ---\n{userNote.strip()[:200]}\nTreat this as a high-priority preference when building the schedule."
         
     prompt = f"""
         You are brAInwave, a professional AI Study Architect. Your goal is to build a high-performance daily schedule tailored to a student's specific cognitive profile and academic load.
@@ -298,6 +429,7 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
         - Weekly Classes: {json.dumps(classes)}
         - Pending Assignments: {json.dumps(assignments)}
         - USER'S FIXED CUSTOM TASKS: {customContext}
+        {userInstruction}
         
         --- ARCHITECTURAL INSTRUCTIONS ---
         1. CLASS FILTERING: Only include classes from 'Weekly Classes' that occur on {dayOfWeek}.
