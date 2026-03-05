@@ -68,6 +68,15 @@ export const LocalDB = {
         is_dirty INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS flashcards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        material_id INTEGER,
+        question TEXT,
+        answer TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
   },
 
@@ -162,7 +171,7 @@ export const LocalDB = {
     type?: string,
   ) => {
     const result = db.runSync(
-      `INSERT INTO study_materials (user_id, title, rawContent, uri, type, is_dirty) VALUES (?, ?, ?, ?, ?, 1)`,
+      `INSERT INTO study_materials (user_id, title, rawContent, file_uri, file_type, is_dirty) VALUES (?, ?, ?, ?, ?, 1)`,
       [userId, title, rawContent, uri || null, type || null],
     );
     return result.lastInsertRowId;
@@ -463,5 +472,40 @@ export const LocalDB = {
       `DELETE FROM assignments WHERE user_id = ? AND (id = ? OR remote_id = ?)`,
       [userId, id, id],
     );
+  },
+
+  // FLASHCARDS
+  getFlashcards: (userId: string, materialId: string | number) => {
+    return db.getAllSync(
+      `SELECT * FROM flashcards WHERE user_id = ? AND material_id = ? ORDER BY id ASC`,
+      [userId, materialId],
+    );
+  },
+
+  saveFlashcards: (
+    userId: string,
+    materialId: string | number,
+    cards: any[],
+  ) => {
+    // 1. Delete existing flashcards for this material to avoid duplicates
+    db.runSync(`DELETE FROM flashcards WHERE user_id = ? AND material_id = ?`, [
+      userId,
+      materialId,
+    ]);
+
+    // 2. Insert new cards
+    for (const card of cards) {
+      db.runSync(
+        `INSERT INTO flashcards (user_id, material_id, question, answer) VALUES (?, ?, ?, ?)`,
+        [userId, materialId, card.question, card.answer],
+      );
+    }
+  },
+
+  deleteFlashcards: (userId: string, materialId: string | number) => {
+    db.runSync(`DELETE FROM flashcards WHERE user_id = ? AND material_id = ?`, [
+      userId,
+      materialId,
+    ]);
   },
 };

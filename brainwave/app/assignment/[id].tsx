@@ -19,6 +19,7 @@ import { LocalDB } from "../database/localDb";
 import { ExportIcon } from "@/components/Icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { File, Paths } from "expo-file-system";
 
 export default function AssignmentDetail() {
   const { id } = useLocalSearchParams();
@@ -180,10 +181,18 @@ export default function AssignmentDetail() {
     `;
 
       const { uri: printUri } = await Print.printToFileAsync({ html });
+      const fileName = `${data.title.replace(/\s+/g, "_")}.pdf`;
+      const tempFile = new File(printUri);
+      const targetFile = new File(Paths.cache, fileName);
+      
+      if (targetFile.exists) {
+        await targetFile.delete();
+      }
+      await tempFile.move(targetFile);
       const tempAction = async () => {
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
-          await Sharing.shareAsync(printUri);
+          await Sharing.shareAsync(targetFile.uri);
         }
       };
       await tempAction();

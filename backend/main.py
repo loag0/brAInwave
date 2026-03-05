@@ -8,12 +8,12 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import firestore, credentials
-from database import SessionLocal, StudyMaterial, Timetable, Assignment, init_db
-from dotenv import load_dotenv
 import os
 import json
 from typing import List, Optional
 from urllib.parse import unquote
+from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashcard, init_db
+from dotenv import load_dotenv
 
 # 1. Setup environment and Database
 load_dotenv()
@@ -59,6 +59,13 @@ class StudyMaterialSync(BaseModel):
     rawContent: str
     aiPlan: str
 
+class FlashcardBase(BaseModel):
+    question: str
+    answer: str
+
+class FlashcardList(BaseModel):
+    flashcards: List[FlashcardBase]
+
 class TimetableSync(BaseModel):
     title: str
     structuredData: dict
@@ -91,6 +98,11 @@ class PlanRequest(BaseModel):
 
 @app.post("/upload-syllabus")
 async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Analyzes a syllabus PDF/image and generates a study plan using Gemini.
+    Saves to local SQL and syncs to Firestore 'materials' collection.
+    Called by: handleUploadSyllabus in (tabs)/index.tsx
+    """
     try:
         fileName = unquote(file.filename or "Uploaded_syllabus")
         cleanTitle = fileName.rsplit('.', 1)[0].replace('_', ' ')
@@ -150,6 +162,11 @@ async def processSyllabus(user_id: str, file: UploadFile = File(...), db: Sessio
     
 @app.post("/upload-assignment")
 async def processAssignment(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Extracts metadata from an assignment PDF and generates a master study plan.
+    Saves to local SQL and syncs to Firestore 'assignments' collection.
+    Called by: handleUploadAssignment in (tabs)/index.tsx
+    """
     try:
         fileName = unquote(file.filename or "Uploaded_assignment")
         content = await file.read()
@@ -240,11 +257,19 @@ async def processAssignment(user_id: str, file: UploadFile = File(...), db: Sess
 
 @app.get("/assignments/{user_id}")
 async def listAssignments(user_id: str, db: Session = Depends(get_db)):
+    """
+    Lists all assignments for a user, ordered by due date.
+    Called by: useContent hook (frontend)
+    """
     assignments = db.query(Assignment).filter(Assignment.user_id == user_id).order_by(Assignment.due_date.asc()).all()
     return {"assignments": assignments}
 
 @app.get("/assignment/{user_id}/{assignment_id}")
 async def getAssignment(user_id: str, assignment_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches details for a specific assignment.
+    Called by: brAInwaveApi.getAssignment (frontend)
+    """
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id, Assignment.user_id == user_id).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found.")
@@ -252,6 +277,10 @@ async def getAssignment(user_id: str, assignment_id: int, db: Session = Depends(
 
 @app.delete("/assignment/{user_id}/{assignment_id}")
 async def deleteAssignment(user_id: str, assignment_id: int, db: Session = Depends(get_db)):
+    """
+    Deletes an assignment from both local SQL and Firestore.
+    Called by: brAInwaveApi.deleteAssignment (frontend)
+    """
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id, Assignment.user_id == user_id).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found.")
@@ -275,6 +304,11 @@ async def deleteAssignment(user_id: str, assignment_id: int, db: Session = Depen
     
 @app.post("/upload-timetable")
 async def uploadTimetable(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Parses a timetable PDF to extract a weekly class template.
+    Saves to local SQL and syncs to Firestore 'timetable' document.
+    Called by: upload (useTimetableUpload) in (tabs)/index.tsx
+    """
     content = await file.read()
     prompt = """
         You are brAInwave, a smart study planning assistant for college students.
@@ -282,7 +316,11 @@ async def uploadTimetable(user_id: str, file: UploadFile = File(...), db: Sessio
         Return a JSON object with a key 'weekly_template'.
         'weekly_template' must be an object where keys are 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'.
         Each day contains a list of classes with: 'subject', 'time', 'room'.
-        If a day has no classes, return an empty list for that day
+        
+        CRITICAL INSTRUCTIONS:
+        1. Extract the 'time' exactly as it appears in the document (e.g., "10:00 - 11:00"). 
+        2. Do NOT adjust the time for timezones or any other reason. 
+        3. If a day has no classes, return an empty list for that day.
     """
     
     response = client.models.generate_content(
@@ -318,6 +356,48 @@ async def uploadTimetable(user_id: str, file: UploadFile = File(...), db: Sessio
     
     return {"user_id": user_id, "weekly_template": weeklyTemplate}
 
+@app.get("/timetables/{user_id}")
+async def listTimetables(user_id: str, db: Session = Depends(get_db)):
+    """
+    Fetches all timetables for a specific user.
+    Called by: useContent hook (frontend)
+    """
+    timetables = db.query(Timetable).filter(Timetable.user_id == user_id).order_by(Timetable.created_at.desc()).all()
+    # Parse structuredData string back to dict
+    result = []
+    for t in timetables:
+        result.append({
+            "id": t.id,
+            "user_id": t.user_id,
+            "title": t.title,
+            "structuredData": json.loads(str(t.structuredData)),
+            "created_at": t.created_at
+        })
+    return {"timetables": result}
+
+@app.delete("/timetable/{user_id}/{timetable_id}")
+async def deleteTimetable(user_id: str, timetable_id: int, db: Session = Depends(get_db)):
+    """
+    Deletes a timetable from both local database and Firestore.
+    Called by: brAInwaveApi.deleteTimetable (frontend)
+    """
+    timetable = db.query(Timetable).filter(Timetable.id == timetable_id, Timetable.user_id == user_id).first()
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable not found.")
+    
+    # Optional: If we want to clear the 'active' timetable in Firestore
+    # For now, we'll just remove the local record. 
+    # If the user has multiple, they might want to revert to an older one.
+    
+    db.delete(timetable)
+    db.commit()
+    
+    # We also check if this was the 'current' one in Firestore (though Firestore implementation is simple right now)
+    # docRef = fs_db.collection("users").document(user_id).collection("data").document("timetable")
+    # docRef.delete() # This might be destructive if they have other tables.
+    
+    return {"status": "success", "message": "Timetable deleted successfully"}
+
 @app.post("/timetables")
 async def syncTimetable(user_id: str, data: TimetableSync, db: Session = Depends(get_db)):
     newTimetable = Timetable(
@@ -338,6 +418,9 @@ async def syncTimetable(user_id: str, data: TimetableSync, db: Session = Depends
 
 @app.post("/study-materials")
 async def syncStudyMaterials(data: StudyMaterialSync, db: Session = Depends(get_db)):
+    """
+    Called by useContent hook to sync local dirty records to SQL and Firestore.
+    """
     material = StudyMaterial(
         user_id=data.user_id,
         title=data.title,
@@ -348,10 +431,27 @@ async def syncStudyMaterials(data: StudyMaterialSync, db: Session = Depends(get_
     db.add(material)
     db.commit()
     db.refresh(material)
+
+    # Sync to Firebase Firestore
+    doc_ref = fs_db.collection("users").document(data.user_id).collection("data").document("materials")
+    doc_ref.set({
+        "syllabus_list": ArrayUnion([{
+            "id": material.id,
+            "title": material.title,
+            "aiPlan": material.aiPlan,
+            "timestamp": datetime.now(timezone.utc)
+        }])
+    }, merge=True)
+
     return {"id": material.id, "status": "synced"}
 
 @app.post("/generate-plan")
 async def generateDailyPlan(request: PlanRequest):
+    """
+    Uses Gemini to generate a personalized daily study schedule.
+    Saves the result to Firestore 'plans' collection.
+    Called by: useContent.generatePlanForDate (frontend)
+    """
     try:
         # 1. Fetch data from Firestore
         userDataRef = fs_db.collection("users").document(request.user_id).collection("data").document("timetable")
@@ -476,6 +576,10 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
 
 @app.get("/daily-plans/{user_id}")
 async def listDailyPlans(user_id: str):
+    """
+    Fetches all generated daily plans for a user from Firestore.
+    Called by: useContent hook (frontend)
+    """
     plansRef = fs_db.collection("users").document(user_id).collection("plans")
     docs = plansRef.stream()
     
@@ -491,6 +595,10 @@ async def listDailyPlans(user_id: str):
 
 @app.get("/study-plan/{user_id}/{material_id}")
 async def getStudyMaterial(user_id: str, material_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches a specific study material/plan from local SQL.
+    Called by: brAInwaveApi.getStudyPlan (frontend)
+    """
     material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user_id).first()
     if not material:
         raise HTTPException(status_code=404, detail="Study plan not found.")
@@ -514,12 +622,111 @@ async def getDailyPlan(user_id: str, date: str):
 
 @app.delete("/study-plan/{user_id}/{material_id}")
 async def deleteStudyMaterial(user_id: str, material_id: int, db: Session = Depends(get_db)):
+    """
+    Deletes a study material from both local SQL and Firestore.
+    Called by: brAInwaveApi.deleteStudyPlan (frontend)
+    """
     material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user_id).first()
     if not material:
         raise HTTPException(status_code=404, detail="Study plan not found.")
+    
+    # Remove from Firestore
+    doc_ref = fs_db.collection("users").document(user_id).collection("data").document("materials")
+    doc_data = doc_ref.get()
+    
+    if doc_data.exists:
+        data_dict = doc_data.to_dict()
+        mat_list = data_dict.get("syllabus_list", [])
+        updated_list = [m for m in mat_list if m.get("id") != material_id]
+        doc_ref.set({"syllabus_list": updated_list}, merge=True)
+
     db.delete(material)
     db.commit()
     return {"status": "success"}
+
+@app.post("/generate-flashcards")
+async def generateFlashcards(user_id: str, material_id: int, db: Session = Depends(get_db)):
+    try:
+        # 1. Fetch material content
+        material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user_id).first()
+        if not material:
+            raise HTTPException(status_code=404, detail="Material not found")
+        
+        prompt = f"""
+        You are brAInwave, a study assistant. Analyze the following study material and generate a set of effective flashcards for active recall.
+        
+        MATERIAL TITLE: {material.title}
+        CONTENT:
+        {material.aiPlan}
+        
+        INSTRUCTIONS:
+        1. Generate a minimum of 5 and maximum of 15 flashcards.
+        2. Each flashcard must have a 'question' and an 'answer'.
+        3. Make questions concise and focused on one concept.
+        4. Make answers clear and informative.
+        5. Return the result in JSON format with a key 'flashcards' containing an array of objects.
+        """
+        
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            contents=[prompt]
+        )
+        
+        if not response.text:
+            raise HTTPException(status_code=500, detail="Failed to generate flashcards")
+        
+        flashcardData = json.loads(response.text)
+        cards = flashcardData.get("flashcards", [])
+        
+        # 2. Cleanup existing flashcards for this material to prevent duplication in SQL
+        db.query(Flashcard).filter(Flashcard.material_id == material_id, Flashcard.user_id == user_id).delete()
+        
+        # 3. Save new cards to local DB
+        saved_cards = []
+        for card in cards:
+            new_card = Flashcard(
+                user_id=user_id,
+                material_id=material_id,
+                question=card['question'],
+                answer=card['answer']
+            )
+            db.add(new_card)
+            saved_cards.append(new_card)
+        
+        db.commit()
+        
+        # 4. Sync to Firestore
+        doc_ref = fs_db.collection("users").document(user_id).collection("data").document(f"flashcards_{material_id}")
+        doc_ref.set({
+            "id": material_id, # Use 'id' to match syllabus_list naming convention
+            "flashcards": cards,
+            "timestamp": datetime.now(timezone.utc)
+        }, merge=True)
+        
+        return {"status": "success", "flashcards": saved_cards}
+        
+    except Exception as e:
+        print(f"Flashcard generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/flashcards/{user_id}/{material_id}")
+async def getFlashcards(user_id: str, material_id: int, db: Session = Depends(get_db)):
+    """
+    Fetches flashcards for a specific material.
+    Checks local SQL first, then Firestore as a fallback.
+    """
+    cards = db.query(Flashcard).filter(Flashcard.user_id == user_id, Flashcard.material_id == material_id).all()
+    
+    if not cards:
+        # Check Firestore fallback
+        doc_ref = fs_db.collection("users").document(user_id).collection("data").document(f"flashcards_{material_id}")
+        doc = doc_ref.get()
+        if doc.exists:
+            # We return the simple list from Firestore
+            return {"status": "success", "flashcards": doc.to_dict().get("flashcards", [])}
+            
+    return {"status": "success", "flashcards": cards}
 
 @app.delete("/daily-plan/{user_id}/{date}/{task_id}")
 async def deleteDailyTask(user_id: str, date: str, task_id: str):

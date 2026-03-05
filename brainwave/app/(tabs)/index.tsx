@@ -553,7 +553,10 @@ export default function Home() {
                               { color: getPriorityColor(a.priority) },
                             ]}
                           >
-                            Due {a.due_date}
+                            Due{" "}
+                            {a.due_date
+                              ? a.due_date.split("-").reverse().join("/")
+                              : "N/A"}
                           </Text>
                         </View>
                         <ChevronRightIcon

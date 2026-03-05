@@ -6,6 +6,9 @@ import {
   ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
+  Text,
+  Modal,
+  FlatList,
 } from "react-native";
 import { useLocalSearchParams, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -28,6 +31,10 @@ export default function MaterialDetail() {
     null,
   );
   const [loading, setLoading] = useState(true);
+  const [flashcards, setFlashcards] = useState<any[]>([]);
+  const [showFlashcards, setShowFlashcards] = useState(false);
+  const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
+  const [remoteId, setRemoteId] = useState<string | number | null>(null);
 
   const getSyllabus = useCallback(async () => {
     if (!user?.id || !id) return;
@@ -45,11 +52,34 @@ export default function MaterialDetail() {
         return;
       }
 
-      const remoteId = localData?.remote_id || id;
-      const response = await brAInwaveApi.getStudyPlan(user.id, remoteId);
+      const rId = localData?.remote_id || id;
+      setRemoteId(rId as string);
+
+      const response = await brAInwaveApi.getStudyPlan(user.id, rId);
 
       if (response) {
         setData(response);
+      }
+
+      // Fetch flashcards
+      let localCards = await LocalDB.getFlashcards(user.id, id as string);
+      if (localCards && localCards.length > 0) {
+        setFlashcards(localCards);
+      } else {
+        // Try fetching from API if not found locally
+        const apiResponse = await brAInwaveApi.getFlashcards(user.id, rId);
+        if (
+          apiResponse &&
+          apiResponse.flashcards &&
+          apiResponse.flashcards.length > 0
+        ) {
+          setFlashcards(apiResponse.flashcards);
+          await LocalDB.saveFlashcards(
+            user.id,
+            id as string,
+            apiResponse.flashcards,
+          );
+        }
       }
     } catch (e) {
       console.error("Error fetching study plan:", e);
@@ -57,6 +87,30 @@ export default function MaterialDetail() {
       setLoading(false);
     }
   }, [id, user?.id]);
+
+  const handleGenerateFlashcards = async () => {
+    if (!user?.id || !id) return;
+    setGeneratingFlashcards(true);
+    const targetId = remoteId || id;
+    try {
+      const response = await brAInwaveApi.generateFlashcards(
+        user.id,
+        targetId as string,
+      );
+      if (response && response.flashcards) {
+        setFlashcards(response.flashcards);
+        await LocalDB.saveFlashcards(
+          user.id,
+          id as string, // Still save locally under the local ID for consistency with retrieval
+          response.flashcards,
+        );
+      }
+    } catch (e) {
+      console.error("Error generating flashcards:", e);
+    } finally {
+      setGeneratingFlashcards(false);
+    }
+  };
 
   useEffect(() => {
     getSyllabus();
@@ -217,8 +271,146 @@ export default function MaterialDetail() {
           >
             {data?.aiPlan || "No content found for this syllabus."}
           </Markdown>
+
+          <View style={styles.flashcardContainer}>
+            <View style={styles.flashcardInfo}>
+              <Text
+                style={[
+                  styles.flashcardStatusText,
+                  { color: theme.colors.text.secondary },
+                ]}
+              >
+                {flashcards.length > 0
+                  ? `Continuous learning: ${flashcards.length} flashcards available.`
+                  : "No flashcards generated yet. Generate some to start active recall!"}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.buttonGroup,
+                flashcards.length === 0 && { flexDirection: "column" },
+              ]}
+            >
+              {flashcards.length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                  onPress={() => setShowFlashcards(true)}
+                >
+                  <Text style={styles.buttonText}>View Flashcards</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  flashcards.length === 0 && { width: "100%", marginTop: 10 },
+                  {
+                    backgroundColor: theme.colors.background,
+                    borderWidth: 1,
+                    borderColor: theme.colors.primary,
+                  },
+                ]}
+                onPress={handleGenerateFlashcards}
+                disabled={generatingFlashcards}
+              >
+                {generatingFlashcards ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.primary}
+                  />
+                ) : (
+                  <Text
+                    style={[styles.buttonText, { color: theme.colors.primary }]}
+                  >
+                    {flashcards.length > 0
+                      ? "Regenerate"
+                      : "Generate Flashcards"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       )}
+
+      <Modal
+        visible={showFlashcards}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFlashcards(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.background },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: theme.colors.text.primary },
+                ]}
+              >
+                Flashcards
+              </Text>
+              <TouchableOpacity onPress={() => setShowFlashcards(false)}>
+                <Text
+                  style={{ color: theme.colors.primary, fontWeight: "bold" }}
+                >
+                  Close
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={flashcards}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.cardContainer,
+                    {
+                      backgroundColor: isDark ? "#1e1e1e" : "#f9f9f9",
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.questionText,
+                      { color: theme.colors.text.primary },
+                    ]}
+                  >
+                    Q: {item.question}
+                  </Text>
+                  <View
+                    style={{
+                      height: 1,
+                      backgroundColor: theme.colors.border,
+                      marginVertical: 10,
+                    }}
+                  />
+                  <Text
+                    style={[
+                      styles.answerText,
+                      { color: theme.colors.text.secondary },
+                    ]}
+                  >
+                    A: {item.answer}
+                  </Text>
+                </View>
+              )}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -244,4 +436,69 @@ const styles = StyleSheet.create({
   },
   container: { padding: 20, paddingBottom: 50 },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 5,
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  flashcardContainer: {
+    marginTop: 30,
+    padding: 15,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.02)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+  flashcardInfo: {
+    marginBottom: 15,
+    alignItems: "center",
+  },
+  flashcardStatusText: {
+    fontSize: 14,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalContent: {
+    height: "80%",
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  cardContainer: {
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+  },
+  questionText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    lineHeight: 22,
+  },
+  answerText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
 });
