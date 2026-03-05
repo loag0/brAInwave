@@ -49,5 +49,15 @@ class Assignment(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_deleted = Column(Integer, default=0)
 
+class Flashcard(Base):
+    __tablename__ = "flashcards"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    material_id = Column(Integer, index=True)
+    question = Column(Text)
+    answer = Column(Text)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 def init_db():
     Base.metadata.create_all(bind=engine)
