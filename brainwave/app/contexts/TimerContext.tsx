@@ -37,7 +37,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (totalSecsLeft <= 0) {
       setIsRunning(false);
-      setMinutes(0);
+      setMinutes(Math.floor(totalSeconds / 60));
       setSeconds(0);
       expectedEndTimeRef.current = null;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

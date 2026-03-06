@@ -66,10 +66,28 @@ export const StarIcon: React.FC<IconProps> = ({ size, color }) => (
   </Svg>
 );
 
+export const NotificationSettingsIcon: React.FC<IconProps> = ({ color, size }) => (
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="M480-489Zm0 409q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM160-200v-80h80v-280q0-84 50.5-149T422-793q-10 22-15.5 46t-7.5 49q-35 21-57 57t-22 81v280h320v-122q20 3 40 3t40-3v122h80v80H160Zm480-280-12-60q-12-5-22.5-10.5T584-564l-58 18-40-68 46-40q-2-13-2-26t2-26l-46-40 40-68 58 18q11-8 21.5-13.5T628-820l12-60h80l12 60q12 5 22.5 10.5T776-796l58-18 40 68-46 40q2 13 2 26t-2 26l46 40-40 68-58-18q-11 8-21.5 13.5T732-540l-12 60h-80Zm96.5-143.5Q760-647 760-680t-23.5-56.5Q713-760 680-760t-56.5 23.5Q600-713 600-680t23.5 56.5Q647-600 680-600t56.5-23.5Z"
+      fill={color}
+    />
+  </Svg>
+);
+
 export const NotificationIcon: React.FC<IconProps> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
     <Path
       d="M160-200v-80h80v-280q0-83 50-147.5T420-792v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 20 130 84.5T720-560v280h80v80H160Zm320-300Zm0 420q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM320-280h320v-280q0-66-47-113t-113-47q-66 0-113 47t-47 113v280Z"
+      fill={color}
+    />
+  </Svg>
+);
+
+export const NotificationActiveIcon: React.FC<IconProps> = ({ color, size }) => (
+  <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
+    <Path
+      d="M80-560q0-100 44.5-183.5T244-882l47 64q-60 44-95.5 111T160-560H80Zm720 0q0-80-35.5-147T669-818l47-64q75 55 119.5 138.5T880-560h-80ZM160-200v-80h80v-280q0-83 50-147.5T420-792v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 20 130 84.5T720-560v280h80v80H160Zm320-300Zm0 420q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM320-280h320v-280q0-66-47-113t-113-47q-66 0-113 47t-47 113v280Z"
       fill={color}
     />
   </Svg>
