@@ -534,43 +534,25 @@ export default function Planner() {
 
   // Offline fallback: if we don't have a Firestore plan yet, try LocalDB via useContent
   useEffect(() => {
-    if (!user?.id) return;
-    if (planItems.length > 0) return;
+    if (!user?.id || !planItems.length) return;
+  // Only schedule notifications for today's plan
+    const todayId = weekDays[0].id;
+    if (selectedDay !== todayId) return;
 
-    const localPlan = plans.find(
-      (p) => p.date === selectedDay || p.id === selectedDay,
-    );
+  // Only schedule if the user has notifications enabled
+    if (!user?.studyPreferences?.notifications?.studyReminders) return;
 
-    if (localPlan?.tasks?.length) {
-      setPlanItems(sortTasksByTime(localPlan.tasks));
-      setLoading(false);
-      return;
-    }
+    const leadMinutes = user?.studyPreferences?.notificationLeadMinutes ?? 10;
 
-    // If no cached plan, fall back to timetable template
-    const dateObj = new Date(selectedDay);
-    const dayName = dateObj
-      .toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })
-      .toLowerCase();
-
-    const templateClasses = weeklyTemplate?.[dayName] || [];
-
-    if (templateClasses.length) {
-      const formattedItems = templateClasses.map((cls: any, index: number) => ({
-        id: `temp-offline-${index}`,
-        time: cls.time,
-        subject: cls.subject,
-        task: "Class Lecture",
-        duration: "1 hour",
-        completed: false,
-        difficulty: "unset",
-        isTemplate: true,
-      }));
-
-      setPlanItems(sortTasksByTime(formattedItems));
-      setLoading(false);
-    }
-  }, [user?.id, selectedDay, plans, weeklyTemplate, planItems.length]);
+    scheduleDailyNotifications(planItems, leadMinutes);
+  }, [
+    planItems,
+    selectedDay,
+    weekDays,
+    user?.id,
+    user?.studyPreferences?.notifications?.studyReminders,
+    user?.studyPreferences?.notificationLeadMinutes,
+  ]);
 
   // Schedule notifications when plan items change for today
   useEffect(() => {

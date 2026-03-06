@@ -350,7 +350,8 @@ export default function Library() {
 
                   return days.map((day, idx) => {
                     const mins = activityMap.get(idx) || 0;
-                    const height = Math.min(100, (mins / 300) * 100); // 5h max height
+                    //reduced the max height for demonstration properties
+                    const height = Math.min(100, (mins / 20) * 100); // 5h max height
                     return (
                       <View key={day} style={styles.chartBar}>
                         <View style={styles.chartBarContainer}>

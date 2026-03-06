@@ -132,6 +132,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       studyPreferences: {
         ...user.studyPreferences,
         ...updates.studyPreferences,
+        ...(updates.studyPreferences?.notifications && {
+          notifications: {
+            ...user.studyPreferences?.notifications,
+            ...updates.studyPreferences.notifications,
+          },
+        }),
       },
     };
     setUser(updatedUser);
@@ -139,12 +145,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     // 2. PERSIST TO SQLITE IMMEDIATELY
     LocalDB.saveUser(updatedUser);
 
-    // 3. BACKGROUND SYNC TO FIRESTORE (No 'await', no 'loading' spinner)
+    // 3. BACKGROUND SYNC TO FIRESTORE
     try {
       const userRef = doc(firestore, "users", user.id);
-      updateDoc(userRef, updates);
+      const flatUpdates: Record<string, any> = {};
+
+      if (updates.studyPreferences) {
+        Object.entries(updates.studyPreferences).forEach(([key, value]) => {
+          if (key === "notifications" && typeof value === "object" && value !== null) {
+            // Go one level deeper for notifications
+            Object.entries(value).forEach(([nKey, nValue]) => {
+              flatUpdates[`studyPreferences.notifications.${nKey}`] = nValue;
+            });
+          } else {
+            flatUpdates[`studyPreferences.${key}`] = value;
+          }
+        });
+      }
+
+      // for top level fields like name or email
+      Object.entries(updates).forEach(([key, value]) => {
+        if (key !== "studyPreferences") {
+          flatUpdates[key] = value;
+        }
+      });
+
+      updateDoc(userRef, flatUpdates);
     } catch (error) {
-      console.error("Sync failed: queued for later reconnection", error);
+      console.error("Sync failed:", error);
     }
   };
 

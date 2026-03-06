@@ -1,14 +1,46 @@
 import * as Notifications from "expo-notifications";
+import { Linking } from "react-native";
 
-export function parseStartDate(item: any) {
+// Notification Handler - taken from _layout.tsx
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+export async function getNotificationPermissionStatus(): Promise<
+  "granted" | "denied" | "undetermined"
+> {
+  const { status } = await Notifications.getPermissionsAsync();
+  return status as "granted" | "denied" | "undetermined";
+}
+
+//Requests notification permission from the OS.
+export async function ensureNotificationPermission(): Promise<boolean> {
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  if (existingStatus === "granted") return true;
+  if (existingStatus === "denied") return false; // Can't prompt again on iOS
+
+  const { status } = await Notifications.requestPermissionsAsync();
+  return status === "granted";
+}
+
+// Opens the device's app settings page so the user can manually enable notifications
+export function openAppSettings(): void {
+  Linking.openSettings();
+}
+
+export function parseStartDate(item: any, referenceDate?: Date): Date | null {
   const raw = item.time || item.start;
   if (!raw) return null;
-
   const startTimeStr = raw.split("-")[0].trim();
-  const now = new Date();
+  const base = referenceDate || new Date();
 
   try {
-    // Matches HH:mm, H:mm, HH:mm AM/PM, etc.
     const timeMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
     if (!timeMatch) return null;
 
@@ -22,9 +54,9 @@ export function parseStartDate(item: any) {
     }
 
     const target = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
+      base.getFullYear(),
+      base.getMonth(),
+      base.getDate(),
       hours,
       minutes || 0,
       0,
@@ -38,17 +70,19 @@ export function parseStartDate(item: any) {
 }
 
 export function parseDurationMinutes(durationStr?: string): number {
-  if (!durationStr) return 60; // Default 1 hour
+  if (!durationStr) return 60;
   const match = durationStr.match(/(\d+)/);
   if (!match) return 60;
   const val = parseInt(match[1]);
-  if (durationStr.toLowerCase().includes("hour")) return val * 60;
+  const lower = durationStr.toLowerCase();
+  if (lower.includes("hour")) return val * 60;
+  if (lower.includes("min")) return val;
   return val;
 }
 
 export function formatTimeTo24h(timeStr: string): string {
   if (!timeStr) return "";
-  // Check if it's a range like "09:00 - 10:00"
+
   if (timeStr.includes("-")) {
     return timeStr
       .split("-")
@@ -71,19 +105,32 @@ export function formatTimeTo24h(timeStr: string): string {
   return `${String(hours).padStart(2, "0")}:${minutes}`;
 }
 
-export async function ensureNotificationPermission() {
-  const { status } = await Notifications.getPermissionsAsync();
-  if (status !== "granted") {
-    const res = await Notifications.requestPermissionsAsync();
-    return res.status === "granted";
-  }
-  return true;
+const DAY_NAME_TO_INDEX: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+function getNextOccurrence(dayName: string, now: Date): Date {
+  const targetDay = DAY_NAME_TO_INDEX[dayName.toLowerCase()];
+  if (targetDay === undefined) return now;
+
+  const result = new Date(now);
+  const currentDay = now.getDay();
+  let daysAhead = targetDay - currentDay;
+  if (daysAhead < 0) daysAhead += 7;
+  result.setDate(now.getDate() + daysAhead);
+  return result;
 }
 
 export async function scheduleDailyNotifications(
   schedule: any[],
   leadMinutes: number,
-) {
+): Promise<void> {
   if (!schedule?.length) return;
 
   await Notifications.cancelAllScheduledNotificationsAsync();
@@ -91,47 +138,53 @@ export async function scheduleDailyNotifications(
   const now = new Date();
 
   for (const item of schedule) {
-    const startDate = parseStartDate(item);
+    const referenceDate = item.day
+      ? getNextOccurrence(item.day, now)
+      : new Date(now);
+
+    const startDate = parseStartDate(item, referenceDate);
     if (!startDate) continue;
 
     const triggerTime = new Date(startDate.getTime() - leadMinutes * 60 * 1000);
 
-    // Only schedule if it's in the future
-    if (triggerTime > now) {
-      const taskName = item.task || item.subject || "Next activity";
+    const effectiveTrigger =
+      triggerTime <= now && item.day
+        ? new Date(triggerTime.getTime() + 7 * 24 * 60 * 60 * 1000)
+        : triggerTime;
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Upcoming activity",
-          body: `${taskName} starts in ${leadMinutes} minutes`,
-          sound: true,
-          data: { taskId: item.id },
-        },
-        trigger: {
-          type: "date",
-          date: triggerTime,
-        } as Notifications.DateTriggerInput,
-      });
-    }
+    if (effectiveTrigger <= now) continue;
+
+    const taskName = item.task || item.subject || "Next activity";
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Upcoming activity",
+        body: `${taskName} starts in ${leadMinutes} minutes`,
+        sound: true,
+        data: { taskId: item.id },
+      },
+      trigger: {
+        type: "date",
+        date: effectiveTrigger,
+      } as Notifications.DateTriggerInput,
+    });
   }
 }
 
 export async function scheduleNextClassNotification(
   classItem: any,
   leadMinutes: number,
-) {
+): Promise<void> {
   if (!classItem) return;
   await scheduleDailyNotifications([classItem], leadMinutes);
 }
 
-export function sortTasksByTime(tasks: any[]) {
+export function sortTasksByTime(tasks: any[]): any[] {
   return [...tasks].sort((a, b) => {
     const timeA = parseStartDate(a);
     const timeB = parseStartDate(b);
-
     if (!timeA) return 1;
     if (!timeB) return -1;
-
     return timeA.getTime() - timeB.getTime();
   });
 }

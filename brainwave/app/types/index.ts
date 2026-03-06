@@ -9,15 +9,16 @@ export interface User {
     preferredSessionLength?: "short" | "medium" | "long";
     mode?: "stay_consistent" | "exam_prep" | "catch_up";
     subjectPriorities?: string[];
-    notificationLeadMinutes: number;
-    notifications?: {
-      studyReminders: true;
-      assignmentDeadlines: true;
-      goalAchievements: true;
-      dailySummary: false;
-    };
+    notificationLeadMinutes?: number;
+    notifications?: NotificationPreferences
   };
   hasFinishedSetup: boolean;
+}
+export interface NotificationPreferences {
+  studyReminders: boolean;
+  assignmentDeadlines: boolean;
+  goalAchievements: boolean;
+  dailySummary: boolean;
 }
 
 export interface AuthContextType {

@@ -23,7 +23,7 @@ import {
   StopIcon,
   PauseIcon,
   PlayIcon,
-  ICONS
+  ICONS,
 } from "@/components/Icons";
 import { useNavigation, useRouter } from "expo-router";
 import { ensureNotificationPermission } from "@/utils/notifications";
@@ -46,9 +46,10 @@ export default function FocusScreen() {
   const { showAlert } = useAlert();
   const router = useRouter();
   const navigation = useNavigation();
-  const [isPickerVisible, setPickerVisible] = useState(false);
+  const [isPickerVisible, setPickerVisible] = useState(false);        // preset chips modal
+  const [isTimePickerVisible, setTimePickerVisible] = useState(false); // drum scroll modal
   const [customDurations, setCustomDurations] = useState<number[]>([]);
-  const [isTimePickerVisible, setTimePickerVisible] = useState(false);
+  const [pressedDuration, setPressedDuration] = useState<number | null>(null);
   const [notificationId, setNotificationId] = useState<string | null>(null);
 
   const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -75,7 +76,6 @@ export default function FocusScreen() {
   useEffect(() => {
     const parent = navigation.getParent()?.getParent();
     if (!parent) return;
-
     parent.setOptions({
       tabBarStyle: isRunning
         ? { display: "none" }
@@ -92,7 +92,6 @@ export default function FocusScreen() {
 
   useEffect(() => {
     const progress = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
-
     Animated.timing(progressAnim, {
       toValue: progress,
       duration: 900,
@@ -105,22 +104,23 @@ export default function FocusScreen() {
     outputRange: [CIRCLE_LENGTH, 0],
   });
 
-  const handlePreset = async (mins: number) => {
+  const handlePreset = (mins: number) => {
     const safeMins = Math.min(Math.max(mins, 1), 180);
-    setDuration(safeMins);
-    setPickerVisible(false);
-    setTimePickerVisible(false);
+    setPressedDuration(mins);
+    setTimeout(() => {
+      setPressedDuration(null);
+      setDuration(safeMins);
+      setPickerVisible(false);
+    }, 200);
   };
 
   const toggleTimer = async () => {
     try {
       if (!isRunning) {
-        const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 0) return;
+        const totalSecs = minutes * 60 + seconds;
+        if (totalSecs <= 0) return;
 
-        // Check/request permissions
         const hasPermission = await ensureNotificationPermission();
-
         if (hasPermission) {
           const id = await Notifications.scheduleNotificationAsync({
             content: {
@@ -130,7 +130,7 @@ export default function FocusScreen() {
             },
             trigger: {
               type: SchedulableTriggerInputTypes.TIME_INTERVAL,
-              seconds: totalSeconds,
+              seconds: totalSecs,
             },
           });
           setNotificationId(id);
@@ -144,21 +144,17 @@ export default function FocusScreen() {
         }
 
         if (remainingSeconds === totalSeconds) {
-          // Starting a fresh session
           startSession(minutes);
         } else {
-          // Resuming a paused session
           setIsRunning(true);
         }
       } else {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
         if (notificationId) {
           await Notifications.cancelScheduledNotificationAsync(notificationId);
           setNotificationId(null);
         }
         setIsRunning(false);
-        // Don't reset the timer here - just pause it
       }
     } catch (e) {
       console.error("Notification error", e);
@@ -199,9 +195,7 @@ export default function FocusScreen() {
   };
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Minimize */}
       {isRunning && (
         <TouchableOpacity style={styles.minimizeBtn} onPress={handleMinimize}>
@@ -209,7 +203,7 @@ export default function FocusScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Timer */}
+      {/* Timer circle */}
       <TouchableOpacity
         disabled={isRunning}
         onPress={() => setPickerVisible(true)}
@@ -237,11 +231,8 @@ export default function FocusScreen() {
             transform="rotate(-90 175 175)"
           />
         </Svg>
-
         <View style={styles.timeLabelContainer}>
-          <Text
-            style={[styles.timerText, { color: theme.colors.text.primary }]}
-          >
+          <Text style={[styles.timerText, { color: theme.colors.text.primary }]}>
             {String(minutes).padStart(2, "0")}:
             {String(seconds).padStart(2, "0")}
           </Text>
@@ -249,9 +240,7 @@ export default function FocusScreen() {
             <Text style={{ color: theme.colors.primary }}>Tap to set time</Text>
           )}
           {isRunning && (
-            <Text style={{ color: theme.colors.primary }}>
-              Stay locked in twin
-            </Text>
+            <Text style={{ color: theme.colors.primary }}>Stay locked in twin</Text>
           )}
         </View>
       </TouchableOpacity>
@@ -269,18 +258,14 @@ export default function FocusScreen() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[
-                styles.mainBtn,
-                { backgroundColor: theme.colors.primary },
-              ]}
+              style={[styles.mainBtn, { backgroundColor: theme.colors.primary }]}
               onPress={toggleTimer}
             >
               <Text style={styles.mainBtnText}>Focus</Text>
             </TouchableOpacity>
           )}
 
-          {(isRunning ||
-            (remainingSeconds < totalSeconds && remainingSeconds > 0)) && (
+          {(isRunning || (remainingSeconds < totalSeconds && remainingSeconds > 0)) && (
             <TouchableOpacity onPress={handleStop} style={styles.stopBtn}>
               <StopIcon size={44} color={theme.colors.primary} />
             </TouchableOpacity>
@@ -288,74 +273,113 @@ export default function FocusScreen() {
         </View>
       </View>
 
-      {/* Picker */}
-      <Modal visible={isPickerVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.colors.surface },
-            ]}
-          >
-            <Text
-              style={[styles.modalTitle, { color: theme.colors.text.primary }]}
-            >
+      {/* Preset chips modal — tap circle to open */}
+      <Modal visible={isPickerVisible} transparent animationType="none">
+        <Animated.View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setPickerVisible(false)}
+            activeOpacity={1}
+          />
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>
               Set Duration
+            </Text>
+            <Text style={[styles.modalHint, { color: theme.colors.text.secondary }]}>
+              Hold to remove custom
             </Text>
 
             <View style={styles.presetRow}>
-              {[15, 25, 45, ...customDurations].map((m) => (
-                <TouchableOpacity
-                  key={m}
-                  style={styles.presetBtn}
-                  onPress={() => handlePreset(m)}
-                  onLongPress={() => {
-                    if (customDurations.includes(m)) {
-                      setCustomDurations((prev) => prev.filter((x) => x !== m));
-                      Toast.show({
-                        type: "info",
-                        text1: `${m}mins, removed`,
-                        position: "bottom",
-                      });
-                    }
-                  }}
-                >
-                  <Text style={styles.presetText}>{m}m</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              {[15, 25, 45, ...customDurations].map((m) => {
+                const isCustom = ![15, 25, 45].includes(m);
+                return (
+                  <TouchableOpacity
+                    key={m}
+                    style={[
+                      styles.presetBtn,
+                      {
+                        backgroundColor: pressedDuration === m
+                          ? theme.colors.primary
+                          : isDark
+                            ? "rgba(255,255,255,0.07)"
+                            : "rgba(0,0,0,0.05)",
+                        borderWidth: isCustom ? 1 : 0,
+                        borderColor: theme.colors.primary + "50",
+                      },
+                    ]}
+                    onPress={() => handlePreset(m)}
+                    onLongPress={() => {
+                      if (customDurations.includes(m)) {
+                        setCustomDurations((prev) => prev.filter((x) => x !== m));
+                        Toast.show({
+                          type: "info",
+                          text1: `${m}m removed`,
+                          position: "bottom",
+                        });
+                      }
+                    }}
+                    delayLongPress={500}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.presetText, { color: pressedDuration === m ? "#fff" : theme.colors.text.primary }]}>
+                      {m}m
+                    </Text>
+                    {isCustom && (
+                      <View style={[styles.customDot, { backgroundColor: theme.colors.primary }]} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
 
-            <View style={styles.customRow}>
+              {/* + closes preset modal, opens drum scroll */}
               <TouchableOpacity
-                style={styles.addBtn}
-                onPress={() => setTimePickerVisible(true)}
+                style={[
+                  styles.presetBtn,
+                  styles.addBtn,
+                  {
+                    borderColor: theme.colors.primary + "60",
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.04)"
+                      : "rgba(0,0,0,0.03)",
+                  },
+                ]}
+                onPress={() => {
+                  setPickerVisible(false);
+                  setTimePickerVisible(true);
+                }}
+                activeOpacity={0.7}
               >
-                <Text style={{ color: "#fff", fontSize: 28 }}>+</Text>
+                <Text style={[styles.addBtnText, { color: theme.colors.primary }]}>＋</Text>
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={() => setPickerVisible(false)}>
-              <Text style={{ marginTop: 20, color: theme.colors.error }}>
-                Cancel
-              </Text>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setPickerVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.cancelText, { color: theme.colors.error }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </Modal>
 
+      {/* Drum scroll — for adding a new custom duration */}
       <MinutePicker
         visible={isTimePickerVisible}
-        onClose={() => setTimePickerVisible(false)}
+        onClose={() => {
+          setTimePickerVisible(false);
+          setPickerVisible(true);
+        }}
         onConfirm={(mins) => {
-          if (customDurations.includes(mins)) {
-            Toast.show({
-              type: "error",
-              text1: "Duration already added!",
-              position: "bottom",
-            });
-            return;
+          const safeMins = Math.min(Math.max(mins, 1), 180);
+          if (!customDurations.includes(safeMins)) {
+            setCustomDurations((prev) => [...prev, safeMins].sort((a, b) => a - b));
+          } else {
+            Toast.show({ type: "error", text1: "Duration already added!", position: "bottom" });
           }
-          setCustomDurations((prev) => [...prev, mins].sort((a, b) => a - b));
+          setTimePickerVisible(false);
+          setPickerVisible(true);
         }}
         theme={theme}
         initial={25}
@@ -413,60 +437,80 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       left: 15,
       padding: 10,
     },
+    stopBtn: {
+      padding: 10,
+    },
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "center",
-      alignItems: "center",
+      justifyContent: "flex-end",
+      paddingBottom: 30,
+      paddingHorizontal: 16,
     },
     modalContent: {
-      width: "80%",
-      padding: 30,
-      borderRadius: 20,
-      alignItems: "center",
-    },
-    presetRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 15,
-      marginVertical: 20,
-    },
-    presetText: {
-      fontWeight: "600",
-      color: theme.colors.secondary,
-    },
-    presetBtn: {
-      paddingHorizontal: 52,
-      paddingVertical: 7,
-      backgroundColor: theme.colors.primary,
-      borderRadius: 12,
-    },
-    customRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
-    input: {
-      borderWidth: 1,
-      padding: 10,
-      borderRadius: 10,
-      width: 100,
-      textAlign: "center",
-    },
-    addBtn: {
-      backgroundColor: theme.colors.primary,
-      width: 45,
-      height: 45,
-      borderRadius: 22.5,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    stopBtn: {
-      padding: 10,
+      borderRadius: 26,
+      paddingTop: 28,
+      paddingBottom: 20,
+      paddingHorizontal: 22,
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 24,
+      elevation: 20,
     },
     modalTitle: {
       fontSize: 20,
       fontWeight: "700",
-      marginBottom: 20,
+      letterSpacing: -0.4,
+      marginBottom: 4,
+    },
+    modalHint: {
+      fontSize: 12,
+      opacity: 0.55,
+      marginBottom: 22,
+    },
+    presetRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      marginBottom: 24,
+    },
+    presetBtn: {
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      position: "relative",
+      minWidth: 70,
+    },
+    presetText: {
+      fontSize: 15,
+      fontWeight: "500",
+      letterSpacing: 0.2,
+    },
+    customDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      position: "absolute",
+      top: 6,
+      right: 6,
+    },
+    addBtn: {
+      borderWidth: 1.5,
+      borderStyle: "dashed",
+    },
+    addBtnText: {
+      fontSize: 20,
+      fontWeight: "300",
+      lineHeight: 22,
+    },
+    cancelBtn: {
+      alignItems: "center",
+      paddingVertical: 10,
+    },
+    cancelText: {
+      fontSize: 15,
+      fontWeight: "500",
     },
   });

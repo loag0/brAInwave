@@ -49,6 +49,7 @@ export default function OnboardingScreen() {
           mode,
           isMorningPerson: true,
           preferredSessionLength: sessionLength,
+          notificationLeadMinutes: 10,
         },
         updatedAt: new Date().toISOString(),
       };

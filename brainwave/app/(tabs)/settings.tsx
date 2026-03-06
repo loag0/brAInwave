@@ -21,7 +21,9 @@ import {
   FireIcon,
   SunIcon,
   StarIcon,
+  NotificationSettingsIcon,
   NotificationIcon,
+  NotificationActiveIcon,
   ChevronDownIcon,
   BookIcon,
   EnvelopeIcon,
@@ -30,6 +32,11 @@ import {
   SettingsIcon,
   LogoutIcon,
 } from "@/components/Icons";
+import {
+  ensureNotificationPermission,
+  openAppSettings,
+  getNotificationPermissionStatus,
+} from "@/utils/notifications";
 
 interface IconProps {
   color: string;
@@ -48,6 +55,10 @@ export default function Settings() {
   const [isUpdatingSession, setIsUpdatingSession] = useState(false);
   const [isModeExpanded, setIsModeExpanded] = useState(false);
   const [isUpdatingMode, setIsUpdatingMode] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    user?.studyPreferences?.notifications?.studyReminders ?? false,
+  );
+  const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
 
   const MoonIcon: React.FC<IconProps> = ({ color, size }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
@@ -81,31 +92,93 @@ export default function Settings() {
     return (parts[0][0] + parts[parts.length - 1][0]).toLowerCase();
   };
 
-  const handleFocusUpdate = async (value: boolean) => {
-    if(!user || user.studyPreferences.isMorningPerson === value) return;
+  const handleNotificationToggle = async (value: boolean) => {
+    if (!user) return;
+    setIsTogglingNotifications(true);
+    setNotificationsEnabled(value);
 
+    const status = await getNotificationPermissionStatus();
+    console.log("Device permission status:", status); // ← add this
+    console.log("Trying to set notifications to:", value);
+
+    try {
+      if (value) {
+        const granted = await ensureNotificationPermission();
+
+        if (!granted) {
+          setNotificationsEnabled(false); // revert — denied or blocked
+          showAlert({
+            title: "Notifications Blocked",
+            message:
+              "brAInwave doesn't have permission to send notifications. Enable it in your phone settings.",
+            confirmText: "Open Settings",
+            showCancel: true,
+            onConfirm: () => openAppSettings(),
+          });
+          return;
+        }
+
+        // Permission granted — save to user preferences
+        await updateProfileData({
+          studyPreferences: {
+            ...user.studyPreferences,
+            notifications: {
+              studyReminders: true,
+              assignmentDeadlines: true,
+              goalAchievements: true,
+              dailySummary: false,
+              ...user.studyPreferences.notifications,
+            },
+          },
+        });
+
+        console.log("Saved to Firestore:", user.studyPreferences.notifications);
+      } else {
+        // Turning OFF — no permission check needed
+        await updateProfileData({
+          studyPreferences: {
+            ...user.studyPreferences,
+            notifications: {
+              ...user.studyPreferences.notifications,
+              studyReminders: false,
+              assignmentDeadlines: false,
+              goalAchievements: false,
+              dailySummary: false,
+            },
+          },
+        });
+      }
+    } catch (e) {
+      console.error("Failed to update notification preference:", e);
+      setNotificationsEnabled(!value); // revert on unexpected error
+    } finally {
+      setTimeout(() => setIsTogglingNotifications(false), 500);
+    }
+  };
+
+  const handleFocusUpdate = async (value: boolean) => {
+    if (!user || user.studyPreferences.isMorningPerson === value) return;
     setIsUpdatingFocus(true);
-    try{
-      const updatedPreferences = {
-        ...user.studyPreferences,
-        isMorningPerson: value,
-      };
-      await updateProfileData({ studyPreferences: updatedPreferences });
+    try {
+      await updateProfileData({
+        studyPreferences: { ...user.studyPreferences, isMorningPerson: value },
+      });
     } finally {
       setTimeout(() => setIsUpdatingFocus(false), 500);
     }
   };
 
   const handleSessionUpdate = async (length: "short" | "medium" | "long") => {
-    if(!user || user.studyPreferences.preferredSessionLength === length) return;
-
+    if (!user || user.studyPreferences.preferredSessionLength === length)
+      return;
     setIsUpdatingSession(true);
-    try{
-      const updatedPreferences = {
-        ...user.studyPreferences,
-        preferredSessionLength: length
-      };
-      await updateProfileData({ studyPreferences: updatedPreferences });
+    try {
+      await updateProfileData({
+        studyPreferences: {
+          ...user.studyPreferences,
+          preferredSessionLength: length,
+        },
+      });
     } finally {
       setTimeout(() => setIsUpdatingSession(false), 500);
     }
@@ -116,13 +189,10 @@ export default function Settings() {
   ) => {
     if (!user?.id) return;
     setIsUpdatingMode(true);
-
     try {
-      const updatedPreferences = {
-        ...user.studyPreferences,
-        mode: mode,
-      };
-      await updateProfileData({ studyPreferences: updatedPreferences });
+      await updateProfileData({
+        studyPreferences: { ...user.studyPreferences, mode },
+      });
     } finally {
       setTimeout(() => setIsUpdatingMode(false), 500);
     }
@@ -145,7 +215,7 @@ export default function Settings() {
         </View>
 
         <View style={styles.content}>
-          {/* Settings Card */}
+          {/* Profile Card */}
           <TouchableOpacity
             style={styles.card}
             onPress={() => router.push("/(account)/profile")}
@@ -166,85 +236,134 @@ export default function Settings() {
           {/* Notifications Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <NotificationIcon color={theme.colors.text.primary} size={22} />
+              <NotificationSettingsIcon color={theme.colors.text.primary} size={22} />
               <Text style={styles.cardTitle}>Notifications</Text>
             </View>
             <View style={styles.cardContent}>
-              <View style={styles.accordionContainer}>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() =>
-                    setIsNotificationExpanded(!isNotificationExpanded)
-                  }
-                >
-                  <View style={styles.menuItemLeft}>
-                    <NotificationIcon
-                      color={theme.colors.text.secondary}
-                      size={18}
-                    />
-                    <View style={styles.menuItemText}>
-                      <Text style={styles.menuItemTitle}>
-                        Class Notification
-                      </Text>
-                      <Text style={styles.menuItemSubtitle}>
-                        Notify me{" "}
-                        {user?.studyPreferences.notificationLeadMinutes} minutes
-                        before class
-                      </Text>
-                    </View>
-                  </View>
-                  <View
-                    style={{
-                      transform: [
-                        { rotate: isNotificationExpanded ? "180deg" : "0deg" },
-                      ],
-                    }}
-                  >
-                    <ChevronDownIcon
-                      color={theme.colors.text.secondary}
-                      size={24}
-                    />
-                  </View>
-                </TouchableOpacity>
-
-                {isNotificationExpanded && (
-                  <View style={styles.expandedContent}>
-                    <Text style={styles.helperText}>
-                      Choose when to get notified before your next class:
+              {/* Enable / Disable Toggle */}
+              <View style={styles.darkModeContainer}>
+                <View style={styles.menuItemLeft}>
+                  <NotificationIcon
+                    color={theme.colors.text.secondary}
+                    size={18}
+                  />
+                  <View style={styles.menuItemText}>
+                    <Text style={styles.menuItemTitle}>
+                      Enable Notifications
                     </Text>
-                    <View style={styles.segmentedControl}>
-                      {[5, 10, 15, 30].map((min) => (
-                        <TouchableOpacity
-                          key={min}
-                          style={[
-                            styles.segment,
-                            user?.studyPreferences.notificationLeadMinutes ===
-                              min && styles.segmentActive,
-                          ]}
-                          onPress={() =>
-                            updateProfileData({
-                              studyPreferences: {
-                                ...user?.studyPreferences,
-                                notificationLeadMinutes: min,
-                              },
-                            })
-                          }
-                        >
-                          <Text
-                            style={[
-                              styles.segmentText,
-                              user?.studyPreferences.notificationLeadMinutes ===
-                                min && styles.segmentTextActive,
-                            ]}
-                          >
-                            {min} min
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                    <Text style={styles.menuItemSubtitle}>
+                      {notificationsEnabled
+                        ? "Reminders are on"
+                        : "Tap to turn on reminders"}
+                    </Text>
                   </View>
+                </View>
+                {isTogglingNotifications ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.primary}
+                  />
+                ) : (
+                  <Switch
+                    value={notificationsEnabled}
+                    onValueChange={handleNotificationToggle}
+                    trackColor={{
+                      false: theme.colors.border,
+                      true: theme.colors.primary,
+                    }}
+                    thumbColor={notificationsEnabled ? "#fff" : "#f4f3f4"}
+                  />
                 )}
               </View>
+
+              {/* Lead Time — only shown when notifications are on */}
+              {notificationsEnabled && (
+                <>
+                  <Separator theme={theme} />
+                  <View style={styles.accordionContainer}>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() =>
+                        setIsNotificationExpanded(!isNotificationExpanded)
+                      }
+                    >
+                      <View style={styles.menuItemLeft}>
+                        <NotificationActiveIcon
+                          color={theme.colors.text.secondary}
+                          size={18}
+                        />
+                        <View style={styles.menuItemText}>
+                          <Text style={styles.menuItemTitle}>
+                            Notification Timing
+                          </Text>
+                          <Text style={styles.menuItemSubtitle}>
+                            Notify me{" "}
+                            {user?.studyPreferences.notificationLeadMinutes ??
+                              10}{" "}
+                            minutes before
+                          </Text>
+                        </View>
+                      </View>
+                      <View
+                        style={{
+                          transform: [
+                            {
+                              rotate: isNotificationExpanded
+                                ? "180deg"
+                                : "0deg",
+                            },
+                          ],
+                        }}
+                      >
+                        <ChevronDownIcon
+                          color={theme.colors.text.secondary}
+                          size={24}
+                        />
+                      </View>
+                    </TouchableOpacity>
+
+                    {isNotificationExpanded && (
+                      <View style={styles.expandedContent}>
+                        <Text style={styles.helperText}>
+                          Choose when to get notified before your next class:
+                        </Text>
+                        <View style={styles.segmentedControl}>
+                          {[5, 10, 15, 30].map((min) => (
+                            <TouchableOpacity
+                              key={min}
+                              style={[
+                                styles.segment,
+                                (user?.studyPreferences
+                                  .notificationLeadMinutes ?? 10) === min &&
+                                  styles.segmentActive,
+                              ]}
+                              onPress={() =>
+                                updateProfileData({
+                                  studyPreferences: {
+                                    ...user?.studyPreferences,
+                                    notificationLeadMinutes: min,
+                                  },
+                                })
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.segmentText,
+                                  (user?.studyPreferences
+                                    .notificationLeadMinutes ?? 10) === min &&
+                                    styles.segmentTextActive,
+                                ]}
+                              >
+                                {min} min
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
             </View>
           </View>
 
@@ -256,7 +375,7 @@ export default function Settings() {
             </View>
 
             <View style={styles.cardContent}>
-              {/* 1. Focus Window Accordion */}
+              {/* Peak Focus Window */}
               <View style={styles.accordionContainer}>
                 <TouchableOpacity
                   style={styles.menuItem}
@@ -281,7 +400,6 @@ export default function Settings() {
                       </Text>
                     </View>
                   </View>
-                  {/* Toggleable Chevron */}
                   <View
                     style={{
                       transform: [
@@ -358,7 +476,7 @@ export default function Settings() {
 
               <Separator theme={theme} />
 
-              {/* 2. Session Length Accordion */}
+              {/* Session Length */}
               <View style={styles.accordionContainer}>
                 <TouchableOpacity
                   style={styles.menuItem}
@@ -443,7 +561,7 @@ export default function Settings() {
 
               <Separator theme={theme} />
 
-              {/* 4. Study Mode Accordion */}
+              {/* Study Mode */}
               <View style={styles.accordionContainer}>
                 <TouchableOpacity
                   style={styles.menuItem}
@@ -534,7 +652,7 @@ export default function Settings() {
 
               <Separator theme={theme} />
 
-              {/* 3. Subject Priorities - Navigates away */}
+              {/* Subject Priorities */}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => router.push("/priorities")}
@@ -627,7 +745,6 @@ export default function Settings() {
             </TouchableOpacity>
           </View>
 
-          {/* Version */}
           <Text style={styles.version}>brAInwave v1.0.0</Text>
         </View>
       </ScrollView>
@@ -635,7 +752,6 @@ export default function Settings() {
   );
 }
 
-// Separator Component
 interface SeparatorProps {
   theme: Theme;
 }
@@ -721,11 +837,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       color: theme.colors.text.primary,
       marginBottom: 4,
     },
-    profileSubtitle: {
-      fontSize: 14,
-      fontFamily: theme.fonts.regular,
-      color: theme.colors.text.secondary,
-    },
     cardHeader: {
       flexDirection: "row",
       alignItems: "center",
@@ -739,12 +850,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     },
     cardContent: {
       gap: 0,
-    },
-    settingContainer: {
-      paddingVertical: 12,
-    },
-    settingHeader: {
-      marginBottom: 12,
     },
     helperText: {
       alignSelf: "center",
@@ -768,7 +873,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     },
     segmentActive: {
       backgroundColor: isDark ? theme.colors.primary : theme.colors.surface,
-      // Add a subtle shadow for the active state
       shadowColor: "#000",
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
@@ -836,20 +940,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontFamily: theme.fonts.medium,
       color: theme.colors.text.primary,
     },
-    badge: {
-      backgroundColor: theme.colors.primary + "15",
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.colors.primary + "30",
-    },
-    badgeText: {
-      color: theme.colors.primary,
-      fontSize: 12,
-      fontWeight: "600",
-      textTransform: "uppercase",
-    },
     logoutButton: {
       marginTop: 4,
     },
@@ -873,7 +963,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       paddingTop: 4,
       backgroundColor: isDark ? theme.colors.border + "20" : "#F9F9F9",
       borderRadius: 12,
-      marginTop: -4, // Blend it with the menu item above
+      marginTop: -4,
     },
     miniLoader: {
       flexDirection: "row",
@@ -887,5 +977,4 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       color: theme.colors.text.secondary,
       fontStyle: "italic",
     },
-    // ... segmentedControl styles from previous step ...
   });
