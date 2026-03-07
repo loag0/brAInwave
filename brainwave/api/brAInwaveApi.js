@@ -20,6 +20,8 @@ axios.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+axios.defaults.timeout = 20000; // 20 seconds timeout for all requests
+
 const checkConnection = async () => {
   console.log(`Checking connection to: ${API_BASE_URL}`);
   try {
@@ -52,7 +54,10 @@ class BrAInwaveAPI {
     const response = await axios.post(
       `${API_BASE_URL}/upload-timetable`,
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000, // 60 seconds timeout for file uploads
+      },
     );
     return response.data;
   }
@@ -72,7 +77,10 @@ class BrAInwaveAPI {
     const response = await axios.post(
       `${API_BASE_URL}/upload-syllabus`,
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
+      { 
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+      },
     );
     return response.data;
   }
@@ -92,7 +100,10 @@ class BrAInwaveAPI {
     const response = await axios.post(
       `${API_BASE_URL}/upload-assignment`,
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } },
+      { 
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+      },
     );
     return response.data;
   }
@@ -198,7 +209,10 @@ class BrAInwaveAPI {
     };
     if (userNote) body.userNote = userNote;
 
-    const response = await axios.post(`${API_BASE_URL}/generate-plan`, body);
+    const response = await axios.post(
+      `${API_BASE_URL}/generate-plan`, body,
+      { timeout: 60000 } // in case ai generation takes longer
+    );
     return response.data;
   }
 
@@ -229,7 +243,10 @@ class BrAInwaveAPI {
     const response = await axios.post(
       `${API_BASE_URL}/generate-flashcards`,
       null,
-      { params: { material_id: materialId } },
+      { 
+        params: { material_id: materialId },
+        timeout: 60000,
+      },
     );
     return response.data;
   }

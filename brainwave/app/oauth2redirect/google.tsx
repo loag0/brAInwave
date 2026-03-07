@@ -1,8 +1,29 @@
+import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
+import { useRouter } from "expo-router";
 
 export default function GoogleOAuthRedirect() {
   const { theme } = useTheme();
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (user) {
+        // If user exists, redirect to the main app
+        if(!user.hasFinishedSetup){
+          router.replace("/(onboarding)");
+        } else{
+          router.replace("/(tabs)");
+        }
+      } else{
+        // If no user, redirect to login
+        router.replace("/(auth)/login");
+      }
+  }, [user, isLoading, router]);
 
   return (
     <View

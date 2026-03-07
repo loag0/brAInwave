@@ -84,37 +84,59 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, []);
 
   useEffect(() => {
+    const currentGroup = segments[0] as string | undefined;
+    if (currentGroup === "oauth2redirect") return;
+
+    const timeout = setTimeout(() => {
+      if(user){
+        if(!user.hasFinishedSetup) {
+          router.replace("/(onboarding)");
+        } else{
+          router.replace("/(tabs)");
+        }
+      } else{
+        router.replace("/(auth)/login");
+      }
+    }, 4000);
+
+    return () => clearTimeout(timeout);
+  }, [segments, user, router]);
+
+  useEffect(() => {
     if (isLoading || !fontsLoaded || hasSeenWelcome === null) return;
 
     //initializes the db tables
     LocalDB.init();
 
-    const currentGroup = segments[0];
+    const currentGroup = segments[0] as string | undefined;
     const isRedirecting = currentGroup === "oauth2redirect";
 
     if (user) {
+      if(isRedirecting) return; //while on oauth2redirect, don't redirect to avoid navigation conflicts
+
       if (!user.hasFinishedSetup) {
         // Force to onboarding
-        if (currentGroup !== "(onboarding)" && !isRedirecting) {
+        if (currentGroup !== "(onboarding)") {
           router.replace("/(onboarding)");
         }
       } else {
         if (
           currentGroup === "(auth)" ||
           currentGroup === "(onboarding)" ||
-          isRedirecting ||
           !currentGroup // Handles the root index reload
         ) {
           router.replace("/(tabs)");
         }
       }
     } else {
+      if(isRedirecting) return;
+
       if(!hasSeenWelcome){
-        AsyncStorage.setItem("hasSeenWelcome", "true");
         router.replace("/(auth)/welcome");
+        AsyncStorage.setItem("hasSeenWelcome", "true").then(() => setHasSeenWelcome(true));
       } else{
       // Not logged in: only allow (auth) and redirect
-      if (currentGroup !== "(auth)" && !isRedirecting) {
+      if (currentGroup !== "(auth)") {
         router.replace("/(auth)/login");
       }}
     }
