@@ -740,7 +740,7 @@ async def deleteDailyTask(user_id: str, date: str, task_id: str):
         items = data.get("items", [])
         
         # Filter out the task to delete
-        updated_items = [item for item in items if item.get("id") != task_id]
+        updated_items = [item for item in items if str(item.get("id")) != str(task_id)]
         
         if len(updated_items) == len(items):
             raise HTTPException(status_code=404, detail="Task not found in daily plan.")
