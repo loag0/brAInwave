@@ -192,16 +192,16 @@ export const useContent = () => {
           }
 
           const remoteMaterials = await BrainwaveAPI.listStudyPlans(user.id);
-          if (remoteMaterials?.studyPlans) {
-            LocalDB.syncMaterialsFromServer(
+          if (remoteMaterials?.plans) {
+            await LocalDB.syncMaterialsFromServer(
               user.id,
-              remoteMaterials.studyPlans,
+              remoteMaterials.plans,
             );
           }
 
           const remoteTimetables = await BrainwaveAPI.listTimetables(user.id);
           if (remoteTimetables?.timetables) {
-            LocalDB.syncTimetablesFromServer(
+            await LocalDB.syncTimetablesFromServer(
               user.id,
               remoteTimetables.timetables,
             );
@@ -209,7 +209,7 @@ export const useContent = () => {
 
           const remoteAssignments = await BrainwaveAPI.listAssignments(user.id);
           if (remoteAssignments?.assignments) {
-            LocalDB.syncAssignmentsFromServer(
+            await LocalDB.syncAssignmentsFromServer(
               user.id,
               remoteAssignments.assignments,
             );

@@ -704,7 +704,7 @@ async def generateFlashcards(user_id: str, material_id: int, db: Session = Depen
             "timestamp": datetime.now(timezone.utc)
         }, merge=True)
         
-        return {"status": "success", "flashcards": saved_cards}
+        return {"status": "success", "flashcards": cards}
         
     except Exception as e:
         print(f"Flashcard generation error: {e}")

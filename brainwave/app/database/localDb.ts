@@ -177,7 +177,7 @@ export const LocalDB = {
     return result.lastInsertRowId;
   },
 
-  syncMaterialsFromServer: (userId: string, materials: any[]) => {
+  syncMaterialsFromServer: async (userId: string, materials: any[]) => {
     const remoteIds = materials.map((m) => m.id);
     if (remoteIds.length > 0) {
       const placeholders = remoteIds.map(() => "?").join(",");
