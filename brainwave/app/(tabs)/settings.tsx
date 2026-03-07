@@ -123,11 +123,11 @@ export default function Settings() {
           studyPreferences: {
             ...user.studyPreferences,
             notifications: {
+              ...user.studyPreferences.notifications,
               studyReminders: true,
               assignmentDeadlines: true,
               goalAchievements: true,
               dailySummary: false,
-              ...user.studyPreferences.notifications,
             },
           },
         });

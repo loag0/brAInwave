@@ -554,29 +554,6 @@ export default function Planner() {
     user?.studyPreferences?.notificationLeadMinutes,
   ]);
 
-  // Schedule notifications when plan items change for today
-  useEffect(() => {
-    if (
-      !user?.id ||
-      !planItems.length ||
-      !user?.studyPreferences?.notifications?.studyReminders
-    )
-      return;
-
-    const todayId = weekDays[0].id;
-    if (selectedDay === todayId) {
-      const leadMinutes = user?.studyPreferences.notificationLeadMinutes ?? 10;
-      scheduleDailyNotifications(planItems, leadMinutes);
-    }
-  }, [
-    planItems,
-    selectedDay,
-    weekDays,
-    user?.id,
-    user?.studyPreferences?.notifications?.studyReminders,
-    user?.studyPreferences?.notificationLeadMinutes,
-  ]);
-
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case "easy":
@@ -783,6 +760,8 @@ export default function Planner() {
       showCancel: true,
       confirmText: "Delete",
       cancelText: "Keep it",
+      iconPath: ICONS.ERROR,
+      iconColor: theme.colors.error,
       onConfirm: async () => {
         // Optimistic UI update
         const updatedItems = planItems.filter(

@@ -46,7 +46,7 @@ export default function FocusScreen() {
   const { showAlert } = useAlert();
   const router = useRouter();
   const navigation = useNavigation();
-  const [isPickerVisible, setPickerVisible] = useState(false);        // preset chips modal
+  const [isPickerVisible, setPickerVisible] = useState(false); // preset chips modal
   const [isTimePickerVisible, setTimePickerVisible] = useState(false); // drum scroll modal
   const [customDurations, setCustomDurations] = useState<number[]>([]);
   const [pressedDuration, setPressedDuration] = useState<number | null>(null);
@@ -195,7 +195,9 @@ export default function FocusScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       {/* Minimize */}
       {isRunning && (
         <TouchableOpacity style={styles.minimizeBtn} onPress={handleMinimize}>
@@ -232,7 +234,9 @@ export default function FocusScreen() {
           />
         </Svg>
         <View style={styles.timeLabelContainer}>
-          <Text style={[styles.timerText, { color: theme.colors.text.primary }]}>
+          <Text
+            style={[styles.timerText, { color: theme.colors.text.primary }]}
+          >
             {String(minutes).padStart(2, "0")}:
             {String(seconds).padStart(2, "0")}
           </Text>
@@ -240,7 +244,9 @@ export default function FocusScreen() {
             <Text style={{ color: theme.colors.primary }}>Tap to set time</Text>
           )}
           {isRunning && (
-            <Text style={{ color: theme.colors.primary }}>Stay locked in twin</Text>
+            <Text style={{ color: theme.colors.primary }}>
+              Stay locked in twin
+            </Text>
           )}
         </View>
       </TouchableOpacity>
@@ -258,14 +264,18 @@ export default function FocusScreen() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.mainBtn, { backgroundColor: theme.colors.primary }]}
+              style={[
+                styles.mainBtn,
+                { backgroundColor: theme.colors.primary },
+              ]}
               onPress={toggleTimer}
             >
               <Text style={styles.mainBtnText}>Focus</Text>
             </TouchableOpacity>
           )}
 
-          {(isRunning || (remainingSeconds < totalSeconds && remainingSeconds > 0)) && (
+          {(isRunning ||
+            (remainingSeconds < totalSeconds && remainingSeconds > 0)) && (
             <TouchableOpacity onPress={handleStop} style={styles.stopBtn}>
               <StopIcon size={44} color={theme.colors.primary} />
             </TouchableOpacity>
@@ -281,11 +291,20 @@ export default function FocusScreen() {
             onPress={() => setPickerVisible(false)}
             activeOpacity={1}
           />
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text.primary }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <Text
+              style={[styles.modalTitle, { color: theme.colors.text.primary }]}
+            >
               Set Duration
             </Text>
-            <Text style={[styles.modalHint, { color: theme.colors.text.secondary }]}>
+            <Text
+              style={[styles.modalHint, { color: theme.colors.text.secondary }]}
+            >
               Hold to remove custom
             </Text>
 
@@ -298,11 +317,12 @@ export default function FocusScreen() {
                     style={[
                       styles.presetBtn,
                       {
-                        backgroundColor: pressedDuration === m
-                          ? theme.colors.primary
-                          : isDark
-                            ? "rgba(255,255,255,0.07)"
-                            : "rgba(0,0,0,0.05)",
+                        backgroundColor:
+                          pressedDuration === m
+                            ? theme.colors.primary
+                            : isDark
+                              ? "rgba(255,255,255,0.07)"
+                              : "rgba(0,0,0,0.05)",
                         borderWidth: isCustom ? 1 : 0,
                         borderColor: theme.colors.primary + "50",
                       },
@@ -310,7 +330,9 @@ export default function FocusScreen() {
                     onPress={() => handlePreset(m)}
                     onLongPress={() => {
                       if (customDurations.includes(m)) {
-                        setCustomDurations((prev) => prev.filter((x) => x !== m));
+                        setCustomDurations((prev) =>
+                          prev.filter((x) => x !== m),
+                        );
                         Toast.show({
                           type: "info",
                           text1: `${m}m removed`,
@@ -321,11 +343,26 @@ export default function FocusScreen() {
                     delayLongPress={500}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.presetText, { color: pressedDuration === m ? "#fff" : theme.colors.text.primary }]}>
+                    <Text
+                      style={[
+                        styles.presetText,
+                        {
+                          color:
+                            pressedDuration === m
+                              ? "#fff"
+                              : theme.colors.text.primary,
+                        },
+                      ]}
+                    >
                       {m}m
                     </Text>
                     {isCustom && (
-                      <View style={[styles.customDot, { backgroundColor: theme.colors.primary }]} />
+                      <View
+                        style={[
+                          styles.customDot,
+                          { backgroundColor: theme.colors.primary },
+                        ]}
+                      />
                     )}
                   </TouchableOpacity>
                 );
@@ -349,7 +386,11 @@ export default function FocusScreen() {
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.addBtnText, { color: theme.colors.primary }]}>＋</Text>
+                <Text
+                  style={[styles.addBtnText, { color: theme.colors.primary }]}
+                >
+                  ＋
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -358,7 +399,9 @@ export default function FocusScreen() {
               onPress={() => setPickerVisible(false)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.cancelText, { color: theme.colors.error }]}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: theme.colors.error }]}>
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -373,17 +416,15 @@ export default function FocusScreen() {
         }}
         onConfirm={(mins) => {
           const safeMins = Math.min(Math.max(mins, 1), 180);
-          if (!customDurations.includes(safeMins)) {
-            setCustomDurations((prev) => [...prev, safeMins].sort((a, b) => a - b));
-          } else {
-            Toast.show({ type: "error", text1: "Duration already added!", position: "bottom" });
-          }
+          setCustomDurations((prev) =>
+            [...prev, safeMins].sort((a, b) => a - b),
+          );
           setTimePickerVisible(false);
           setPickerVisible(true);
         }}
         theme={theme}
         initial={25}
-        existingDurations={customDurations}
+        existingDurations={[15, 25, 45, ...customDurations]}
       />
     </View>
   );
