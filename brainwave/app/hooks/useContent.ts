@@ -99,7 +99,7 @@ export const useContent = () => {
         }
       }
 
-      // ── TIMETABLES ─────────────────────────────────────────────────────────
+      //TIMETABLES
       for (const table of dirtyTimetables) {
         try {
           // Handle soft-deleted records
@@ -141,7 +141,7 @@ export const useContent = () => {
         }
       }
 
-      // ── ASSIGNMENTS ────────────────────────────────────────────────────────
+      //ASSIGNMENTS
       for (const ass of dirtyAssignments) {
         try {
           // Handle soft-deleted records

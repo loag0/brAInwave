@@ -9,7 +9,9 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 #DATABASE_URL = "SQLITE:///./brainwave.db"  # For local testing with SQLite
 
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL environment variable is not set.")
+    # Fallback to local SQLite for dev
+    DATABASE_URL = "sqlite:///./brainwave.db"
+    print("⚠️  No DATABASE_URL found, using local SQLite")
 
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
