@@ -9,3 +9,4 @@ firebase-admin
 PyPDF2
 python-multipart
 pydantic
+psycopg2-binary
