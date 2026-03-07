@@ -20,10 +20,19 @@ load_dotenv()
 app = FastAPI(title="brAInwave API", version="1.0.0")
 
 # Initialize Firestore
-cred = credentials.Certificate("serviceAccountKey.json")
+firebase_env = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+
+if firebase_env:
+    # Railway — load from env variable
+    cred = credentials.Certificate(json.loads(firebase_env))
+else:
+    # Local dev — load from file
+    cred = credentials.Certificate("serviceAccountKey.json")
+
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
-fs_db = firestore.client() 
+
+fs_db = firestore.client()
 
 @app.on_event("startup")
 def on_startup():
