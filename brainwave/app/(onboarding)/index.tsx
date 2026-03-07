@@ -17,6 +17,12 @@ import { db as firestore } from "../../firebaseConfig";
 type SessionLength = "short" | "medium" | "long";
 type Mode = "stay_consistent" | "exam_prep" | "catch_up";
 
+const SESSION_COLORS = {
+  short: { key: "success" },
+  medium: { key: "warning" },
+  long: { key: "error" },
+} as const;
+
 export default function OnboardingScreen() {
   const { theme, isDark } = useTheme();
   const { user, updateProfileData } = useAuth();
@@ -26,21 +32,19 @@ export default function OnboardingScreen() {
   const [sessionLength, setSessionLength] = useState<SessionLength>("medium");
   const [isSaving, setIsSaving] = useState(false);
 
-  const requestNotificationPermission = async () => {
+  const requestNotificationPermission = async (): Promise<boolean> => {
     const { status } = await Notifications.getPermissionsAsync();
-    if (status !== "granted") {
-      await Notifications.requestPermissionsAsync();
-    }
+    if (status === "granted") return true;
+    const { status: newStatus } = await Notifications.requestPermissionsAsync();
+    return newStatus === "granted";
   };
 
   const handleFinish = async () => {
     if (!user?.id) return;
-
     setIsSaving(true);
 
     try {
-      await requestNotificationPermission();
-
+      const granted = await requestNotificationPermission();
       const userRef = doc(firestore, "users", user.id);
 
       const payload = {
@@ -50,14 +54,18 @@ export default function OnboardingScreen() {
           isMorningPerson: true,
           preferredSessionLength: sessionLength,
           notificationLeadMinutes: 10,
+          notifications: {
+            studyReminders: granted,
+            assignmentDeadlines: granted,
+            goalAchievements: granted,
+            dailySummary: false,
+          },
         },
         updatedAt: new Date().toISOString(),
       };
 
       await setDoc(userRef, payload, { merge: true });
-
       updateProfileData(payload);
-
       router.replace("/(tabs)");
     } catch (err) {
       console.error("Onboarding error:", err);
@@ -73,60 +81,82 @@ export default function OnboardingScreen() {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-        Let’s set you up
+        Let's set you up
       </Text>
 
       <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
-        What’s your main goal?
+        What's your main goal?
       </Text>
 
       <View style={styles.row}>
-        <Option
-          label="Exam Prep"
-          active={mode === "exam_prep"}
-          onPress={() => setMode("exam_prep")}
-          styles={styles}
-        />
-        <Option
-          label="Stay Consistent"
-          active={mode === "stay_consistent"}
-          onPress={() => setMode("stay_consistent")}
-          styles={styles}
-        />
-        <Option
-          label="Catch Up"
-          active={mode === "catch_up"}
-          onPress={() => setMode("catch_up")}
-          styles={styles}
-        />
+        {(["exam_prep", "stay_consistent", "catch_up"] as Mode[]).map((m) => (
+          <TouchableOpacity
+            key={m}
+            onPress={() => setMode(m)}
+            style={[
+              styles.goalOption,
+              {
+                backgroundColor:
+                  mode === m
+                    ? theme.colors.primary
+                    : theme.colors.primary + "20",
+                borderColor: mode === m ? theme.colors.primary : "transparent",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.goalOptionText,
+                {
+                  color: mode === m ? "#fff" : theme.colors.primary,
+                },
+              ]}
+            >
+              {m === "exam_prep"
+                ? "Exam Prep"
+                : m === "stay_consistent"
+                  ? "Stay Consistent"
+                  : "Catch Up"}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
         Preferred study session length
       </Text>
 
-      <View style={styles.row}>
-        <Option
-          label="Short - 15–25 min"
-          active={sessionLength === "short"}
-          onPress={() => setSessionLength("short")}
-          styles={styles}
-          variant="session"
-        />
-        <Option
-          label="Medium   (30 - 45 min)"
-          active={sessionLength === "medium"}
-          onPress={() => setSessionLength("medium")}
-          styles={styles}
-          variant="session"
-        />
-        <Option
-          label="Long - 60+ min"
-          active={sessionLength === "long"}
-          onPress={() => setSessionLength("long")}
-          styles={styles}
-          variant="session"
-        />
+      <View style={{ gap: 12, marginBottom: 28 }}>
+        {(["short", "medium", "long"] as SessionLength[]).map((s) => {
+          const colorKey = SESSION_COLORS[s].key;
+          const color = theme.colors[colorKey];
+          const isActive = sessionLength === s;
+          return (
+            <TouchableOpacity
+              key={s}
+              onPress={() => setSessionLength(s)}
+              style={[
+                styles.sessionOption,
+                {
+                  backgroundColor: isActive ? color : color + "20",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.sessionOptionText,
+                  { color: isActive ? "#fff" : color },
+                ]}
+              >
+                {s === "short"
+                  ? "Short — 15–25 min"
+                  : s === "medium"
+                    ? "Medium — 30–45 min"
+                    : "Long — 60+ min"}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <TouchableOpacity
@@ -142,31 +172,9 @@ export default function OnboardingScreen() {
       </TouchableOpacity>
 
       <Text style={[styles.footnote, { color: theme.colors.text.secondary }]}>
-        Notifications help remind you when it’s study time
+        Notifications help remind you when it's study time
       </Text>
     </View>
-  );
-}
-
-function Option({
-  label,
-  active,
-  onPress,
-  styles,
-  variant = "goal",
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  styles: ReturnType<typeof createStyles>;
-  variant?: "goal" | "session";
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[styles.option, variant === "session" && styles.sessionOption, active && styles.optionActive]}>
-      <Text style={[styles.optionText, variant === "session" && styles.sessionText]}>{label}</Text>
-    </TouchableOpacity>
   );
 }
 
@@ -189,34 +197,29 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: 12,
     },
     row: {
-      justifyContent: "center",
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 10,
       marginBottom: 28,
     },
-    sessionOption: {
-      minWidth: "100%",
-      borderRadius: 14,
-      paddingVertical: 14,
-    },
-    sessionText: {
-      fontSize: 14,
-      textAlign: "center",
-    },
-    option: {
+    goalOption: {
       paddingVertical: 12,
       paddingHorizontal: 16,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: "#ccc",
     },
-    optionActive: {
-      backgroundColor: theme.colors.primary,
-      borderColor: "#000",
+    goalOptionText: {
+      fontWeight: "600",
+      fontSize: 14,
     },
-    optionText: {
-      color: "#fff",
+    sessionOption: {
+      width: "100%",
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    sessionOptionText: {
+      fontSize: 14,
       fontWeight: "600",
     },
     button: {

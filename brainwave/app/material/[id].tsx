@@ -300,7 +300,9 @@ export default function MaterialDetail() {
                   ]}
                   onPress={() => setShowFlashcards(true)}
                 >
-                  <Text style={styles.buttonText}>View Flashcards</Text>
+                  <Text style={[styles.buttonText, { color: "#fff" }]}>
+                    View Flashcards
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -461,7 +463,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   flashcardStatusText: {
-    fontSize: 14,
+    fontSize: 12,
     textAlign: "center",
     fontStyle: "italic",
   },

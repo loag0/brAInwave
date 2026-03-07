@@ -4,10 +4,8 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const checkConnection = async () => {
   console.log(`Checking connection to: ${API_BASE_URL}`);
-
   try {
     const response = await fetch(API_BASE_URL);
-
     if (response.ok) {
       console.log("Server is LIVE and reachable!");
     } else {
@@ -24,7 +22,6 @@ class BrAInwaveAPI {
   /**
    * Uploads a timetable PDF/image to the backend for parsing.
    * Matching Endpoint: POST /upload-timetable
-   * Used in: useTimetableUpload hook
    */
   async uploadTimetable(userId, fileUri, fileName, fileType) {
     const formData = new FormData();
@@ -38,10 +35,7 @@ class BrAInwaveAPI {
       `${API_BASE_URL}/upload-timetable?user_id=${userId}`,
       formData,
       {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          "ngrok-skip-browser-warning": true,
-        },
+        headers: { "Content-Type": "multipart/form-data" },
         timeout: 60000,
       },
     );
@@ -51,18 +45,14 @@ class BrAInwaveAPI {
   /**
    * Uploads a syllabus PDF/image to generate a study plan.
    * Matching Endpoint: POST /upload-syllabus
-   * Used in: Dashboard (index.tsx)
    */
   async uploadSyllabus(userId, fileUri, fileName, fileType) {
     const formData = new FormData();
-
-    const fileToUpload = {
+    formData.append("file", {
       uri: fileUri,
       name: fileName || "file.pdf",
       type: fileType || "application/pdf",
-    };
-
-    formData.append("file", fileToUpload);
+    });
 
     try {
       const response = await axios({
@@ -72,12 +62,9 @@ class BrAInwaveAPI {
         data: formData,
         headers: {
           "Content-Type": "multipart/form-data",
-          "ngrok-skip-browser-warning": "true",
           Accept: "application/json",
         },
-        transformRequest: (data) => {
-          return data;
-        },
+        transformRequest: (data) => data,
       });
       return response.data;
     } catch (error) {
@@ -91,7 +78,6 @@ class BrAInwaveAPI {
   /**
    * Uploads an assignment PDF to extract metadata and generate a study guide.
    * Matching Endpoint: POST /upload-assignment
-   * Used in: Dashboard (index.tsx)
    */
   async uploadAssignment(userId, fileUri, fileName, fileType) {
     const formData = new FormData();
@@ -109,12 +95,9 @@ class BrAInwaveAPI {
         data: formData,
         headers: {
           "Content-Type": "multipart/form-data",
-          "ngrok-skip-browser-warning": "true",
           Accept: "application/json",
         },
-        transformRequest: (data) => {
-          return data;
-        },
+        transformRequest: (data) => data,
       });
       return response.data;
     } catch (error) {
@@ -122,6 +105,43 @@ class BrAInwaveAPI {
         console.log("Assignment Upload Error:", error.response.data);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Creates a text-only study material (no file).
+   * Matching Endpoint: POST /study-material
+   * Used in: syncDirtyRecords (text-only fallback)
+   */
+  async createMaterial(userId, { title, rawContent }) {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/study-material`,
+        { title, rawContent },
+        {
+          params: { user_id: userId },
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to create material: ${error.message}`);
+    }
+  }
+
+  /**
+   * Deletes a specific study material.
+   * Matching Endpoint: DELETE /study-material/{userId}/{materialId}
+   * Used in: syncDirtyRecords, deleteMaterial
+   */
+  async deleteMaterial(userId, materialId) {
+    try {
+      const response = await axios.delete(
+        `${API_BASE_URL}/study-material/${userId}/${materialId}`,
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to delete material: ${error.message}`);
     }
   }
 
@@ -151,16 +171,29 @@ class BrAInwaveAPI {
       return response.data;
     } catch (error) {
       throw new Error(
-        error.response?.data?.detail || "failed to fetch daily plans",
+        error.response?.data?.detail || "Failed to fetch daily plans",
       );
     }
   }
 
   /**
-   * Lists all timetables imported by the user.
-   * Matching Endpoint: GET /timetables/{userId}
-   * Used in: useContent hook
+   * Saves a generated daily plan to the backend.
+   * Matching Endpoint: POST /daily-plan
+   * Used in: generatePlanForDate (immediate push after AI generation)
    */
+  async saveDailyPlan(userId, date, items) {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/daily-plan`,
+        { user_id: userId, date, items },
+        { headers: { "Content-Type": "application/json" } },
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to save daily plan: ${error.message}`);
+    }
+  }
+
   async listTimetables(userId) {
     try {
       const response = await axios.get(`${API_BASE_URL}/timetables/${userId}`);
@@ -170,11 +203,6 @@ class BrAInwaveAPI {
     }
   }
 
-  /**
-   * Deletes a specific timetable.
-   * Matching Endpoint: DELETE /timetable/{userId}/{timetableId}
-   * Used in: useContent hook (planned)
-   */
   async deleteTimetable(userId, timetableId) {
     try {
       const response = await axios.delete(
@@ -186,9 +214,6 @@ class BrAInwaveAPI {
     }
   }
 
-  /**
-   * Fetches specific assignment details.
-   */
   async getAssignment(userId, assignmentId) {
     try {
       const response = await axios.get(
@@ -200,9 +225,6 @@ class BrAInwaveAPI {
     }
   }
 
-  /**
-   * Lists all assignments for the user.
-   */
   async listAssignments(userId) {
     try {
       const response = await axios.get(`${API_BASE_URL}/assignments/${userId}`);
@@ -212,9 +234,6 @@ class BrAInwaveAPI {
     }
   }
 
-  /**
-   * Deletes a specific assignment.
-   */
   async deleteAssignment(userId, assignmentId) {
     try {
       const response = await axios.delete(
@@ -226,9 +245,6 @@ class BrAInwaveAPI {
     }
   }
 
-  /**
-   * Deletes a specific study plan/material.
-   */
   async deleteStudyPlan(userId, planId) {
     try {
       const response = await axios.delete(
@@ -240,9 +256,6 @@ class BrAInwaveAPI {
     }
   }
 
-  /**
-   * Deletes a specific task from a daily plan.
-   */
   async deleteTask(userId, date, taskId) {
     try {
       const response = await axios.delete(
@@ -254,14 +267,6 @@ class BrAInwaveAPI {
     }
   }
 
-  /**
-   * Used for generating the daily plan considering user-specific preferences
-   * @param {string} userId
-   * @param {string} date
-   * @param {Object} preferences
-   * @param {Array} customTasks
-   */
-
   async generateDailyPlan(
     userId,
     date,
@@ -272,19 +277,17 @@ class BrAInwaveAPI {
     try {
       const body = {
         user_id: userId,
-        date: date,
-
+        date,
         isMorningPerson: preferences.isMorningPerson,
         preferredSessionLength: preferences.preferredSessionLength,
         mode: preferences.mode,
         subjectPriorities: preferences.subjectPriorities,
-        customTasks: customTasks,
+        customTasks,
       };
       if (userNote) body.userNote = userNote;
 
       const response = await axios.post(`${API_BASE_URL}/generate-plan`, body, {
         headers: { "Content-Type": "application/json" },
-        "ngrok-skip-browser-warning": true,
         timeout: 45000,
       });
       return response.data;
@@ -311,7 +314,6 @@ class BrAInwaveAPI {
     }
   }
 
-  // Flashcards
   async generateFlashcards(userId, materialId) {
     try {
       const response = await axios.post(
@@ -319,7 +321,6 @@ class BrAInwaveAPI {
         null,
         {
           params: { user_id: userId, material_id: materialId },
-          headers: { "ngrok-skip-browser-warning": true },
           timeout: 45000,
         },
       );

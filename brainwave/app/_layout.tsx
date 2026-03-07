@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Stack,
   //Slot,
@@ -16,6 +16,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useKeepAwake } from "expo-keep-awake";
 import Toast from "react-native-toast-message";
 import { AlertProvider } from "./contexts/AlertContext";
@@ -66,6 +67,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const segments = useSegments();
   const router = useRouter();
   const { theme, isDark, isThemeLoading } = useTheme();
+  const [hasSeenWelcome, setHasSeenWelcome] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (fontsLoaded && !isLoading && !isThemeLoading) {
@@ -76,13 +78,18 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, [fontsLoaded, isLoading, isThemeLoading]);
 
   useEffect(() => {
-    if (isLoading || !fontsLoaded) return;
+    AsyncStorage.getItem("hasSeenWelcome").then((val) => {
+      setHasSeenWelcome(val === "true");
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || !fontsLoaded || hasSeenWelcome === null) return;
 
     //initializes the db tables
     LocalDB.init();
 
     const currentGroup = segments[0];
-    const currentScreen = segments[1];
     const isRedirecting = currentGroup === "oauth2redirect";
 
     if (user) {
@@ -101,15 +108,17 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           router.replace("/(tabs)");
         }
       }
-    } else if (!currentScreen || currentScreen === "welcome") {
-      router.replace("/(auth)/welcome");
     } else {
+      if(!hasSeenWelcome){
+        AsyncStorage.setItem("hasSeenWelcome", "true");
+        router.replace("/(auth)/welcome");
+      } else{
       // Not logged in: only allow (auth) and redirect
       if (currentGroup !== "(auth)" && !isRedirecting) {
-        router.replace("/(auth)/welcome");
-      }
+        router.replace("/(auth)/login");
+      }}
     }
-  }, [user, isLoading, segments, fontsLoaded, router]);
+  }, [user, isLoading, hasSeenWelcome, segments, fontsLoaded, router]);
 
   return (
     <>

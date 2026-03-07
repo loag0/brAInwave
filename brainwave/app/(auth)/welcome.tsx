@@ -7,7 +7,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FontAwesome5 } from "@expo/vector-icons"; // Correct for Native
+import { FontAwesome5 } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "../contexts/ThemeContext";
 
