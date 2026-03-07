@@ -28,42 +28,42 @@ export const useContent = () => {
       currentMaterials: any[],
       currentTimetables: any[],
       currentAssignments: any[],
+      currentPlans: any[],
     ) => {
       if (!user?.id || isSyncing.current) return;
 
-      // Include soft-deleted records so they get pushed to backend too
       const dirtyMaterials = currentMaterials.filter((m) => m.is_dirty === 1);
       const dirtyTimetables = currentTimetables.filter((t) => t.is_dirty === 1);
       const dirtyAssignments = currentAssignments.filter(
         (a) => a.is_dirty === 1,
       );
+      const dirtyPlans = currentPlans.filter((p) => p.is_dirty === 1);
 
       const totalToSync =
         dirtyMaterials.length +
         dirtyTimetables.length +
-        dirtyAssignments.length;
+        dirtyAssignments.length +
+        dirtyPlans.length;
+
       if (totalToSync === 0) return;
 
       isSyncing.current = true;
       setSyncProgress({ current: 0, total: totalToSync });
       let completed = 0;
 
-      //MATERIALS
+      // ── MATERIALS ──────────────────────────────────────────────────────────
       for (const item of dirtyMaterials) {
         try {
-          // Handle soft-deleted records first
           if (item.is_deleted === 1) {
             if (item.remote_id) {
               await BrainwaveAPI.deleteMaterial(user.id, item.remote_id);
             }
-            // Only hard delete locally AFTER backend confirms
             LocalDB.hardDeleteMaterial(item.id);
             completed++;
             setSyncProgress({ current: completed, total: totalToSync });
             continue;
           }
 
-          // File-based material
           if (item.file_uri) {
             const result = await BrainwaveAPI.uploadSyllabus(
               user.id,
@@ -76,8 +76,6 @@ export const useContent = () => {
               result.id,
               result.studyPlan,
             );
-
-            // Text-only material (no file attached)
           } else {
             const result = await BrainwaveAPI.createMaterial(user.id, {
               title: item.title,
@@ -91,18 +89,14 @@ export const useContent = () => {
         } catch (e: any) {
           console.error(`Material Sync Failed [${item.title}]:`, e.message);
           if (e.response?.status >= 500) {
-            console.log(
-              `Deleting failed material [${item.title}] to prevent retry loop.`,
-            );
             LocalDB.hardDeleteMaterial(item.id);
           }
         }
       }
 
-      //TIMETABLES
+      // ── TIMETABLES ─────────────────────────────────────────────────────────
       for (const table of dirtyTimetables) {
         try {
-          // Handle soft-deleted records
           if (table.is_deleted === 1) {
             if (table.remote_id) {
               await BrainwaveAPI.deleteTimetable(user.id, table.remote_id);
@@ -127,24 +121,19 @@ export const useContent = () => {
             );
           }
 
-          // Fixed: completed++ was missing for timetables in original code
           completed++;
           setSyncProgress({ current: completed, total: totalToSync });
         } catch (e: any) {
           console.error(`Timetable Sync Failed [${table.title}]:`, e.message);
           if (e.response?.status >= 500) {
-            console.log(
-              `Deleting failed timetable [${table.title}] to prevent retry loop.`,
-            );
             LocalDB.hardDeleteTimetable(table.id);
           }
         }
       }
 
-      //ASSIGNMENTS
+      // ── ASSIGNMENTS ────────────────────────────────────────────────────────
       for (const ass of dirtyAssignments) {
         try {
-          // Handle soft-deleted records
           if (ass.is_deleted === 1) {
             if (ass.remote_id) {
               await BrainwaveAPI.deleteAssignment(user.id, ass.remote_id);
@@ -176,11 +165,21 @@ export const useContent = () => {
         } catch (e: any) {
           console.error(`Assignment Sync Failed [${ass.title}]:`, e.message);
           if (e.response?.status >= 500) {
-            console.log(
-              `Deleting failed assignment [${ass.title}] to prevent retry loop.`,
-            );
             LocalDB.hardDeleteAssignment(ass.id);
           }
+        }
+      }
+
+      // ── DAILY PLANS ────────────────────────────────────────────────────────
+      for (const plan of dirtyPlans) {
+        try {
+          await BrainwaveAPI.saveDailyPlan(user.id, plan.date, plan.tasks);
+          LocalDB.markPlanSynced(user.id, plan.date);
+          completed++;
+          setSyncProgress({ current: completed, total: totalToSync });
+        } catch (e: any) {
+          console.error(`Plan Sync Failed [${plan.date}]:`, e.message);
+          // Stays dirty — retries on next reconnect
         }
       }
 
@@ -188,11 +187,10 @@ export const useContent = () => {
       isSyncing.current = false;
       setSyncProgress({ current: 0, total: 0 });
 
-      // Refresh state after sync — getAllMaterials/Timetables/Assignments
-      // already filter out is_deleted = 1 so UI stays clean
       setMaterials(await LocalDB.getAllMaterials(user.id));
       setTimetables(await LocalDB.getAllTimetables(user.id));
       setAssignments(await LocalDB.getAllAssignments(user.id));
+      setPlans(await LocalDB.getAllPlans(user.id));
     },
     [user?.id],
   );
@@ -216,11 +214,12 @@ export const useContent = () => {
       setError(null);
 
       try {
-        // 2. Push dirty/deleted records to backend first
+        // 2. Push all dirty records (including plans) to backend first
         await syncDirtyRecords(
           localMaterials,
           localTimetables,
           localAssignments,
+          localPlans,
         );
 
         // 3. Pull from backend if forced or 12hr cache expired
@@ -323,14 +322,17 @@ export const useContent = () => {
       );
 
       if (dailyPlan?.items) {
-        await LocalDB.upsertPlan(user.id, date, dailyPlan.items);
+        // Save locally as dirty first — backend push determines if it clears
+        await LocalDB.upsertPlan(user.id, date, dailyPlan.items, true);
 
-        // Push plan to backend immediately — no dirty flag needed for plans
+        // Try immediate backend push
         try {
           await BrainwaveAPI.saveDailyPlan(user.id, date, dailyPlan.items);
+          // Success — mark clean
+          LocalDB.markPlanSynced(user.id, date);
         } catch {
-          // Already saved locally, will survive offline
-          console.warn("Plan saved locally but failed to push to backend.");
+          // Stays dirty — syncDirtyRecords retries on reconnect
+          console.warn("Plan saved locally as dirty, will sync on reconnect.");
         }
 
         const updatedPlans = await LocalDB.getAllPlans(user.id);
@@ -389,7 +391,6 @@ export const useContent = () => {
         setMaterials(await LocalDB.getAllMaterials(user.id));
       }
     } catch (syncError: any) {
-      // is_dirty = 1 means syncDirtyRecords will retry this on next connection
       console.error(
         "Immediate cloud sync failed, will retry on reconnect: ",
         syncError.message,
@@ -442,7 +443,6 @@ export const useContent = () => {
         });
         setAssignments(await LocalDB.getAllAssignments(user.id));
       } catch (err) {
-        // is_dirty = 1 means syncDirtyRecords will retry on reconnect
         console.error(
           "Immediate assignment sync failed, will retry on reconnect:",
           err,
@@ -456,26 +456,17 @@ export const useContent = () => {
       if (!user?.id) return false;
 
       try {
-        // Soft delete locally — sets is_dirty = 1, is_deleted = 1
         LocalDB.deleteAssignment(user.id, id);
         setAssignments(await LocalDB.getAllAssignments(user.id));
 
-        // Try immediate backend delete
         if (remoteId) {
           await BrainwaveAPI.deleteAssignment(user.id, remoteId);
-          // Backend confirmed — now hard delete locally
-          LocalDB.hardDeleteAssignment(
-            // find local id from soft-deleted record before it's gone
-            // pass the numeric local id if you have it, otherwise syncDirtyRecords handles it
-            Number(id),
-          );
+          LocalDB.hardDeleteAssignment(Number(id));
         }
-        // If offline or no remoteId, syncDirtyRecords will handle it on reconnect
 
         return true;
       } catch (e) {
         console.error("Error deleting assignment:", e);
-        // Soft delete already happened locally, sync will retry backend delete
         return true;
       }
     },

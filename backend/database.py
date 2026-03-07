@@ -1,6 +1,7 @@
 import os
+from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
 from datetime import datetime, timezone
 
 # For railway dashboard
@@ -20,75 +21,79 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 class Base(DeclarativeBase):
-    pass
+    __allow_unmapped__ = True
 
 class StudyMaterial(Base):
     __tablename__ = "study_materials"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    title = Column(String, index=True)
-    rawContent = Column(Text)
-    aiPlan = Column(Text)
-    file_uri = Column(String, nullable=True)
-    file_type = Column(String, nullable=True)
-    created_at = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    title: Mapped[str] = mapped_column(String, index=True)
+    rawContent: Mapped[str] = mapped_column(Text)
+    aiPlan: Mapped[str] = mapped_column(Text)
+    file_uri: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    file_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    is_deleted = Column(Integer, default=0)
+    is_deleted: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Timetable(Base):
     __tablename__ = "timetables"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    title = Column(String, index=True)
-    structuredData = Column(Text)
-    created_at = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    title: Mapped[str] = mapped_column(String, index=True)
+    structuredData: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
-    is_deleted = Column(Integer, default=0)
+    is_deleted: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Assignment(Base):
     __tablename__ = "assignments"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    title = Column(String, index=True)
-    subject = Column(String, index=True)
-    due_date = Column(String)  # YYYY-MM-DD
-    priority = Column(String)  # low, medium, high
-    rawContent = Column(Text)
-    file_uri = Column(String, nullable=True)
-    file_type = Column(String, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    is_deleted = Column(Integer, default=0)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    title: Mapped[str] = mapped_column(String, index=True)
+    subject: Mapped[str] = mapped_column(String, index=True)
+    due_date: Mapped[str] = mapped_column(String)  # YYYY-MM-DD
+    priority: Mapped[str] = mapped_column(String)  # low, medium, high
+    rawContent: Mapped[str] = mapped_column(Text)
+    file_uri: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    file_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_deleted: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Flashcard(Base):
     __tablename__ = "flashcards"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    material_id = Column(Integer, index=True)
-    question = Column(Text)
-    answer = Column(Text)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    material_id: Mapped[int] = mapped_column(Integer, index=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class DailyPlan(Base):
     __tablename__ = "daily_plans"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    date = Column(String)  # YYYY-MM-DD
-    items_json = Column(Text)
-    generated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # use SQLAlchemy 2.0 style annotations so the type-checker knows the
+    # attribute holds a Python value rather than a Column object.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    date: Mapped[str] = mapped_column(String)  # YYYY-MM-DD
+    items_json: Mapped[str] = mapped_column(String)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
 class CompletionLog(Base):
     __tablename__ = "completion_logs"

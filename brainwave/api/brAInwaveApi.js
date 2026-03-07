@@ -1,6 +1,24 @@
 import axios from "axios";
+import { auth } from "../firebaseConfig";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+// Attach Firebase ID token to every request automatically
+axios.interceptors.request.use(
+  async (config) => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const token = await user.getIdToken();
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error("Error getting auth token:", error);
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
 
 const checkConnection = async () => {
   console.log(`Checking connection to: ${API_BASE_URL}`);
@@ -28,16 +46,13 @@ class BrAInwaveAPI {
     formData.append("file", {
       uri: fileUri,
       name: fileName,
-      type: fileType,
+      type: fileType || "application/pdf",
     });
 
     const response = await axios.post(
-      `${API_BASE_URL}/upload-timetable?user_id=${userId}`,
+      `${API_BASE_URL}/upload-timetable`,
       formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
-        timeout: 60000,
-      },
+      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return response.data;
   }
@@ -54,25 +69,12 @@ class BrAInwaveAPI {
       type: fileType || "application/pdf",
     });
 
-    try {
-      const response = await axios({
-        method: "post",
-        url: `${API_BASE_URL}/upload-syllabus`,
-        params: { user_id: userId },
-        data: formData,
-        headers: {
-          "Content-Type": "multipart/form-data",
-          Accept: "application/json",
-        },
-        transformRequest: (data) => data,
-      });
-      return response.data;
-    } catch (error) {
-      if (error.response) {
-        console.log("Server Error Data:", error.response.data);
-      }
-      throw error;
-    }
+    const response = await axios.post(
+      `${API_BASE_URL}/upload-syllabus`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response.data;
   }
 
   /**
@@ -87,184 +89,96 @@ class BrAInwaveAPI {
       type: fileType || "application/pdf",
     });
 
-    try {
-      const response = await axios({
-        method: "post",
-        url: `${API_BASE_URL}/upload-assignment`,
-        params: { user_id: userId },
-        data: formData,
-        headers: {
-          "Content-Type": "multipart/form-data",
-          Accept: "application/json",
-        },
-        transformRequest: (data) => data,
-      });
-      return response.data;
-    } catch (error) {
-      if (error.response) {
-        console.log("Assignment Upload Error:", error.response.data);
-      }
-      throw error;
-    }
+    const response = await axios.post(
+      `${API_BASE_URL}/upload-assignment`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response.data;
   }
 
   /**
-   * Creates a text-only study material (no file).
-   * Matching Endpoint: POST /study-material
-   * Used in: syncDirtyRecords (text-only fallback)
+   * Syncs a text-only study material (no file) to Supabase.
+   * Matching Endpoint: POST /study-materials
+   * Used in: syncDirtyRecords for materials without a file attachment
    */
   async createMaterial(userId, { title, rawContent }) {
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/study-material`,
-        { title, rawContent },
-        {
-          params: { user_id: userId },
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to create material: ${error.message}`);
-    }
+    const response = await axios.post(`${API_BASE_URL}/study-materials`, {
+      title,
+      rawContent,
+      aiPlan: "",
+    });
+    return response.data;
   }
 
   /**
-   * Deletes a specific study material.
-   * Matching Endpoint: DELETE /study-material/{userId}/{materialId}
+   * Deletes a study material from Supabase.
+   * Matching Endpoint: DELETE /study-plan/{materialId}
    * Used in: syncDirtyRecords, deleteMaterial
    */
   async deleteMaterial(userId, materialId) {
-    try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/study-material/${userId}/${materialId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to delete material: ${error.message}`);
-    }
-  }
-
-  async getStudyPlan(userId, planId) {
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/study-plan/${userId}/${planId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to get study plan: ${error.message}`);
-    }
-  }
-
-  async listStudyPlans(userId) {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/study-plans/${userId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to list study plans: ${error.message}`);
-    }
-  }
-
-  async listDailyPlans(userId) {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/daily-plans/${userId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        error.response?.data?.detail || "Failed to fetch daily plans",
-      );
-    }
+    const response = await axios.delete(
+      `${API_BASE_URL}/study-plan/${materialId}`,
+    );
+    return response.data;
   }
 
   /**
-   * Saves a generated daily plan to the backend.
-   * Matching Endpoint: POST /daily-plan
-   * Used in: generatePlanForDate (immediate push after AI generation)
+   * Syncs a local timetable to Supabase.
+   * Matching Endpoint: POST /timetables
    */
-  async saveDailyPlan(userId, date, items) {
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/daily-plan`,
-        { user_id: userId, date, items },
-        { headers: { "Content-Type": "application/json" } },
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to save daily plan: ${error.message}`);
-    }
-  }
-
-  async listTimetables(userId) {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/timetables/${userId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to list timetables: ${error.message}`);
-    }
-  }
-
-  async deleteTimetable(userId, timetableId) {
-    try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/timetable/${userId}/${timetableId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to delete timetable: ${error.message}`);
-    }
-  }
-
-  async getAssignment(userId, assignmentId) {
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/assignment/${userId}/${assignmentId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to get assignment: ${error.message}`);
-    }
+  async syncTimetable(userId, title, structuredData) {
+    const response = await axios.post(`${API_BASE_URL}/timetables`, {
+      title,
+      structuredData,
+    });
+    return response.data;
   }
 
   async listAssignments(userId) {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/assignments/${userId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to list assignments: ${error.message}`);
-    }
+    const response = await axios.get(`${API_BASE_URL}/assignments`);
+    return response.data;
+  }
+
+  async getAssignment(userId, assignmentId) {
+    const response = await axios.get(
+      `${API_BASE_URL}/assignment/${assignmentId}`,
+    );
+    return response.data;
   }
 
   async deleteAssignment(userId, assignmentId) {
-    try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/assignment/${userId}/${assignmentId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to delete assignment: ${error.message}`);
-    }
+    const response = await axios.delete(
+      `${API_BASE_URL}/assignment/${assignmentId}`,
+    );
+    return response.data;
+  }
+
+  async listTimetables(userId) {
+    const response = await axios.get(`${API_BASE_URL}/timetables`);
+    return response.data;
+  }
+
+  async deleteTimetable(userId, timetableId) {
+    const response = await axios.delete(
+      `${API_BASE_URL}/timetable/${timetableId}`,
+    );
+    return response.data;
+  }
+
+  async listStudyPlans(userId) {
+    const response = await axios.get(`${API_BASE_URL}/study-plans`);
+    return response.data;
+  }
+
+  async getStudyPlan(userId, planId) {
+    const response = await axios.get(`${API_BASE_URL}/study-plan/${planId}`);
+    return response.data;
   }
 
   async deleteStudyPlan(userId, planId) {
-    try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/study-plan/${userId}/${planId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to delete study plan: ${error.message}`);
-    }
-  }
-
-  async deleteTask(userId, date, taskId) {
-    try {
-      const response = await axios.delete(
-        `${API_BASE_URL}/daily-plan/${userId}/${date}/${taskId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to delete task: ${error.message}`);
-    }
+    const response = await axios.delete(`${API_BASE_URL}/study-plan/${planId}`);
+    return response.data;
   }
 
   async generateDailyPlan(
@@ -274,83 +188,69 @@ class BrAInwaveAPI {
     customTasks = [],
     userNote,
   ) {
-    try {
-      const body = {
-        user_id: userId,
-        date,
-        isMorningPerson: preferences.isMorningPerson,
-        preferredSessionLength: preferences.preferredSessionLength,
-        mode: preferences.mode,
-        subjectPriorities: preferences.subjectPriorities,
-        customTasks,
-      };
-      if (userNote) body.userNote = userNote;
+    const body = {
+      date,
+      isMorningPerson: preferences.isMorningPerson,
+      preferredSessionLength: preferences.preferredSessionLength,
+      mode: preferences.mode,
+      subjectPriorities: preferences.subjectPriorities,
+      customTasks,
+    };
+    if (userNote) body.userNote = userNote;
 
-      const response = await axios.post(`${API_BASE_URL}/generate-plan`, body, {
-        headers: { "Content-Type": "application/json" },
-        timeout: 45000,
-      });
-      return response.data;
-    } catch (error) {
-      console.error(
-        "Error in generateDailyPlan: ",
-        error.response?.data || error.message,
-      );
-      throw new Error(
-        error.response?.data?.detail ||
-          `Failed to generate daily plan: ${error.message}`,
-      );
-    }
+    const response = await axios.post(`${API_BASE_URL}/generate-plan`, body);
+    return response.data;
+  }
+
+  async saveDailyPlan(userId, date, items) {
+    const response = await axios.post(`${API_BASE_URL}/daily-plan`, {
+      date,
+      items,
+    });
+    return response.data;
+  }
+
+  async listDailyPlans(userId) {
+    const response = await axios.get(`${API_BASE_URL}/daily-plans`);
+    return response.data;
   }
 
   async getDailyPlan(userId, date) {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/daily-plan/${userId}/${date}`,
-      );
+      const response = await axios.get(`${API_BASE_URL}/daily-plan/${date}`);
       return response.data;
     } catch (error) {
-      return error.message || null;
+      console.error(`Error fetching daily plan for ${date}:`, error.message);
+      return null;
     }
   }
 
   async generateFlashcards(userId, materialId) {
-    try {
-      const response = await axios.post(
-        `${API_BASE_URL}/generate-flashcards`,
-        null,
-        {
-          params: { user_id: userId, material_id: materialId },
-          timeout: 45000,
-        },
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        error.response?.data?.detail ||
-          `Failed to generate flashcards: ${error.message}`,
-      );
-    }
+    const response = await axios.post(
+      `${API_BASE_URL}/generate-flashcards`,
+      null,
+      { params: { material_id: materialId } },
+    );
+    return response.data;
   }
 
   async getFlashcards(userId, materialId) {
-    try {
-      const response = await axios.get(
-        `${API_BASE_URL}/flashcards/${userId}/${materialId}`,
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to fetch flashcards: ${error.message}`);
-    }
+    const response = await axios.get(
+      `${API_BASE_URL}/flashcards/${materialId}`,
+    );
+    return response.data;
+  }
+
+  async deleteTask(userId, date, taskId) {
+    const response = await axios.delete(
+      `${API_BASE_URL}/daily-plan/${date}/${taskId}`,
+    );
+    return response.data;
   }
 
   async checkHealth() {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/health`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Failed to check API health: ${error.message}`);
-    }
+    const response = await axios.get(`${API_BASE_URL}/health`);
+    return response.data;
   }
 }
 
