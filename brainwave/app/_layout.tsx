@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Stack,
   //Slot,
@@ -69,6 +69,10 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { theme, isDark, isThemeLoading } = useTheme();
   const [hasSeenWelcome, setHasSeenWelcome] = useState<boolean | null>(null);
 
+  // Ref to track if we've already navigated to prevent multiple redirects
+  const hasNavigated = useRef(false);
+  const prevUserRef = useRef<any>(undefined);
+
   useEffect(() => {
     if (fontsLoaded && !isLoading && !isThemeLoading) {
       setTimeout(() => {
@@ -83,6 +87,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     });
   }, []);
 
+  //OAuth redirect fallback - if stuck on oauth2redirect for more than 4 seconds, redirect based on auth state
   useEffect(() => {
     const currentGroup = segments[0] as string | undefined;
     if (currentGroup === "oauth2redirect") return;
@@ -103,17 +108,30 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, [segments, user, router]);
 
   useEffect(() => {
-    if (isLoading || !fontsLoaded || hasSeenWelcome === null) return;
-
-    //initializes the db tables
-    LocalDB.init();
+    if (isLoading || !fontsLoaded || isThemeLoading || hasSeenWelcome === null)
+      return;
 
     const currentGroup = segments[0] as string | undefined;
     const isRedirecting = currentGroup === "oauth2redirect";
 
-    if (user) {
-      if(isRedirecting) return; //while on oauth2redirect, don't redirect to avoid navigation conflicts
+    //detect logout
+    const prevUser = prevUserRef.current;
+    const justLoggedOut = prevUser && !user;
+    prevUserRef.current = user;
 
+    if (justLoggedOut) {
+      hasNavigated.current = false; // Reset navigation flag on logout
+    }
+
+    //dont interfere with oauth redirect screen
+    if (isRedirecting) return;
+
+    if (hasNavigated.current && !justLoggedOut) return; // Prevent multiple navigations
+
+    //initializes the db tables
+    LocalDB.init();
+
+    if (user) {
       if (!user.hasFinishedSetup) {
         // Force to onboarding
         if (currentGroup !== "(onboarding)") {
@@ -128,19 +146,22 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           router.replace("/(tabs)");
         }
       }
+      hasNavigated.current = true; // Set navigation flag after handling auth state
     } else {
-      if(isRedirecting) return;
-
-      if(!hasSeenWelcome){
+      if (!hasSeenWelcome) {
         router.replace("/(auth)/welcome");
-        AsyncStorage.setItem("hasSeenWelcome", "true").then(() => setHasSeenWelcome(true));
-      } else{
-      // Not logged in: only allow (auth) and redirect
-      if (currentGroup !== "(auth)") {
-        router.replace("/(auth)/login");
-      }}
+        AsyncStorage.setItem("hasSeenWelcome", "true").then(() =>
+          setHasSeenWelcome(true),
+        );
+      } else {
+        // Not logged in: only allow (auth) and redirect
+        if (currentGroup !== "(auth)") {
+          router.replace("/(auth)/login");
+        }
+      }
     }
-  }, [user, isLoading, hasSeenWelcome, segments, fontsLoaded, router]);
+    hasNavigated.current = true;
+  }, [user, isLoading, isThemeLoading, hasSeenWelcome, segments, fontsLoaded, router]);
 
   return (
     <>

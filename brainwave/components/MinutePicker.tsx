@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Theme } from "../app/types";
 import { useTheme } from "../app/contexts/ThemeContext";
+import Toast from "react-native-toast-message";
 
 interface MinutePickerProps {
   visible: boolean;
@@ -31,6 +32,7 @@ export default function MinutePicker({
   onConfirm,
   theme,
   initial = 25,
+  existingDurations = [],
 }: MinutePickerProps) {
   const [pickedMinutes, setPickedMinutes] = useState(initial);
   const { isDark } = useTheme();
@@ -166,6 +168,15 @@ export default function MinutePicker({
                 { backgroundColor: theme.colors.primary },
               ]}
               onPress={() => {
+                if(existingDurations.includes(pickedMinutes)) {
+                  Toast.show({
+                    type: "error",
+                    text1: `${pickedMinutes}m already exists!`,
+                    text2: "Please pick a different duration.",
+                    position: "bottom",
+                  });
+                  return;
+                }
                 onConfirm(pickedMinutes);
                 onClose();
               }}

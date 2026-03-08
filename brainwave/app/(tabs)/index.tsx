@@ -210,7 +210,7 @@ export default function Home() {
         setIsLoading(false);
         showAlert?.({
           title: "Assignment Uploaded",
-          message: "Our AI is busy building your master plan!",
+          message: "brAInwave is busy building your master plan!",
         });
       }
     } catch (err: any) {
