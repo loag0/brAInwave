@@ -1,5 +1,6 @@
 node_modules/
 .expo/
+.vscode/
 dist/
 expo-env.d.ts
 build/
