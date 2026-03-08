@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -8,9 +8,13 @@ export default function GoogleOAuthRedirect() {
   const { theme } = useTheme();
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const hasRedirected = useRef(false);
 
   useEffect(() => {
     if (isLoading) return;
+    if(hasRedirected.current) return; // Prevent multiple redirects
+
+    hasRedirected.current = true;
 
     if (user) {
         // If user exists, redirect to the main app

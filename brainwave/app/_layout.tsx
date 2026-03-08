@@ -87,46 +87,20 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     });
   }, []);
 
-  //OAuth redirect fallback - if stuck on oauth2redirect for more than 4 seconds, redirect based on auth state
-  useEffect(() => {
-    const currentGroup = segments[0] as string | undefined;
-    if (currentGroup === "oauth2redirect") return;
-
-    const timeout = setTimeout(() => {
-      if(user){
-        if(!user.hasFinishedSetup) {
-          router.replace("/(onboarding)");
-        } else{
-          router.replace("/(tabs)");
-        }
-      } else{
-        router.replace("/(auth)/login");
-      }
-    }, 4000);
-
-    return () => clearTimeout(timeout);
-  }, [segments, user, router]);
-
   useEffect(() => {
     if (isLoading || !fontsLoaded || isThemeLoading || hasSeenWelcome === null)
       return;
 
-    const currentGroup = segments[0] as string | undefined;
-    const isRedirecting = currentGroup === "oauth2redirect";
-
     //detect logout
     const prevUser = prevUserRef.current;
-    const justLoggedOut = prevUser && !user;
+    const justLoggedOut = prevUser !== undefined && prevUser !== null && !user;
     prevUserRef.current = user;
 
     if (justLoggedOut) {
       hasNavigated.current = false; // Reset navigation flag on logout
     }
 
-    //dont interfere with oauth redirect screen
-    if (isRedirecting) return;
-
-    if (hasNavigated.current && !justLoggedOut) return; // Prevent multiple navigations
+    if (hasNavigated.current) return; // Prevent multiple navigations
 
     //initializes the db tables
     LocalDB.init();
@@ -134,17 +108,9 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     if (user) {
       if (!user.hasFinishedSetup) {
         // Force to onboarding
-        if (currentGroup !== "(onboarding)") {
           router.replace("/(onboarding)");
-        }
       } else {
-        if (
-          currentGroup === "(auth)" ||
-          currentGroup === "(onboarding)" ||
-          !currentGroup // Handles the root index reload
-        ) {
           router.replace("/(tabs)");
-        }
       }
       hasNavigated.current = true; // Set navigation flag after handling auth state
     } else {
@@ -154,10 +120,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           setHasSeenWelcome(true),
         );
       } else {
-        // Not logged in: only allow (auth) and redirect
-        if (currentGroup !== "(auth)") {
           router.replace("/(auth)/login");
-        }
       }
     }
     hasNavigated.current = true;
