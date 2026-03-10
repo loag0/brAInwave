@@ -1,4 +1,3 @@
-// app/(tabs)/Planner.tsx - Study Planner Page
 import React, {
   useState,
   useEffect,
@@ -26,8 +25,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { useFocusEffect } from "@react-navigation/native";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
-import { db as firestore } from "../../firebaseConfig";
 import brainwaveApi from "@/api/brAInwaveApi";
 import { useAlert } from "../contexts/AlertContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -54,7 +51,6 @@ const PlannerSkeleton = ({ theme }: { theme: any }) => {
   const pulseAnimation = React.useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    // Set up the infinite pulse loop
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnimation, {
@@ -71,7 +67,6 @@ const PlannerSkeleton = ({ theme }: { theme: any }) => {
         }),
       ]),
     );
-
     pulse.start();
     return () => pulse.stop();
   }, [pulseAnimation]);
@@ -136,17 +131,19 @@ export default function Planner() {
   const router = useRouter();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { plans, refresh } = useContent();
+  const { plans, timetables, refresh } = useContent();
 
-  //This is for state management
   const [planItems, setPlanItems] = useState<any[]>([]);
   const [isLoading, setLoading] = useState(true);
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [weeklyTemplate, setWeeklyTemplate] = useState<Record<string, any[]>>(
-    {},
-  );
 
-  //Modal States
+  // Derive weekly template from the most recently uploaded timetable in LocalDB
+  const weeklyTemplate = useMemo(() => {
+    if (!timetables || timetables.length === 0) return {};
+    return timetables[0]?.structuredData || {};
+  }, [timetables]);
+
+  // Modal states
   const [isModalVisible, setModalVisible] = useState(false);
   const [newTask, setNewTask] = useState({
     task: "",
@@ -161,13 +158,12 @@ export default function Planner() {
   const [timeValue, setTimeValue] = useState(new Date());
   const [deadlineValue, setDeadlineValue] = useState(new Date());
 
-  //AI Regeneration Options Modal State
+  // AI Regeneration modal state
   const [isRegenerateModalVisible, setRegenerateModalVisible] = useState(false);
-  const [tempIntensity, setTempIntensity] = useState("Balanced"); // "Light", "Balanced", "Intense"
-  const [tempSessionLength, setTempSessionLength] = useState("medium"); // "short", "medium", "long"
+  const [tempIntensity, setTempIntensity] = useState("Balanced");
+  const [tempSessionLength, setTempSessionLength] = useState("medium");
   const [aiUserNote, setAiUserNote] = useState("");
 
-  //Difficulty Selection State
   const [selectedDifficultyTask, setSelectedDifficultyTask] = useState<
     string | null
   >(null);
@@ -176,10 +172,8 @@ export default function Planner() {
 
   const BUILT_IN_TAGS = useMemo(() => ["Personal", "Exam Prep"], []);
 
-  // Extract subjects from timetable for the tag picker
   const availableTags = useMemo(() => {
     const subjectSet = new Set<string>();
-    // Get subjects from the weekly template
     if (weeklyTemplate) {
       Object.values(weeklyTemplate).forEach((dayItems: any) => {
         if (Array.isArray(dayItems)) {
@@ -198,7 +192,6 @@ export default function Planner() {
         }
       });
     }
-    // Also extract from current plan items
     planItems.forEach((item: any) => {
       if (item.subject && !BUILT_IN_TAGS.includes(item.subject)) {
         subjectSet.add(item.subject);
@@ -207,7 +200,6 @@ export default function Planner() {
     return [...BUILT_IN_TAGS, ...Array.from(subjectSet)];
   }, [BUILT_IN_TAGS, weeklyTemplate, planItems]);
 
-  // Priority scoring: combines urgency and difficulty
   const computePriorityScore = (task: any) => {
     const difficultyMap: Record<string, number> = {
       easy: 20,
@@ -237,12 +229,10 @@ export default function Planner() {
 
   const onRefresh = async () => {
     if (!user?.id) return;
-    setLoading(true); // Show skeleton
+    setLoading(true);
     setRefreshing(true);
     try {
       if (refresh) await refresh(true);
-    } catch (e) {
-      console.error("Refresh failed:", e);
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -258,31 +248,24 @@ export default function Planner() {
   const isTaskActive = (item: any) => {
     const start = parseStartDate(item);
     if (!start) return false;
-    const now = new Date();
-    // Only apply to today's tasks
     if (selectedDay !== weekDays[0].id) return false;
-
     const durationMins = parseDurationMinutes(item.duration);
     const end = new Date(start.getTime() + durationMins * 60000);
-    return now >= start && now <= end;
+    return new Date() >= start && new Date() <= end;
   };
 
   const isTaskPast = (item: any) => {
-    if (item.completed) return false; // Don't dim if completed, that's handled by completed style
+    if (item.completed) return false;
     const start = parseStartDate(item);
     if (!start) return false;
-    const now = new Date();
-    // Only apply to today's tasks
     if (selectedDay !== weekDays[0].id) return false;
-
     const durationMins = parseDurationMinutes(item.duration);
     const end = new Date(start.getTime() + durationMins * 60000);
-    return now > end;
+    return new Date() > end;
   };
 
   const PulseDot = () => {
     const pulseAnim = useRef(new Animated.Value(1)).current;
-
     useEffect(() => {
       Animated.loop(
         Animated.sequence([
@@ -338,48 +321,31 @@ export default function Planner() {
     );
   };
 
+  // Save plan locally as dirty then push to backend
+  const savePlan = useCallback(
+    async (items: any[], date: string) => {
+      if (!user?.id) return;
+      const clean = items.map(({ isTemplate, ...rest }) => rest);
+      await LocalDB.upsertPlan(user.id, date, clean, true);
+      try {
+        await brainwaveApi.saveDailyPlan(user.id, date, clean);
+        LocalDB.markPlanSynced(user.id, date);
+      } catch {
+        // Stays dirty — syncs on reconnect
+      }
+    },
+    [user?.id],
+  );
+
   const handleSetDifficulty = async (difficulty: string) => {
     if (!selectedDifficultyTask || !user?.id) return;
-
-    // Close modal instantly for offline-first responsiveness
     setSelectedDifficultyTask(null);
 
-    // Optimistic UI update
     const updatedItems = planItems.map((item) =>
       item.id === selectedDifficultyTask ? { ...item, difficulty } : item,
     );
     setPlanItems(updatedItems);
-
-    // Save locally immediately
-    const itemsToSave = updatedItems.map((item) => {
-      const { isTemplate, ...rest } = item;
-      return rest;
-    });
-    LocalDB.upsertPlan(user.id, selectedDay, itemsToSave);
-
-    // Sync to firestore in background without blocking UI
-    try {
-      const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
-      setDoc(
-        planRef,
-        {
-          items: itemsToSave,
-        },
-        { merge: true },
-      ).catch((e) => {
-        console.error("Failed to sync difficulty setting to cloud", e);
-      });
-    } catch (e) {
-      console.error("Local save error", e);
-      // Revert optimism if local logic fails
-      setPlanItems((items) =>
-        items.map((item) =>
-          item.id === selectedDifficultyTask
-            ? { ...item, difficulty: "unset" }
-            : item,
-        ),
-      );
-    }
+    await savePlan(updatedItems, selectedDay);
   };
 
   const styles = createStyles(theme);
@@ -409,17 +375,13 @@ export default function Planner() {
         icon: "rocket",
       };
     }
-
     if (topSubject && !hasHardestSubject) {
       return {
         title: "Light Day?",
-        text: `No ${topSubjectRaw} sessions today. Use this extra headspace to review your #2 priority: ${
-          priorities[1] || "your notes"
-        }.`,
+        text: `No ${topSubjectRaw} sessions today. Use this extra headspace to review your #2 priority: ${priorities[1] || "your notes"}.`,
         icon: "leaf",
       };
     }
-
     return {
       title: "AI Insight",
       text: "You're most productive in the evening. I've planned challenging tasks after 6pm.",
@@ -430,28 +392,23 @@ export default function Planner() {
   const weekDays = useMemo(() => {
     const days = [];
     const now = new Date();
-
     for (let i = 0; i < 5; i++) {
-      // change the 5 to alter how many days the scroller shows
       const date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       date.setDate(date.getDate() + i);
-
-      // YYYY-MM-DD in local time to avoid UTC shift
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
       const id = `${year}-${month}-${day}`;
-
-      let label = "";
-      if (i === 0) label = "Today";
-      else if (i === 1) label = "Tomorrow";
-      else label = date.toLocaleDateString("en-US", { weekday: "short" });
-
+      let label =
+        i === 0
+          ? "Today"
+          : i === 1
+            ? "Tomorrow"
+            : date.toLocaleDateString("en-US", { weekday: "short" });
       const dayDate = date.toLocaleDateString("en-US", {
         day: "numeric",
-        month: i < 5 ? "short" : undefined, //edit if you wanna limit how far it shows the month under the day
+        month: i < 5 ? "short" : undefined,
       });
-
       days.push({ id, label, date: dayDate });
     }
     return days;
@@ -459,91 +416,44 @@ export default function Planner() {
 
   const [selectedDay, setSelectedDay] = useState(weekDays[0].id);
 
-  //Initial fetch from db for timetable
-  // this is then mirrored into Firestore by the backend
+  // Load plan when selected day or plans array changes
   useEffect(() => {
     if (!user?.id) return;
-
     setLoading(true);
 
-    const unsubTemplate = onSnapshot(
-      doc(firestore, "users", user.id, "data", "timetable"),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setWeeklyTemplate(docSnap.data().weekly_template || {});
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Firebase error: ", error);
-        setLoading(false);
-      },
-    );
+    const existingPlan = plans.find((p) => p.date === selectedDay);
 
-    return () => unsubTemplate();
-  }, [user?.id]);
+    if (existingPlan?.tasks?.length > 0) {
+      setPlanItems(sortTasksByTime(existingPlan.tasks));
+    } else {
+      // Fallback to timetable classes for this day
+      const dateObj = new Date(selectedDay + "T00:00:00");
+      const dayName = dateObj
+        .toLocaleDateString("en-US", { weekday: "long" })
+        .toLowerCase();
+      const templateClasses = weeklyTemplate?.[dayName] || [];
+      const formattedItems = templateClasses.map((cls: any, index: number) => ({
+        id: `temp-${index}`,
+        time: cls.time,
+        subject: cls.subject,
+        task: "Class Lecture",
+        duration: "1 hour",
+        completed: false,
+        difficulty: "unset",
+        isTemplate: true,
+      }));
+      setPlanItems(sortTasksByTime(formattedItems));
+    }
 
-  //Fetches data for day switching and mirrors Firestore into LocalDB
-  useEffect(() => {
-    if (!user?.id) return;
+    setLoading(false);
+  }, [selectedDay, plans, weeklyTemplate, user?.id]);
 
-    setLoading(true);
-
-    const unsubPlan = onSnapshot(
-      doc(firestore, "users", user.id, "plans", selectedDay),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          // If there is a generated plan, show that and mirror it into LocalDB
-          const items = docSnap.data().items || [];
-          const sorted = sortTasksByTime(items);
-          setPlanItems(sorted);
-          LocalDB.upsertPlan(user.id, selectedDay, sorted);
-        } else {
-          // FALLBACK: if there is no plan, then just show classes from the template
-          const dateObj = new Date(selectedDay);
-          const dayName = dateObj
-            .toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })
-            .toLowerCase();
-
-          const templateClasses = weeklyTemplate?.[dayName] || [];
-
-          const formattedItems = templateClasses.map(
-            (cls: any, index: number) => ({
-              id: `temp-${index}`,
-              time: cls.time,
-              subject: cls.subject,
-              task: "Class Lecture",
-              duration: "1 hour",
-              completed: false,
-              difficulty: "unset",
-              isTemplate: true,
-            }),
-          );
-
-          setPlanItems(sortTasksByTime(formattedItems));
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Plan fetch error: ", error);
-        setLoading(false);
-      },
-    );
-    return () => unsubPlan();
-  }, [user?.id, selectedDay, weeklyTemplate]);
-
-  // Offline fallback: if we don't have a Firestore plan yet, try LocalDB via useContent
+  // Schedule notifications when today's plan changes
   useEffect(() => {
     if (!user?.id || !planItems.length) return;
-  // Only schedule notifications for today's plan
-    const todayId = weekDays[0].id;
-    if (selectedDay !== todayId) return;
-
-  // Only schedule if the user has notifications enabled
+    if (selectedDay !== weekDays[0].id) return;
     if (!user?.studyPreferences?.notifications?.studyReminders) return;
-
     const leadMinutes = user?.studyPreferences?.notificationLeadMinutes ?? 10;
-
     scheduleDailyNotifications(planItems, leadMinutes);
   }, [
     planItems,
@@ -577,8 +487,6 @@ export default function Planner() {
         return theme.colors.warning;
       case "hard":
         return theme.colors.error;
-      case "unset":
-        return theme.colors.text.secondary;
       default:
         return theme.colors.text.secondary;
     }
@@ -612,12 +520,10 @@ export default function Planner() {
 
   const confirmRegeneration = async () => {
     if (!user?.id) return;
-
     setRegenerateModalVisible(false);
     setIsOptimizing(true);
 
     try {
-      // Map intensity to a 'mode'. Use user preference if 'Balanced'
       let overrideMode = user.studyPreferences.mode || "stay_consistent";
       if (tempIntensity === "Light") overrideMode = "catch_up";
       if (tempIntensity === "Intense") overrideMode = "exam_prep";
@@ -628,15 +534,21 @@ export default function Planner() {
         preferredSessionLength: tempSessionLength,
       };
 
+      console.log("Sending preferences:", JSON.stringify(overridenPreferences));
+
       const response = await brainwaveApi.generateDailyPlan(
         user.id,
         selectedDay,
         overridenPreferences,
-        [], // <-- custom tasks btw
+        [],
         aiUserNote.trim() || undefined,
       );
 
       if (response.success) {
+        // Save newly generated plan locally + to backend
+        await savePlan(response.items, selectedDay);
+        // Refresh so plans array updates and the useEffect re-derives planItems
+        await refresh?.(false);
         showAlert({
           title: "Schedule Optimized",
           message: "brAInwave has successfully updated your schedule!",
@@ -644,8 +556,7 @@ export default function Planner() {
           confirmText: "Ok",
         });
       }
-    } catch (error) {
-      console.error("Regeneration failed:", error);
+    } catch (error: any) {
       showAlert({
         title: "Optimization Failed",
         message:
@@ -656,6 +567,7 @@ export default function Planner() {
         showCancel: true,
         onConfirm: confirmRegeneration,
       });
+      console.error("422 detail:", JSON.stringify(error.response?.data));
     } finally {
       setIsOptimizing(false);
     }
@@ -663,7 +575,6 @@ export default function Planner() {
 
   const onTimeChange = (event: any, selectedDate?: Date) => {
     setShowTimePicker(false);
-
     if (selectedDate) {
       setTimeValue(selectedDate);
       const formattedTime = selectedDate.toLocaleTimeString([], {
@@ -685,12 +596,9 @@ export default function Planner() {
       });
       return;
     }
-    const dayPlan = plans.find(
-      (p) => p.date === selectedDay || p.id === selectedDay,
-    );
 
-    // If no daily plan exists in store yet, use current planItems (timetable fallback) as base
-    const baseItems = dayPlan?.items || planItems;
+    const existingPlan = plans.find((p) => p.date === selectedDay);
+    const baseItems = existingPlan?.tasks || planItems;
 
     const newTaskItem: any = {
       id: editingTaskId || Date.now().toString(),
@@ -702,26 +610,17 @@ export default function Planner() {
       difficulty: newTask.difficulty || "unset",
       isCustom: !editingTaskId,
     };
-    if (newTask.deadline) {
-      newTaskItem.deadline = newTask.deadline;
-    }
+    if (newTask.deadline) newTaskItem.deadline = newTask.deadline;
 
     const updatedItems = editingTaskId
       ? baseItems.map((it: any) => (it.id === editingTaskId ? newTaskItem : it))
       : [...baseItems, newTaskItem];
 
-    // Optimistically update the UI state directly
     const sortedItems = sortTasksByTime(updatedItems);
     setPlanItems(sortedItems);
 
     try {
-      // 1. Save locally
-      await LocalDB.upsertPlan(user.id, selectedDay, sortedItems);
-
-      // 2. Sync to Firestore
-      const planRef = doc(firestore, "users", user.id, "plans", selectedDay);
-      await setDoc(planRef, { items: sortedItems }, { merge: true });
-
+      await savePlan(sortedItems, selectedDay);
       if (!editingTaskId) {
         showAlert({
           title: "Added!",
@@ -730,14 +629,13 @@ export default function Planner() {
         });
       }
     } catch (e) {
-      console.error("Save failed:", e);
       showAlert({
         title: "Save Error",
-        message: "Failed to save your changes locally or to the cloud.",
+        message: "Failed to save your changes.",
       });
+      console.error("Error saving plan:", e);
     }
 
-    // Close modal instantly and clear state
     setNewTask({
       task: "",
       time: "12:00",
@@ -763,29 +661,17 @@ export default function Planner() {
       iconPath: ICONS.ERROR,
       iconColor: theme.colors.error,
       onConfirm: async () => {
-        // Optimistic UI update
         const updatedItems = planItems.filter(
           (item) => item.id.toString() !== taskId.toString(),
         );
         setPlanItems(updatedItems);
-        LocalDB.upsertPlan(user.id, selectedDay, updatedItems);
+
+        await savePlan(updatedItems, selectedDay);
 
         try {
-          // 1. Delete from Firestore
-          const planRef = doc(
-            firestore,
-            "users",
-            user.id,
-            "plans",
-            selectedDay,
-          );
-          setDoc(planRef, { items: updatedItems }, { merge: true });
-
-          // 2. Delete from Backend
           await brainwaveApi.deleteTask(user.id, selectedDay, taskId);
         } catch (e) {
-          console.error("Error deleting task:", e);
-          // If it fails, the next fetch will restore it, or we could revert here
+          console.error("Error deleting task from backend:", e);
         }
       },
     });
@@ -793,7 +679,6 @@ export default function Planner() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* OVERLAY FOR AI OPTIMIZATION */}
       <Modal transparent visible={isOptimizing} animationType="fade">
         <View
           style={{
@@ -832,7 +717,6 @@ export default function Planner() {
           />
         }
       >
-        {/* Header */}
         <View style={styles.header}>
           <View>
             <Text style={styles.headerTitle}>Study planner</Text>
@@ -842,7 +726,6 @@ export default function Planner() {
           </View>
         </View>
 
-        {/* AI Insights Banner */}
         <View style={styles.insightContainer}>
           <View
             style={[
@@ -865,7 +748,6 @@ export default function Planner() {
           </View>
         </View>
 
-        {/* Week Selector */}
         <View style={styles.weekSelectorContainer}>
           <ScrollView
             horizontal
@@ -902,7 +784,6 @@ export default function Planner() {
           </ScrollView>
         </View>
 
-        {/* Study Plan Section */}
         <View style={styles.planContainer}>
           <View style={styles.planHeader}>
             <Text style={styles.planTitle}>
@@ -951,7 +832,6 @@ export default function Planner() {
                     item.completed && styles.planCardCompleted,
                     isTaskPast(item) && { opacity: 0.4 },
                     styles.planCardMargin,
-                    // APPLY RED GLOW: Only if Rank #1 and NOT completed
                     isHighPriority &&
                       !item.completed && {
                         borderColor: "#FF4B4B",
@@ -967,7 +847,6 @@ export default function Planner() {
                   <TouchableOpacity
                     style={styles.planContent}
                     onPress={() => {
-                      // Removed: if (item.isTemplate) return;
                       setEditingTaskId(item.id);
                       setNewTask({
                         task: item.task,
@@ -977,7 +856,6 @@ export default function Planner() {
                         subject: item.subject || "Personal",
                         deadline: item.deadline || "",
                       });
-                      // Parse time for the picker
                       const start = parseStartDate(item);
                       if (start) setTimeValue(start);
                       if (item.deadline)
@@ -1011,7 +889,6 @@ export default function Planner() {
                       {item.task}
                     </Text>
 
-                    {/* Subject / Tag + Priority Badges Row */}
                     <View
                       style={{
                         flexDirection: "row",
@@ -1125,7 +1002,6 @@ export default function Planner() {
                     )}
                   </TouchableOpacity>
 
-                  {/* Actions Column on the Right */}
                   <View style={styles.taskActions}>
                     {isTaskActive(item) && <PulseDot />}
                     <TouchableOpacity
@@ -1144,7 +1020,6 @@ export default function Planner() {
           )}
         </View>
 
-        {/* Add Custom Task Trigger */}
         <View style={styles.addTaskContainer}>
           <TouchableOpacity
             style={styles.addTaskButton}
@@ -1165,7 +1040,7 @@ export default function Planner() {
           </TouchableOpacity>
         </View>
 
-        {/* Modal for adding task */}
+        {/* Add/Edit Task Modal */}
         <Modal visible={isModalVisible} animationType="fade" transparent={true}>
           <TouchableOpacity
             style={styles.modalOverlay}
@@ -1316,13 +1191,12 @@ export default function Planner() {
                   <TimerIcon size={20} color={theme.colors.primary} />
                   <Text style={styles.timePickerText}>{newTask.time}</Text>
                 </TouchableOpacity>
-
                 {showTimePicker && (
                   <DateTimePicker
                     value={timeValue}
                     mode="time"
                     is24Hour={true}
-                    display="spinner" // Use 'default' for Android/iOS specific style
+                    display="spinner"
                     onChange={onTimeChange}
                   />
                 )}
@@ -1376,15 +1250,14 @@ export default function Planner() {
                   ))}
                 </View>
 
-                {/* Deadline picker - only for Assignment / Exam Prep */}
                 {(newTask.subject === "Assignment" ||
                   newTask.subject === "Exam Prep") && (
                   <>
-                    {newTask.subject === "Assignment" ? (
-                      <Text style={styles.inputLabel}>Deadline</Text>
-                    ) : (
-                      <Text style={styles.inputLabel}>Exam Date</Text>
-                    )}
+                    <Text style={styles.inputLabel}>
+                      {newTask.subject === "Assignment"
+                        ? "Deadline"
+                        : "Exam Date"}
+                    </Text>
                     <TouchableOpacity
                       style={styles.timePickerButton}
                       onPress={() => setShowDeadlinePicker(true)}
@@ -1463,6 +1336,7 @@ export default function Planner() {
             </TouchableWithoutFeedback>
           </TouchableOpacity>
         </Modal>
+
         {/* Difficulty Selection Modal */}
         <Modal
           visible={selectedDifficultyTask !== null}
@@ -1477,63 +1351,40 @@ export default function Planner() {
             <TouchableWithoutFeedback>
               <View style={[styles.modalContent, { paddingBottom: 20 }]}>
                 <Text style={styles.modalTitle}>Set Task Difficulty</Text>
-
                 <View style={{ width: "100%", gap: 12, marginTop: 10 }}>
-                  <TouchableOpacity
-                    style={[
-                      styles.difficultyOption,
-                      { backgroundColor: theme.colors.success + "20" },
-                    ]}
-                    onPress={() => handleSetDifficulty("easy")}
-                  >
-                    <Text
+                  {[
+                    { label: "Easy", val: "easy", color: theme.colors.success },
+                    {
+                      label: "Medium",
+                      val: "medium",
+                      color: theme.colors.warning,
+                    },
+                    { label: "Hard", val: "hard", color: theme.colors.error },
+                  ].map((opt) => (
+                    <TouchableOpacity
+                      key={opt.val}
                       style={[
-                        styles.difficultyOptionText,
-                        { color: theme.colors.success },
+                        styles.difficultyOption,
+                        { backgroundColor: opt.color + "20" },
                       ]}
+                      onPress={() => handleSetDifficulty(opt.val)}
                     >
-                      Easy
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.difficultyOption,
-                      { backgroundColor: theme.colors.warning + "20" },
-                    ]}
-                    onPress={() => handleSetDifficulty("medium")}
-                  >
-                    <Text
-                      style={[
-                        styles.difficultyOptionText,
-                        { color: theme.colors.warning },
-                      ]}
-                    >
-                      Medium
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.difficultyOption,
-                      { backgroundColor: theme.colors.error + "20" },
-                    ]}
-                    onPress={() => handleSetDifficulty("hard")}
-                  >
-                    <Text
-                      style={[
-                        styles.difficultyOptionText,
-                        { color: theme.colors.error },
-                      ]}
-                    >
-                      Hard
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.difficultyOptionText,
+                          { color: opt.color },
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
             </TouchableWithoutFeedback>
           </TouchableOpacity>
         </Modal>
+
         {/* AI Options Modal */}
         <Modal
           visible={isRegenerateModalVisible}
@@ -1742,17 +1593,9 @@ const createStyles = (theme: Theme) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    difficultyOptionText: {
-      fontFamily: theme.fonts.bold,
-      fontSize: 16,
-    },
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    scrollView: {
-      flex: 1,
-    },
+    difficultyOptionText: { fontFamily: theme.fonts.bold, fontSize: 16 },
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    scrollView: { flex: 1 },
     header: {
       backgroundColor: theme.colors.surface,
       borderBottomWidth: 1,
@@ -1770,9 +1613,7 @@ const createStyles = (theme: Theme) =>
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
     },
-    insightContainer: {
-      padding: theme.spacing.lg,
-    },
+    insightContainer: { padding: theme.spacing.lg },
     insightCard: {
       backgroundColor: theme.colors.surface,
       borderRadius: 16,
@@ -1790,9 +1631,7 @@ const createStyles = (theme: Theme) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    insightText: {
-      flex: 1,
-    },
+    insightText: { flex: 1 },
     insightTitle: {
       fontSize: 16,
       fontFamily: theme.fonts.semiBold,
@@ -1809,10 +1648,7 @@ const createStyles = (theme: Theme) =>
       paddingHorizontal: theme.spacing.lg,
       marginBottom: theme.spacing.lg,
     },
-    weekSelector: {
-      gap: 8,
-      paddingBottom: 8,
-    },
+    weekSelector: { gap: 8, paddingBottom: 8 },
     dayButton: {
       paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.sm,
@@ -1823,30 +1659,21 @@ const createStyles = (theme: Theme) =>
       minWidth: 80,
       alignItems: "center",
     },
-    dayButtonActive: {
-      backgroundColor: theme.colors.primary,
-    },
+    dayButtonActive: { backgroundColor: theme.colors.primary },
     dayLabel: {
       fontSize: 14,
       fontFamily: theme.fonts.medium,
       color: theme.colors.text.primary,
     },
-    dayLabelActive: {
-      color: "#f5f5f5",
-    },
+    dayLabelActive: { color: "#f5f5f5" },
     dayDate: {
       fontSize: 12,
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
       marginTop: 4,
     },
-    dayDateActive: {
-      color: "#f5f5f5",
-      opacity: 0.7,
-    },
-    planContainer: {
-      paddingHorizontal: theme.spacing.lg,
-    },
+    dayDateActive: { color: "#f5f5f5", opacity: 0.7 },
+    planContainer: { paddingHorizontal: theme.spacing.lg },
     planHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -1873,11 +1700,9 @@ const createStyles = (theme: Theme) =>
       marginTop: 20,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      borderStyle: "dashed", // Gives it a "waiting to be filled" look
+      borderStyle: "dashed",
     },
-    emptyIconContainer: {
-      marginBottom: 12,
-    },
+    emptyIconContainer: { marginBottom: 12 },
     emptyText: {
       fontSize: 16,
       color: theme.colors.text.secondary,
@@ -1911,26 +1736,12 @@ const createStyles = (theme: Theme) =>
       flexDirection: "row",
       gap: 12,
     },
-    planCardCompleted: {
-      opacity: 0.6,
-    },
-    planCardMargin: {
-      marginBottom: theme.spacing.sm,
-    },
-    checkboxContainer: {
-      paddingTop: 4,
-    },
-    planContent: {
-      flex: 1,
-    },
-    planTimeContainer: {
-      marginBottom: theme.spacing.xs,
-    },
-    timeRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
+    planCardCompleted: { opacity: 0.6 },
+    planCardMargin: { marginBottom: theme.spacing.sm },
+    checkboxContainer: { paddingTop: 4 },
+    planContent: { flex: 1 },
+    planTimeContainer: { marginBottom: theme.spacing.xs },
+    timeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
     timeText: {
       fontSize: 14,
       fontFamily: theme.fonts.regular,
@@ -1955,9 +1766,7 @@ const createStyles = (theme: Theme) =>
       color: theme.colors.text.primary,
       marginBottom: 4,
     },
-    taskTitleCompleted: {
-      textDecorationLine: "line-through",
-    },
+    taskTitleCompleted: { textDecorationLine: "line-through" },
     subjectText: {
       fontSize: 14,
       fontFamily: theme.fonts.regular,
@@ -1970,10 +1779,7 @@ const createStyles = (theme: Theme) =>
       paddingVertical: 4,
       borderRadius: 6,
     },
-    difficultyText: {
-      fontSize: 12,
-      fontFamily: theme.fonts.medium,
-    },
+    difficultyText: { fontSize: 12, fontFamily: theme.fonts.medium },
     taskActions: {
       flexDirection: "column",
       justifyContent: "center",
@@ -1987,10 +1793,7 @@ const createStyles = (theme: Theme) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    addTaskContainer: {
-      padding: theme.spacing.lg,
-      paddingBottom: 100,
-    },
+    addTaskContainer: { padding: theme.spacing.lg, paddingBottom: 100 },
     addTaskButton: {
       borderWidth: 2,
       borderColor: theme.colors.border,
@@ -2044,12 +1847,8 @@ const createStyles = (theme: Theme) =>
       alignItems: "center",
       marginHorizontal: 5,
     },
-    confirmButton: {
-      backgroundColor: theme.colors.primary,
-    },
-    cancelButton: {
-      backgroundColor: theme.colors.border,
-    },
+    confirmButton: { backgroundColor: theme.colors.primary },
+    cancelButton: { backgroundColor: theme.colors.border },
     confirmButtonText: { color: "#fff", fontWeight: "bold" },
     cancelButtonText: { color: theme.colors.text.secondary },
     inputLabel: {
@@ -2080,7 +1879,5 @@ const createStyles = (theme: Theme) =>
       marginLeft: 10,
       fontSize: 16,
     },
-    inputError: {
-      borderColor: theme.colors.error + "50",
-    },
+    inputError: { borderColor: theme.colors.error + "50" },
   });

@@ -40,7 +40,6 @@ class StudyMaterial(Base):
     )
     is_deleted: Mapped[int] = mapped_column(Integer, default=0)
 
-
 class Timetable(Base):
     __tablename__ = "timetables"
 
@@ -54,7 +53,6 @@ class Timetable(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     is_deleted: Mapped[int] = mapped_column(Integer, default=0)
-
 
 class Assignment(Base):
     __tablename__ = "assignments"
@@ -70,7 +68,6 @@ class Assignment(Base):
     file_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_deleted: Mapped[int] = mapped_column(Integer, default=0)
-
 
 class Flashcard(Base):
     __tablename__ = "flashcards"

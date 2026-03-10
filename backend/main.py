@@ -97,14 +97,16 @@ class CustomTask(BaseModel):
     time: str
     duration: Optional[str] = "30 min"
 
+class DailyPlanRequest(BaseModel):
+    date: str
+    items: list
+
 class PlanRequest(BaseModel):
     date: str
-    # Preferences
     isMorningPerson: bool
     preferredSessionLength: str
     mode: str
     subjectPriorities: List[str]
-    # Tasks
     classes: Optional[List[ClassItem]] = None
     customTasks: Optional[List[CustomTask]] = None
     userNote: Optional[str] = None
@@ -374,24 +376,19 @@ async def syncStudyMaterial(data: StudyMaterialSync, user_id: str = Depends(veri
     return {"id": material.id, "status": "synced"}
 
 @app.post("/daily-plan")
-async def saveDailyPlan(data: dict, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
-    """
-    Saves or updates a daily plan to Supabase.
-    """
-    date = data.get("date")
-    items = data.get("items")
-    items_json = json.dumps(items)
+async def saveDailyPlan(data: DailyPlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    items_json = json.dumps(data.items)
 
     plan = db.query(DailyPlan).filter(
         DailyPlan.user_id == user_id,
-        DailyPlan.date == date
+        DailyPlan.date == data.date
     ).first()
 
     if plan:
         plan.items_json = items_json
         plan.generated_at = datetime.now(timezone.utc)
     else:
-        plan = DailyPlan(user_id=user_id, date=date, items_json=items_json)
+        plan = DailyPlan(user_id=user_id, date=data.date, items_json=items_json)
         db.add(plan)
 
     db.commit()
@@ -545,7 +542,7 @@ async def listDailyPlans(user_id: str = Depends(verify_token), db: Session = Dep
     for plan in plans:
         result.append({
             "date": plan.date,
-            "items": json.loads(str(plan.items_json))
+            "tasks": json.loads(str(plan.items_json))
         })
 
     return {"plans": result}
