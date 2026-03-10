@@ -366,6 +366,13 @@ export const LocalDB = {
     );
   },
 
+  updateAssignmentDueDate: (id: number, newDueDate: string) => {
+    db.runSync(
+      `UPDATE assignments SET due_date = ?, is_dirty = 1 WHERE id = ?`,
+      [newDueDate, id],
+    );
+  },
+
   createAssignmentLocally: (
     userId: string,
     title: string,

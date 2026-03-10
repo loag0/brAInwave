@@ -7,16 +7,19 @@ import {
   StyleSheet,
   TouchableOpacity,
   Text,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import Markdown from "react-native-markdown-display";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useAlert } from "../contexts/AlertContext";
 import { useContent } from "../hooks/useContent";
 import brAInwaveApi from "@/api/brAInwaveApi";
 import { LocalDB } from "../database/localDb";
-import { ExportIcon } from "@/components/Icons";
+import { ExportIcon, ICONS } from "@/components/Icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
@@ -29,8 +32,11 @@ export default function AssignmentDetail() {
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isSavingDate, setIsSavingDate] = useState(false);
   const { deleteAssignment } = useContent();
   const router = useRouter();
+  const { showAlert } = useAlert();
 
   const handleDelete = async () => {
     if (!data?.id) return;
@@ -47,25 +53,15 @@ export default function AssignmentDetail() {
   const getAssignment = useCallback(async () => {
     if (!user?.id || !id) return;
     setLoading(true);
-
     try {
-      // 1. Check Local DB first
       const localData = await LocalDB.getAssignmentById(user.id, id as string);
-
       if (localData && (localData as any).rawContent) {
         setData(localData);
         setLoading(false);
-        // We still fetch remote in background to ensures sync?
-        // For now just return if local found.
         return;
       }
-
-      // 2. Fallback to API
       const response = await brAInwaveApi.getAssignment(user.id, id as string);
-
-      if (response) {
-        setData(response);
-      }
+      if (response) setData(response);
     } catch (e) {
       console.error("Error fetching assignment:", e);
     } finally {
@@ -76,126 +72,134 @@ export default function AssignmentDetail() {
   useEffect(() => {
     getAssignment();
   }, [getAssignment]);
-
   useFocusEffect(
     useCallback(() => {
       getAssignment();
     }, [getAssignment]),
   );
 
+  // For due date handling
+  const handleDateChange = async (_event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (!selectedDate || !data?.id) return;
+
+    // Guard: reject past dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDate < today) {
+      showAlert({
+        title: "Invalid Date",
+        message: "Buddy, due date cannot be in the past. Select a valid date before you pmo",
+        iconPath:ICONS.ERROR,
+        iconColor: theme.colors.error,
+        confirmText: "Got it",
+      });
+      return;
+    }
+
+    const newDate = selectedDate.toISOString().split("T")[0];
+    setData((prev: any) => ({ ...prev, due_date: newDate })); // optimistic
+    setIsSavingDate(true);
+    try {
+      const localId = Number(data.id);
+      if(!localId || isNaN(localId)){
+        console.error("Invalid local id:", data.id);
+        return;
+      }
+      console.log("data id:", data.id, "type:", typeof data.id);
+      console.log("remote_id:", data.remote_id, "local id:", data.id);
+      
+      await LocalDB.updateAssignmentDueDate(localId, newDate);
+      if (data.remote_id) {
+        await brAInwaveApi.updateAssignmentDueDate(data.remote_id, newDate);
+        LocalDB.markAssignmentSynced(localId, data.remote_id);
+      }
+    } catch (e) {
+      console.error("Failed to save due date:", e);
+      // Revert optimistic update on failure
+      setData((prev: any) => ({ ...prev, due_date: data.due_date }));
+    } finally {
+      setIsSavingDate(false);
+    }
+  };
+
+  const formatDueDate = (dateStr?: string | null) => {
+    if (!dateStr) return "Tap to set a due date";
+    return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const getDueDateState = (dateStr?: string | null) => {
+    if (!dateStr) return "unset";
+    const daysLeft =
+      (new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000;
+    if (daysLeft < 0) return "overdue";
+    if (daysLeft <= 3) return "soon";
+    return "ok";
+  };
+
+  const dueDateState = getDueDateState(data?.due_date);
+  const dueDateColor =
+    dueDateState === "overdue"
+      ? theme.colors.error
+      : dueDateState === "soon"
+        ? "#FF9500"
+        : dueDateState === "ok"
+          ? theme.colors.success
+          : theme.colors.text.secondary;
+
+  const dueDateLabel =
+    dueDateState === "overdue"
+      ? "Overdue"
+      : dueDateState === "soon"
+        ? "Due Soon"
+        : "Due Date";
+
+  // PDF export
   const exportToPDF = async () => {
     if (!data) return;
-
     try {
       const contentHtml = await marked.parse(
         data.rawContent || "No content analyzed.",
       );
-
       const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { 
-              font-family: 'Helvetica', 'Arial', sans-serif; 
-              padding: 40px; 
-              color: #333; 
-              line-height: 1.6; 
-            }
-            .document-header { 
-              border-bottom: 2px solid ${theme.colors.primary}; 
-              padding-bottom: 15px; 
-              margin-bottom: 30px;
-            }
-            .meta-section {
-                margin-bottom: 20px;
-                padding: 10px;
-                background: #f9f9f9;
-                border-radius: 8px;
-            }
-            .meta-item {
-                font-size: 14px;
-                margin-bottom: 5px;
-            }
-            h1 { 
-              color: ${theme.colors.primary}; 
-              margin: 0; 
-              font-size: 28px;
-            }
-            .branding { 
-              font-size: 10px; 
-              color: #999; 
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              margin-top: 5px;
-            }
-            
-            h2, h3 { 
-              page-break-after: avoid; 
-              break-after: avoid; 
-              color: ${theme.colors.primary};
-              margin-top: 25px;
-            }
-            pre, blockquote, img { 
-              page-break-inside: avoid; 
-              break-inside: avoid; 
-            }
-            
-            pre { 
-              background: #f8f9fa; 
-              padding: 15px; 
-              border-radius: 8px; 
-              border: 1px solid #eee;
-              white-space: pre-wrap; 
-              font-size: 12px;
-              font-family: 'Courier New', monospace;
-            }
-            blockquote { 
-              border-left: 4px solid #ddd; 
-              margin: 20px 0; 
-              padding: 10px 20px; 
-              background: #fcfcfc;
-              font-style: italic; 
-              color: #555; 
-            }
-            ul, ol { padding-left: 25px; }
-            li { margin-bottom: 8px; }
-            p { margin-bottom: 15px; }
-          </style>
-        </head>
-        <body>
-          <div class="document-header">
-            <h1>${data.title}</h1>
-            <p class="branding">Assignment Master Plan by <span style="color: ${theme.colors.primary}; font-weight: bold;">brAInwave</span></p>
-          </div>
-          <div class="meta-section">
-            <div class="meta-item"><strong>Subject:</strong> ${data.subject}</div>
-            <div class="meta-item"><strong>Due Date:</strong> ${data.due_date}</div>
-            <div class="meta-item"><strong>Priority:</strong> ${data.priority}</div>
-          </div>
-          <div id="content">
-            ${contentHtml}
-          </div>
-        </body>
-      </html>
-    `;
+      <!DOCTYPE html><html><head><style>
+        body { font-family:'Helvetica','Arial',sans-serif; padding:40px; color:#333; line-height:1.6; }
+        .document-header { border-bottom:2px solid ${theme.colors.primary}; padding-bottom:15px; margin-bottom:30px; }
+        .meta-section { margin-bottom:20px; padding:10px; background:#f9f9f9; border-radius:8px; }
+        .meta-item { font-size:14px; margin-bottom:5px; }
+        h1 { color:${theme.colors.primary}; margin:0; font-size:28px; }
+        .branding { font-size:10px; color:#999; text-transform:uppercase; letter-spacing:1px; margin-top:5px; }
+        h2,h3 { page-break-after:avoid; break-after:avoid; color:${theme.colors.primary}; margin-top:25px; }
+        pre,blockquote,img { page-break-inside:avoid; break-inside:avoid; }
+        pre { background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #eee; white-space:pre-wrap; font-size:12px; font-family:'Courier New',monospace; }
+        blockquote { border-left:4px solid #ddd; margin:20px 0; padding:10px 20px; background:#fcfcfc; font-style:italic; color:#555; }
+        ul,ol { padding-left:25px; } li { margin-bottom:8px; } p { margin-bottom:15px; }
+      </style></head><body>
+        <div class="document-header">
+          <h1>${data.title}</h1>
+          <p class="branding">Assignment Master Plan by <span style="color:${theme.colors.primary};font-weight:bold;">brAInwave</span></p>
+        </div>
+        <div class="meta-section">
+          <div class="meta-item"><strong>Subject:</strong> ${data.subject}</div>
+          <div class="meta-item"><strong>Due Date:</strong> ${data.due_date || "Not set"}</div>
+          <div class="meta-item"><strong>Priority:</strong> ${data.priority}</div>
+        </div>
+        <div id="content">${contentHtml}</div>
+      </body></html>`;
 
       const { uri: printUri } = await Print.printToFileAsync({ html });
       const fileName = `${data.title.replace(/\s+/g, "_")}.pdf`;
       const tempFile = new File(printUri);
       const targetFile = new File(Paths.cache, fileName);
-      
-      if (targetFile.exists) {
-        await targetFile.delete();
-      }
+      if (targetFile.exists) await targetFile.delete();
       await tempFile.move(targetFile);
-      const tempAction = async () => {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(targetFile.uri);
-        }
-      };
-      await tempAction();
+      if (await Sharing.isAvailableAsync())
+        await Sharing.shareAsync(targetFile.uri);
     } catch (e) {
       console.error("PDF Export Error:", e);
     }
@@ -221,6 +225,52 @@ export default function AssignmentDetail() {
         <ActivityIndicator style={{ flex: 1 }} color={theme.colors.primary} />
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Due date banner */}
+          <TouchableOpacity
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
+            style={[
+              styles.dueDateBanner,
+              {
+                backgroundColor: dueDateColor + "15",
+                borderColor: dueDateColor + "40",
+              },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.dueDateLabel,
+                  { color: theme.colors.text.secondary },
+                ]}
+              >
+                {dueDateLabel}
+              </Text>
+              <Text style={[styles.dueDateValue, { color: dueDateColor }]}>
+                {formatDueDate(data?.due_date)}
+              </Text>
+            </View>
+            <Text
+              style={{ color: dueDateColor, fontSize: 12, fontWeight: "600" }}
+            >
+              {isSavingDate ? "Saving..." : "Edit"}
+            </Text>
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={
+                data?.due_date
+                  ? new Date(data.due_date + "T00:00:00")
+                  : new Date()
+              }
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={handleDateChange}
+            />
+          )}
+
+          {/* Markdown plan content */}
           <Markdown
             style={{
               body: {
@@ -277,6 +327,22 @@ export default function AssignmentDetail() {
 
 const styles = StyleSheet.create({
   scrollContent: { padding: 20, paddingBottom: 100 },
+  dueDateBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  dueDateLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  dueDateValue: { fontSize: 16, fontWeight: "700" },
   buttonGroup: {
     marginTop: 30,
     flexDirection: "row",

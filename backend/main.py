@@ -110,6 +110,9 @@ class PlanRequest(BaseModel):
     classes: Optional[List[ClassItem]] = None
     customTasks: Optional[List[CustomTask]] = None
     userNote: Optional[str] = None
+    
+class DueDateUpdate(BaseModel):
+    due_date: str
 
 # --- Routes ---
 
@@ -174,11 +177,15 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         mime_type = file.content_type or "application/pdf"
 
         meta_prompt = """
-        Analyze this assignment document and extract the following information in JSON format:
-        - title: A descriptive title for the assignment.
-        - subject: The academic subject (e.g., Computer Science, History).
-        - due_date: The deadline in YYYY-MM-DD format. If not found, use a date 7 days from now.
-        - priority: One of 'low', 'medium', or 'high' based on the complexity or weight described.
+        You are brAInwave, an academic intelligence engine. Analyze this assignment document and extract the following fields as a JSON object:
+        - title: A clear, descriptive title for the assignment (not just the filename).
+        - subject: The academic subject or course this belongs to (e.g., "Software Engineering", "Macroeconomics").
+        - due_date: The submission deadline in YYYY-MM-DD format. ONLY extract this if a date is explicitly written in the document. If no date is found, return null — do NOT guess or infer.
+        - priority: Assess complexity, weight, and scope. Return one of: 'low', 'medium', or 'high'.
+        - estimated_hours: Estimate realistic total hours needed to complete this assignment well. Return an integer.
+        - assignment_type: Classify the work. One of: 'essay', 'report', 'project', 'coding', 'presentation', 'research', 'problem_set', or 'other'.
+
+        Be precise. Do not guess wildly — use only what is in the document.
         """
 
         meta_response = client.models.generate_content(
@@ -196,15 +203,47 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         meta_data = json.loads(meta_response.text)
 
         guide_prompt = """
-        You are brAInwave, a specialized academic consultant. Create a comprehensive 'Master Plan' study guide for this specific assignment.
-        The plan must be in beautiful Markdown format and include:
-        - Assignment Overview: What needs to be done.
-        - Strategic Checklist: Step-by-step actionable tasks to complete the assignment.
-        - Research & Resources: What theories, books, or data sources might be helpful.
-        - Structural Guide: How to structure the final output (e.g., Intro, Body, Conclusion).
-        - Pro Tips: Advice on avoiding common pitfalls or maximizing marks.
+        You are brAInwave, a specialized academic consultant and assignment strategist. Your job is to produce a detailed, battle-tested Master Plan for this specific assignment.
 
-        Make it encouraging and professional.
+        --- ANALYSIS PHASE ---
+        First, deeply understand the assignment:
+        - What is being asked? What is the core deliverable?
+        - What academic standards or marking criteria apply?
+        - What are the common failure points for this type of work?
+
+        --- MASTER PLAN OUTPUT ---
+        Produce the plan in clean, well-structured Markdown. It must include all of the following sections:
+
+        ## 1. Assignment Snapshot
+        A concise 3-4 sentence breakdown of what this assignment requires, the expected output, and what success looks like.
+
+        ## 2. Execution Checklist
+        A numbered, phase-by-phase checklist of every action needed to complete this assignment — from first read to final submission.
+        Each item must be specific and actionable (e.g., "Read Chapter 4 of [textbook] for background on X", not just "Do research").
+        Group tasks into phases: Understand → Research → Draft → Review → Submit.
+
+        ## 3. Resource Radar
+        Suggest specific types of sources, theories, frameworks, or tools relevant to this assignment.
+        Include: academic sources, methodologies, software/tools if applicable, and any citation style requirements.
+
+        ## 4. Structure Blueprint
+        Provide a detailed structural outline for the final deliverable.
+        For written work: title page, abstract, introduction, body sections with suggested headings, conclusion, references.
+        For coding/projects: file structure, key components, expected outputs.
+        For presentations: slide-by-slide outline with talking points.
+
+        ## 5. Time Allocation Guide
+        Break the estimated completion time into phases with suggested hours per phase.
+        Flag which phases are most time-intensive and should be started earliest.
+
+        ## 6. Mark-Maximizing Tips
+        3-5 specific, high-value tips tailored to this assignment type that most students miss.
+        Be direct and honest — what separates a distinction from a pass for this specific piece of work?
+
+        ## 7. Red Flags & Common Mistakes
+        List the top 3-5 mistakes students make on this type of assignment and how to avoid them.
+
+        Keep the tone sharp, encouraging, and professional. Write as if you are a top-tier tutor who has seen hundreds of students fail and succeed at this exact type of work.
         """
 
         guide_response = client.models.generate_content(
@@ -257,6 +296,18 @@ async def getAssignment(assignment_id: int, user_id: str = Depends(verify_token)
         raise HTTPException(status_code=404, detail="Assignment not found.")
     return assignment
 
+@app.patch("/assignment/{assignment_id}/due-date")
+async def updateAssignmentDueDate(assignment_id: int, data: DueDateUpdate, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    assignment = db.query(Assignment).filter(
+        Assignment.id == assignment_id,
+        Assignment.user_id == user_id
+    ).first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+    assignment.due_date = data.due_date
+    db.commit()
+    return {"status": "success"}
+  
 @app.delete("/assignment/{assignment_id}")
 async def deleteAssignment(assignment_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     assignment = db.query(Assignment).filter(
@@ -282,12 +333,17 @@ async def uploadTimetable(user_id: str = Depends(verify_token), file: UploadFile
         Extract the class schedule from this document.
         Return a JSON object with a key 'weekly_template'.
         'weekly_template' must be an object where keys are 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'.
-        Each day contains a list of classes with: 'subject', 'time', 'room'.
+        Each day contains a list of classes with: 'subject', 'time', 'room', 'difficulty'.
 
         CRITICAL INSTRUCTIONS:
         1. Extract the 'time' exactly as it appears in the document (e.g., "10:00 - 11:00").
         2. Do NOT adjust the time for timezones or any other reason.
         3. If a day has no classes, return an empty list for that day.
+        4. For 'difficulty': make a reasonable guess based on the subject name.
+           - Technical/mathematical subjects (e.g., Engineering, Physics, Calculus, Programming) → "hard"
+           - Mixed/analytical subjects (e.g., Economics, Chemistry, Statistics) → "medium"
+           - Humanities/language/social subjects (e.g., History, English, Sociology) → "easy"
+           - If unsure, default to "medium".
     """
 
     response = client.models.generate_content(

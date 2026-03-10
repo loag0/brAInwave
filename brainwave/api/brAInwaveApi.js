@@ -142,6 +142,14 @@ class BrAInwaveAPI {
     return response.data;
   }
 
+  async updateAssignmentDueDate(remoteId, newDueDate) {
+    const response = await axios.patch(
+      `${API_BASE_URL}/assignment/${remoteId}/due-date`,
+      { due_date: newDueDate },
+    );
+    return response.data;
+  }
+
   async deleteAssignment(userId, assignmentId) {
     const response = await axios.delete(
       `${API_BASE_URL}/assignment/${assignmentId}`,
