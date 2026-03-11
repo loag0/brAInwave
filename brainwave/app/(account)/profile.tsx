@@ -1,16 +1,29 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAlert } from "../contexts/AlertContext";
-import { KeyIcon, ShieldIcon, ChevronRightIcon, ICONS } from "@/components/Icons";
+import {
+  KeyIcon,
+  ShieldIcon,
+  ChevronRightIcon,
+  ICONS,
+} from "@/components/Icons";
+import { LocalDB } from "../database/localDb";
 
 export default function ProfileScreen() {
   const { user, getAuth, deleteAccount } = useAuth();
   const { theme } = useTheme();
   const { showAlert } = useAlert();
   const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const is2faEnabled = false;
 
@@ -33,17 +46,22 @@ export default function ProfileScreen() {
       iconPath: ICONS.ERROR,
       iconColor: theme.colors.error,
       onConfirm: async () => {
+        setIsDeleting(true);
         try {
           const auth = getAuth();
-          const user = auth.currentUser;
+          const currentUser = auth.currentUser;
 
-          if (user) {
+          if (currentUser) {
+            if (user?.id) {
+              LocalDB.clearUser(user.id);
+            }
             await deleteAccount();
           }
 
           router.replace("/login");
         } catch (error) {
           console.error("Delete failed:", error);
+          setIsDeleting(false);
           showAlert({
             title: "Error",
             message:
@@ -54,6 +72,21 @@ export default function ProfileScreen() {
       },
     });
   };
+
+  if (isDeleting) {
+    return (
+      <View
+        style={[styles.centered, { backgroundColor: theme.colors.background }]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text
+          style={[styles.deletingText, { color: theme.colors.text.secondary }]}
+        >
+          Deleting your account...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -127,8 +160,6 @@ export default function ProfileScreen() {
       </View>
 
       {/* Danger Zone */}
-
-
       <View style={styles.dangerSection}>
         <Text style={[styles.sectionTitle, { color: "#ff3b30" }]}>
           DANGER ZONE
@@ -147,6 +178,18 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 16,
+  },
+
+  deletingText: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
 
   header: { alignItems: "center", paddingVertical: 40 },
 
@@ -198,7 +241,6 @@ const styles = StyleSheet.create({
   dangerSection: {
     marginTop: 60,
     paddingHorizontal: 20,
-
   },
 
   deleteButton: {

@@ -4,7 +4,6 @@ import { Linking } from "react-native";
 // Notification Handler - taken from _layout.tsx
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
     shouldShowBanner: true,

@@ -566,4 +566,20 @@ export const LocalDB = {
 
     return streak;
   },
+
+  clearUser: (userId: string) => {
+    const tables = [
+      "user_profile",
+      "study_materials",
+      "timetables",
+      "daily_plans",
+      "assignments",
+      "flashcards",
+      "completion_logs",
+    ];
+    for (const table of tables) {
+      const col = table === "user_profile" ? "id" : "user_id";
+      db.runSync(`DELETE FROM ${table} WHERE ${col} = ?`, [userId]);
+    }
+  },
 };
