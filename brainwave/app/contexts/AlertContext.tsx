@@ -129,14 +129,14 @@ export const useAlert = () => useContext(AlertContext);
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)", // Slightly lighter overlay is more modern
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
   },
   alertBox: {
-    width: "80%", // Material standard
+    width: "80%",
     padding: 24,
-    borderRadius: 28, // Material 3 uses larger border radii
+    borderRadius: 28, 
     elevation: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
@@ -145,20 +145,20 @@ const styles = StyleSheet.create({
   },
   iconContainer: { marginBottom: 16, alignItems: "center" },
   title: {
-    fontSize: 24, // M3 Headline Small
+    fontSize: 24,
     fontWeight: "400",
     marginBottom: 16,
-    textAlign: "left", // Left align for Material
+    textAlign: "left",
   },
   message: {
-    fontSize: 14, // M3 Body Medium
+    fontSize: 14,
     marginBottom: 24,
     lineHeight: 20,
     textAlign: "left",
   },
   buttonContainer: {
     flexDirection: "row",
-    justifyContent: "flex-end", // Standard Material button placement
+    justifyContent: "flex-end",
     width: "100%",
   },
   textButton: {
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   },
   buttonLabel: {
     fontSize: 14,
-    textTransform: "uppercase", // Optional: classic material look
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
 });

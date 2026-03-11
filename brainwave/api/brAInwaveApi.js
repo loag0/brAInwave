@@ -9,7 +9,8 @@ axios.interceptors.request.use(
     try {
       const user = auth.currentUser;
       if (user) {
-        const token = await user.getIdToken();
+        // forceRefresh=false uses cached token, avoids delay on every request
+        const token = await user.getIdToken(false);
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
@@ -20,23 +21,7 @@ axios.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-axios.defaults.timeout = 20000; // 20 seconds timeout for all requests
-
-const checkConnection = async () => {
-  console.log(`Checking connection to: ${API_BASE_URL}`);
-  try {
-    const response = await fetch(API_BASE_URL);
-    if (response.ok) {
-      console.log("Server is LIVE and reachable!");
-    } else {
-      console.warn(`Server responded with status: ${response.status}`);
-    }
-  } catch (error) {
-    console.error("Server is DOWN or unreachable:", error.message);
-  }
-};
-
-checkConnection();
+axios.defaults.timeout = 30000; // 30 seconds
 
 class BrAInwaveAPI {
   /**
@@ -56,7 +41,7 @@ class BrAInwaveAPI {
       formData,
       {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 60000, // 60 seconds timeout for file uploads
+        timeout: 60000, // file uploads get longer timeout
       },
     );
     return response.data;
@@ -77,9 +62,9 @@ class BrAInwaveAPI {
     const response = await axios.post(
       `${API_BASE_URL}/upload-syllabus`,
       formData,
-      { 
+      {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 60000,
+        timeout: 60000, // In case Gemini takes a while to parse and generate the plan
       },
     );
     return response.data;
@@ -100,7 +85,7 @@ class BrAInwaveAPI {
     const response = await axios.post(
       `${API_BASE_URL}/upload-assignment`,
       formData,
-      { 
+      {
         headers: { "Content-Type": "multipart/form-data" },
         timeout: 60000,
       },
@@ -125,7 +110,6 @@ class BrAInwaveAPI {
   /**
    * Deletes a study material from Supabase.
    * Matching Endpoint: DELETE /study-plan/{materialId}
-   * Used in: syncDirtyRecords, deleteMaterial
    */
   async deleteMaterial(userId, materialId) {
     const response = await axios.delete(
@@ -154,6 +138,14 @@ class BrAInwaveAPI {
   async getAssignment(userId, assignmentId) {
     const response = await axios.get(
       `${API_BASE_URL}/assignment/${assignmentId}`,
+    );
+    return response.data;
+  }
+
+  async updateAssignmentDueDate(remoteId, newDueDate) {
+    const response = await axios.patch(
+      `${API_BASE_URL}/assignment/${remoteId}/due-date`,
+      { due_date: newDueDate },
     );
     return response.data;
   }
@@ -201,17 +193,19 @@ class BrAInwaveAPI {
   ) {
     const body = {
       date,
-      isMorningPerson: preferences.isMorningPerson,
-      preferredSessionLength: preferences.preferredSessionLength,
-      mode: preferences.mode,
-      subjectPriorities: preferences.subjectPriorities,
-      customTasks,
+      isMorningPerson: preferences.isMorningPerson === true,
+      preferredSessionLength: preferences.preferredSessionLength || "medium",
+      mode: preferences.mode || "stay_consistent",
+      subjectPriorities: preferences.subjectPriorities || [],
+      customTasks: customTasks || [],
     };
-    if (userNote) body.userNote = userNote;
+    if (userNote && typeof userNote === "string" && userNote.trim())
+      body.userNote = userNote;
 
     const response = await axios.post(
-      `${API_BASE_URL}/generate-plan`, body,
-      { timeout: 60000 } // in case ai generation takes longer
+      `${API_BASE_URL}/generate-plan`,
+      body,
+      { timeout: 60000 }, // in case Gemini takes a while to respond with a plan
     );
     return response.data;
   }
@@ -234,7 +228,7 @@ class BrAInwaveAPI {
       const response = await axios.get(`${API_BASE_URL}/daily-plan/${date}`);
       return response.data;
     } catch (error) {
-      console.error(`Error fetching daily plan for ${date}:`, error.message);
+      console.error(`Error fetching daily plan for ${date}:`, error);
       return null;
     }
   }
@@ -243,7 +237,7 @@ class BrAInwaveAPI {
     const response = await axios.post(
       `${API_BASE_URL}/generate-flashcards`,
       null,
-      { 
+      {
         params: { material_id: materialId },
         timeout: 60000,
       },

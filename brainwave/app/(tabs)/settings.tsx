@@ -27,7 +27,6 @@ import {
   ChevronDownIcon,
   BookIcon,
   EnvelopeIcon,
-  LockIcon,
   MobileIcon,
   SettingsIcon,
   LogoutIcon,
@@ -705,19 +704,6 @@ export default function Settings() {
                 <View style={styles.menuItemLeft}>
                   <EnvelopeIcon color={theme.colors.text.secondary} size={18} />
                   <Text style={styles.menuItemTitle}>Email preferences</Text>
-                </View>
-                <ChevronRightIcon
-                  color={theme.colors.text.secondary}
-                  size={28}
-                />
-              </TouchableOpacity>
-
-              <Separator theme={theme} />
-
-              <TouchableOpacity style={styles.menuItemButton}>
-                <View style={styles.menuItemLeft}>
-                  <LockIcon color={theme.colors.text.secondary} size={18} />
-                  <Text style={styles.menuItemTitle}>Privacy & Security</Text>
                 </View>
                 <ChevronRightIcon
                   color={theme.colors.text.secondary}

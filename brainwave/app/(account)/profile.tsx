@@ -4,23 +4,55 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAlert } from "../contexts/AlertContext";
-import { KeyIcon, ShieldIcon, ChevronRightIcon } from "@/components/Icons"
+import { KeyIcon, ShieldIcon, ChevronRightIcon, ICONS } from "@/components/Icons";
 
 export default function ProfileScreen() {
-  const { user } = useAuth();
+  const { user, getAuth, deleteAccount } = useAuth();
   const { theme } = useTheme();
   const { showAlert } = useAlert();
   const router = useRouter();
 
-  // In a real app, this would come from your user object/Firestore
   const is2faEnabled = false;
 
   const handleChangePassword = () => {
     showAlert({
       title: "Reset Password!",
-      message: " A password reset link has been sent to your email",
-      confirmText: "Ok"
-    })
+      message: "A password reset link has been sent to your email",
+      confirmText: "Ok",
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    showAlert({
+      title: "Delete Account?",
+      message:
+        "This action cannot be undone. All your data will be permanently deleted.",
+      confirmText: "Delete",
+      showCancel: true,
+      cancelText: "Cancel",
+      iconPath: ICONS.ERROR,
+      iconColor: theme.colors.error,
+      onConfirm: async () => {
+        try {
+          const auth = getAuth();
+          const user = auth.currentUser;
+
+          if (user) {
+            await deleteAccount();
+          }
+
+          router.replace("/login");
+        } catch (error) {
+          console.error("Delete failed:", error);
+          showAlert({
+            title: "Error",
+            message:
+              "You may need to log in again before deleting your account.",
+            confirmText: "OK",
+          });
+        }
+      },
+    });
   };
 
   return (
@@ -47,7 +79,6 @@ export default function ProfileScreen() {
           SECURITY
         </Text>
 
-        {/* Change Password */}
         <TouchableOpacity
           style={[
             styles.row,
@@ -66,7 +97,6 @@ export default function ProfileScreen() {
           <ChevronRightIcon color={theme.colors.text.secondary} size={28} />
         </TouchableOpacity>
 
-        {/* 2FA Menu Item (No Toggle) */}
         <TouchableOpacity
           style={styles.row}
           onPress={() => router.push("/mfa-setup")}
@@ -79,6 +109,7 @@ export default function ProfileScreen() {
               Two-Factor Authentication
             </Text>
           </View>
+
           <View style={styles.rowRight}>
             <Text
               style={[
@@ -94,13 +125,31 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
       </View>
+
+      {/* Danger Zone */}
+
+
+      <View style={styles.dangerSection}>
+        <Text style={[styles.sectionTitle, { color: "#ff3b30" }]}>
+          DANGER ZONE
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.deleteButton, { borderColor: "#ff3b30" }]}
+          onPress={handleDeleteAccount}
+        >
+          <Text style={styles.deleteText}>Delete Account</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   header: { alignItems: "center", paddingVertical: 40 },
+
   avatar: {
     width: 100,
     height: 100,
@@ -114,9 +163,13 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+
   avatarText: { color: "#fff", fontSize: 40, fontWeight: "bold" },
+
   email: { fontSize: 16, fontWeight: "500" },
+
   section: { marginTop: 20, paddingHorizontal: 20 },
+
   sectionTitle: {
     fontSize: 12,
     fontWeight: "700",
@@ -125,6 +178,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
   },
+
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -132,8 +186,31 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 4,
   },
-  rowLeft: { flexDirection: "row", alignItems: "center"},
+
+  rowLeft: { flexDirection: "row", alignItems: "center" },
+
   rowRight: { flexDirection: "row", alignItems: "center" },
+
   rowText: { fontSize: 16, marginLeft: 12, fontWeight: "500" },
+
   statusLabel: { fontSize: 14, marginRight: 8, fontWeight: "600" },
+
+  dangerSection: {
+    marginTop: 60,
+    paddingHorizontal: 20,
+
+  },
+
+  deleteButton: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+
+  deleteText: {
+    color: "#ff3b30",
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });

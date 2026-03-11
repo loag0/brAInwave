@@ -122,7 +122,7 @@ export const LocalDB = {
     return db.getFirstSync(`SELECT * FROM user_profile WHERE id = ?`, [uid]);
   },
 
-  // ─── MATERIALS ────────────────────────────────────────────────────────────
+  // MATERIALS
 
   getAllMaterials: (userId: string) => {
     return db.getAllSync(
@@ -202,7 +202,7 @@ export const LocalDB = {
     db.runSync(`DELETE FROM study_materials WHERE id = ?`, [localId]);
   },
 
-  // ─── TIMETABLES ───────────────────────────────────────────────────────────
+  // TIMETABLES
 
   getAllTimetables: (userId: string) => {
     const results = db.getAllSync(
@@ -283,7 +283,7 @@ export const LocalDB = {
     db.runSync(`DELETE FROM timetables WHERE id = ?`, [localId]);
   },
 
-  // ─── DAILY PLANS ──────────────────────────────────────────────────────────
+  // DAILY PLANS
 
   getPlanByDate: (userId: string, date: string) => {
     const row = db.getFirstSync(
@@ -351,8 +351,7 @@ export const LocalDB = {
     }
   },
 
-  // ─── ASSIGNMENTS ──────────────────────────────────────────────────────────
-
+  // ASSIGNMENTS
   getAllAssignments: (userId: string) => {
     return db.getAllSync(
       `SELECT * FROM assignments WHERE user_id = ? AND is_deleted = 0 ORDER BY due_date ASC`,
@@ -364,6 +363,13 @@ export const LocalDB = {
     return db.getFirstSync(
       `SELECT * FROM assignments WHERE user_id = ? AND (id = ? OR remote_id = ?) AND is_deleted = 0`,
       [userId, id, id],
+    );
+  },
+
+  updateAssignmentDueDate: (id: number, newDueDate: string) => {
+    db.runSync(
+      `UPDATE assignments SET due_date = ?, is_dirty = 1 WHERE id = ?`,
+      [newDueDate, id],
     );
   },
 
@@ -463,7 +469,7 @@ export const LocalDB = {
     db.runSync(`DELETE FROM assignments WHERE id = ?`, [localId]);
   },
 
-  // ─── FLASHCARDS ───────────────────────────────────────────────────────────
+  // FLASHCARDS
 
   getFlashcards: (userId: string, materialId: string | number) => {
     return db.getAllSync(
@@ -496,7 +502,7 @@ export const LocalDB = {
     ]);
   },
 
-  // ─── COMPLETION & STREAKS ─────────────────────────────────────────────────
+  // COMPLETION & STREAKS
 
   logStudyTime: (userId: string, date: string, minutes: number) => {
     db.runSync(

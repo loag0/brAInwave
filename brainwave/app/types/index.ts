@@ -30,6 +30,8 @@ export interface AuthContextType {
   signup: (userData: SignupData) => Promise<UserCredential>;
   updateProfileData: (updates: Partial<User>) => Promise<void>;
   logout: () => Promise<void>;
+  getAuth: () => any;
+  deleteAccount: () => Promise<void>;
 }
 
 export interface SignupData {

@@ -1,4 +1,6 @@
 import * as DocumentPicker from "expo-document-picker";
+import { doc, setDoc } from "firebase/firestore";
+import { db as firestore } from "../../firebaseConfig";
 import { LocalDB } from "../database/localDb";
 import brainwaveApi from "@/api/brAInwaveApi";
 
@@ -11,10 +13,7 @@ export function useTimetableUpload(
 ) {
   const upload = async () => {
     if (!userId) {
-      showAlert?.({
-        title: "Error",
-        message: "You must be logged in",
-      });
+      showAlert?.({ title: "Error", message: "You must be logged in" });
       return;
     }
 
@@ -32,7 +31,7 @@ export function useTimetableUpload(
     setIsLoading?.(true);
     setLoadingMessage?.("Uploading Timetable...");
 
-    //Create a local copy first so the user has a timetable tracked offline
+    // Create local copy first for offline support
     const localId = LocalDB.createTimetableLocally(
       userId,
       title,
@@ -42,7 +41,6 @@ export function useTimetableUpload(
     );
 
     try {
-      // upload to backend
       const response = await brainwaveApi.uploadTimetable(
         userId,
         file.uri,
@@ -50,22 +48,25 @@ export function useTimetableUpload(
         mimeType,
       );
 
-      // Mark the local timetable as synced
+      // Mark local record as synced with structured data from backend
       LocalDB.markTimetableSynced(
         localId,
         response.id,
         response.weekly_template,
       );
 
+      // Write to Firestore so planner and home screen update in real time
+      await setDoc(
+        doc(firestore, "users", userId, "data", "timetable"),
+        { weekly_template: response.weekly_template },
+        { merge: true },
+      );
+
       await refresh?.(true);
 
-      showAlert?.({
-        title: "Success",
-        message: "Timetable uploaded",
-      });
+      showAlert?.({ title: "Success", message: "Timetable uploaded!" });
     } catch (error: any) {
       console.error("Timetable upload failed, remaining offline-only:", error);
-
       showAlert?.({
         title: "Saved offline",
         message:
