@@ -11,8 +11,10 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  getAuth,
+  deleteUser,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { auth, db as firestore } from "../../firebaseConfig";
 import { User, AuthContextType, SignupData } from "../types";
 import { LocalDB } from "../database/localDb";
@@ -181,6 +183,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     // Optional: Clear SQLite on logout if you want security
   };
 
+  const deleteAccount = async () => {
+    if (!user) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    try {
+      // 1. Delete Firestore user document
+      const userRef = doc(firestore, "users", currentUser.uid);
+      await deleteDoc(userRef);
+
+      // 2. Delete Firebase auth account
+      await deleteUser(currentUser);
+
+      // 3. Clear local cache
+      //LocalDB.clearUser?.(currentUser.uid);
+
+      // 4. Reset state
+      setUser(null);
+      setToken(null);
+    } catch (error) {
+      console.error("Account deletion failed:", error);
+    }
+  };
+
+
   return (
     <AuthContext.Provider
       value={{
@@ -192,6 +220,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         updateUser: () => {},
         updateProfileData,
         logout,
+        getAuth,
+        deleteAccount,
       }}
     >
       {children}
