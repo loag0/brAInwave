@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useState } from "react";
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useTheme } from "./ThemeContext";
-import Svg, { Path } from "react-native-svg"
+import Svg, { Path } from "react-native-svg";
 
 interface AlertOptions {
   title: string;
   message: string;
-  iconPath?: string,
-  iconColor?: string,
+  iconPath?: string;
+  iconColor?: string;
   onConfirm?: () => void;
   onCancel?: () => void;
   confirmText?: string;
@@ -32,6 +32,10 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
 
   const hideAlert = () => setVisible(false);
 
+  const accentColor = config.iconColor || theme.colors.primary;
+  // Soft tinted pill bg for the icon — works in both light and dark
+  const iconBgColor = accentColor + "20";
+
   return (
     <AlertContext.Provider value={{ showAlert }}>
       {children}
@@ -45,77 +49,91 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
           <View
             style={[styles.alertBox, { backgroundColor: theme.colors.surface }]}
           >
-            {/* Render Icon if path exists */}
-            {config.iconPath && (
-              <View style={styles.iconContainer}>
-                <Svg width="32" height="32" viewBox="0 0 24 24">
-                  <Path
-                    d={config.iconPath}
-                    fill={config.iconColor || theme.colors.primary}
-                  />
-                </Svg>
-              </View>
-            )}
+            {/* M3 accent bar at the top */}
+            <View
+              style={[styles.accentBar, { backgroundColor: accentColor }]}
+            />
 
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: theme.colors.text.primary,
-                  textAlign: config.iconPath ? "center" : "left", // Center if there's an icon
-                },
-              ]}
-            >
-              {config.title}
-            </Text>
-
-            <Text
-              style={[
-                styles.message,
-                {
-                  color: theme.colors.text.secondary,
-                  textAlign: config.iconPath ? "center" : "left",
-                },
-              ]}
-            >
-              {config.message}
-            </Text>
-
-            <View style={styles.buttonContainer}>
-              {config.showCancel && (
-                <TouchableOpacity
-                  style={styles.textButton}
-                  onPress={() => {
-                    config.onCancel?.();
-                    hideAlert();
-                  }}
-                >
-                  <Text
+            <View style={styles.body}>
+              {/* Icon + Title on the same row — M3 dialog header pattern */}
+              <View style={styles.headerRow}>
+                {config.iconPath && (
+                  <View
                     style={[
-                      styles.buttonLabel,
-                      { color: theme.colors.primary },
+                      styles.iconCircle,
+                      { backgroundColor: iconBgColor },
                     ]}
                   >
-                    {config.cancelText || "Cancel"}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.textButton}
-                onPress={() => {
-                  config.onConfirm?.();
-                  hideAlert();
-                }}
-              >
+                    <Svg width="20" height="20" viewBox="0 0 24 24">
+                      <Path d={config.iconPath} fill={accentColor} />
+                    </Svg>
+                  </View>
+                )}
                 <Text
                   style={[
-                    styles.buttonLabel,
-                    { color: theme.colors.primary, fontWeight: "700" },
+                    styles.title,
+                    { color: theme.colors.text.primary },
+                    !config.iconPath && { paddingLeft: 0 },
                   ]}
+                  numberOfLines={2}
                 >
-                  {config.confirmText || "OK"}
+                  {config.title}
                 </Text>
-              </TouchableOpacity>
+              </View>
+
+              {/* Message — indented to align under title when icon present */}
+              <Text
+                style={[
+                  styles.message,
+                  { color: theme.colors.text.secondary },
+                  config.iconPath && styles.messageIndented,
+                ]}
+              >
+                {config.message}
+              </Text>
+
+              {/* M3 pill buttons — right aligned */}
+              <View style={styles.buttonRow}>
+                {config.showCancel && (
+                  <TouchableOpacity
+                    style={[
+                      styles.cancelButton,
+                      { borderColor: theme.colors.border },
+                    ]}
+                    onPress={() => {
+                      config.onCancel?.();
+                      hideAlert();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.cancelLabel,
+                        { color: theme.colors.text.secondary },
+                      ]}
+                    >
+                      {config.cancelText || "Cancel"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.confirmButton,
+                    { backgroundColor: accentColor },
+                    !config.showCancel && styles.confirmButtonFull,
+                  ]}
+                  onPress={() => {
+                    config.onConfirm?.();
+                    hideAlert();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.confirmLabel}>
+                    {config.confirmText || "OK"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -133,42 +151,106 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
+  // Wider (90%) but capped at 400 — shorter because header is now a row not a column
   alertBox: {
-    width: "80%",
-    padding: 24,
-    borderRadius: 28, 
-    elevation: 6,
+    width: "90%",
+    maxWidth: 400,
+    borderRadius: 20,
+    overflow: "hidden",
+    elevation: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
   },
-  iconContainer: { marginBottom: 16, alignItems: "center" },
-  title: {
-    fontSize: 24,
-    fontWeight: "400",
-    marginBottom: 16,
-    textAlign: "left",
-  },
-  message: {
-    fontSize: 14,
-    marginBottom: 24,
-    lineHeight: 20,
-    textAlign: "left",
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
+
+  accentBar: {
+    height: 4,
     width: "100%",
   },
-  textButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginLeft: 8,
+
+  body: {
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 18,
   },
-  buttonLabel: {
-    fontSize: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+
+  // Icon + title side by side — M3 dialog header
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 10,
+  },
+
+  // Circular icon container — M3 uses circles not rounded squares
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+
+  title: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+  },
+
+  message: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    marginBottom: 18,
+  },
+
+  // Indent message to align under title text when icon present (icon=40 + gap=14)
+  messageIndented: {
+    paddingLeft: 54,
+  },
+
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+
+  // M3 outlined pill
+  cancelButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 50,
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  cancelLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    letterSpacing: 0.1,
+  },
+
+  // M3 filled pill
+  confirmButton: {
+    paddingHorizontal: 22,
+    paddingVertical: 9,
+    borderRadius: 50,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  confirmButtonFull: {
+    flex: 1,
+  },
+
+  confirmLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#ffffff",
+    letterSpacing: 0.2,
   },
 });

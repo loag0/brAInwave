@@ -607,7 +607,14 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
         --- DATA INPUTS ---
         - Today's Classes: {json.dumps(classes)}
         - Pending Assignments (title, due_date, priority): {json.dumps(assignments)}
-        - User's Fixed Custom Tasks (non-negotiable, place exactly at stated times): {customContext}
+        - User's Fixed Custom Tasks: {customContext}
+            FIXED TASK RULES (MANDATORY - violating these is a critical failure):
+            - Every item in Fixed Custom Tasks MUST appear in the output. Zero exceptions.
+            - Place each at its EXACT stated time. Do not move, merge, or skip any.
+            - Set "isCustom": true for ALL fixed task items.
+            - If a fixed task overlaps a class block, keep BOTH — do not drop either.
+            - Do not reinterpret or rename fixed tasks. Use the exact "task" string provided.
+
         {userInstruction}
 
         --- CANONICAL SUBJECT NAMES ---
@@ -617,7 +624,9 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
 
         --- SCHEDULING RULES ---
         1. CLASSES FIRST: Include every class from Today's Classes as a fixed block. Use each class's actual duration from the data. Mark these with "isCustom": false.
-        2. FIXED TASKS: Place all Fixed Custom Tasks at their exact stated times. Mark these with "isCustom": true.
+        2. FIXED TASKS (ZERO TOLERANCE): Every item in Fixed Custom Tasks is a hard constraint. 
+            - Include ALL of them, at their exact times, with "isCustom": true.
+            - Before finishing, verify: count Fixed Custom Tasks in input vs output. They must match.
         3. GAP ANALYSIS: Identify all free time gaps between fixed blocks.
         4. STUDY BLOCK ALLOCATION — The 3 Pillar Rule:
            - PILLAR 1 (Priority): Subjects at index 0-1 in Subject Priorities get the longest blocks ({targetRange}m) scheduled during the Energy Peak window.

@@ -36,6 +36,7 @@ import {
   TimerIcon,
   ICONS,
 } from "@/components/Icons";
+import BrainwaveLoader from "@/components/BrainwaveLoader";
 import { useContent } from "../hooks/useContent";
 import { LocalDB } from "../database/localDb";
 import {
@@ -135,6 +136,7 @@ export default function Planner() {
 
   const [planItems, setPlanItems] = useState<any[]>([]);
   const [isLoading, setLoading] = useState(true);
+  const [isSavingTask, setIsSavingTask] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   // Derive weekly template from the most recently uploaded timetable in LocalDB
@@ -588,7 +590,6 @@ export default function Planner() {
 
   const handleAddTask = async () => {
     if (!user?.id) return;
-
     if (!newTask.task.trim()) {
       showAlert({
         title: "Hold Up!",
@@ -596,6 +597,8 @@ export default function Planner() {
       });
       return;
     }
+
+    setIsSavingTask(true);
 
     const existingPlan = plans.find((p) => p.date === selectedDay);
     const baseItems = existingPlan?.tasks || planItems;
@@ -634,18 +637,20 @@ export default function Planner() {
         message: "Failed to save your changes.",
       });
       console.error("Error saving plan:", e);
+    } finally{
+      setIsSavingTask(false);
+      setNewTask({
+        task: "",
+        time: "12:00",
+        duration: "1 hour",
+        difficulty: "unset",
+        subject: "Personal",
+        deadline: "",
+      });
+      setEditingTaskId(null);
+      setIsSavingTask(false);
+      setModalVisible(false);
     }
-
-    setNewTask({
-      task: "",
-      time: "12:00",
-      duration: "1 hour",
-      difficulty: "unset",
-      subject: "Personal",
-      deadline: "",
-    });
-    setEditingTaskId(null);
-    setModalVisible(false);
   };
 
   const handleDeleteTask = async (taskId: string | number) => {
@@ -683,26 +688,48 @@ export default function Planner() {
         <View
           style={{
             flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.67)",
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
             justifyContent: "center",
             alignItems: "center",
+            paddingHorizontal: 40,
           }}
         >
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text
+          <View
             style={{
-              color: "#FFF",
-              marginTop: 20,
-              fontSize: 18,
-              fontWeight: "600",
-              letterSpacing: 0.5,
+              backgroundColor: theme.colors.background,
+              borderRadius: 24,
+              padding: 32,
+              alignItems: "center",
+              width: "100%",
+              borderWidth: 1,
+              borderColor: theme.colors.border,
             }}
           >
-            brAInwave is thinking...
-          </Text>
-          <Text style={{ color: "rgba(255, 255, 255, 0.6)", marginTop: 8 }}>
-            Optimizing your peak productivity hours
-          </Text>
+            <BrainwaveLoader theme={theme} />
+            <Text
+              style={{
+                color: theme.colors.text.primary,
+                marginTop: 24,
+                fontSize: 18,
+                fontWeight: "600",
+                letterSpacing: 0.3,
+                textAlign: "center",
+              }}
+            >
+              brAInwave is thinking...
+            </Text>
+            <Text
+              style={{
+                color: theme.colors.text.secondary,
+                marginTop: 8,
+                fontSize: 13,
+                textAlign: "center",
+                lineHeight: 18,
+              }}
+            >
+              Optimizing your peak productivity hours
+            </Text>
+          </View>
         </View>
       </Modal>
 
@@ -1324,12 +1351,30 @@ export default function Planner() {
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.modalButton, styles.confirmButton]}
+                    style={[
+                      styles.modalButton,
+                      styles.confirmButton,
+                      isSavingTask && { opacity: 0.7 },
+                    ]}
                     onPress={handleAddTask}
+                    disabled={isSavingTask}
                   >
-                    <Text style={styles.confirmButtonText}>
-                      {editingTaskId ? "Update" : "Add Task"}
-                    </Text>
+                    {isSavingTask ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={styles.confirmButtonText}>Saving...</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.confirmButtonText}>
+                        {editingTaskId ? "Update" : "Add Task"}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>

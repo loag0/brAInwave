@@ -18,9 +18,20 @@ import { useAuth } from "../contexts/AuthContext";
 import brAInwaveApi from "@/api/brAInwaveApi";
 import { LocalDB } from "../database/localDb";
 import { ExportIcon } from "@/components/Icons";
+import BrainwaveLoader from "@/components/BrainwaveLoader";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
+
+/**
+ * This is so inline code backticks from the AI plan dont render as actual backticks 
+ * but instead as just bold text because it was messing with the theme
+ */
+function sanitizeAiMarkdown(markdown: any){
+  if(!markdown) return '';
+
+  return markdown.replace(/`([^`\n]+)`/g, '**$1**');
+}
 
 export default function MaterialDetail() {
   const { id } = useLocalSearchParams();
@@ -269,7 +280,7 @@ export default function MaterialDetail() {
               },
             }}
           >
-            {data?.aiPlan || "No content found for this syllabus."}
+            {sanitizeAiMarkdown(data?.aiPlan) || "No content found for this syllabus."}
           </Markdown>
 
           <View style={styles.flashcardContainer}>
@@ -320,10 +331,17 @@ export default function MaterialDetail() {
                 disabled={generatingFlashcards}
               >
                 {generatingFlashcards ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={theme.colors.primary}
-                  />
+                  <View style={{ alignItems: "center", gap: 8 }}>
+                    <BrainwaveLoader theme={theme} />
+                    <Text
+                      style={[
+                        styles.buttonText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Generating...
+                    </Text>
+                  </View>
                 ) : (
                   <Text
                     style={[styles.buttonText, { color: theme.colors.primary }]}

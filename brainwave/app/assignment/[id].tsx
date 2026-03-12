@@ -24,6 +24,16 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
 
+/**
+ * This is so inline code backticks from the AI plan dont render as actual backticks 
+ * but instead as just bold text because it was messing with the theme
+ */
+function sanitizeAiMarkdown(markdown: any) {
+  if (!markdown) return "";
+
+  return markdown.replace(/`([^`\n]+)`/g, "**$1**");
+}
+
 export default function AssignmentDetail() {
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
@@ -40,14 +50,34 @@ export default function AssignmentDetail() {
 
   const handleDelete = async () => {
     if (!data?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteAssignment(data.id, data.remote_id);
-      router.back();
-    } catch (e) {
-      console.error("Failed to delete assignment:", e);
-      setIsDeleting(false);
-    }
+
+    showAlert({
+      title: "Confirm Deletion",
+      message: "Are you sure you want to delete this assignment plan? This action cannot be undone.",
+      iconPath: ICONS.ERROR,
+      iconColor: theme.colors.error,
+      confirmText: "Delete",
+      showCancel: true,
+      cancelText: "Cancel",
+      onConfirm: async () => {
+        setIsDeleting(true);
+        try {
+          await deleteAssignment(data.id, data.remote_id);
+          router.back();
+        } catch (e) {
+            console.error("Failed to delete assignment:", e);
+            setIsDeleting(false);
+            setLoading(false);
+            showAlert({
+              title: "Deletion Failed",
+              message: "Sorry, we couldn't delete the assignment. Please try again.",
+              iconPath: ICONS.ERROR,
+              iconColor: theme.colors.error,
+              confirmText: "OK",
+            });
+          }
+        },
+      });
   };
 
   const getAssignment = useCallback(async () => {
@@ -298,7 +328,7 @@ export default function AssignmentDetail() {
               },
             }}
           >
-            {data?.rawContent ||
+            {sanitizeAiMarkdown(data?.rawContent) ||
               "No AI-generated plan found for this assignment."}
           </Markdown>
 
@@ -312,7 +342,7 @@ export default function AssignmentDetail() {
               activeOpacity={0.8}
               disabled={isDeleting}
             >
-              {isDeleting ? (
+              {isDeleting && loading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={{ color: "#fff", fontWeight: "600" }}>Delete</Text>
