@@ -3,7 +3,6 @@ import {
   Stack,
   //Slot,
   useRouter,
-  useSegments,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -64,7 +63,6 @@ export default function RootLayout() {
 function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   useKeepAwake();
   const { user, isLoading } = useAuth();
-  const segments = useSegments();
   const router = useRouter();
   const { theme, isDark, isThemeLoading } = useTheme();
   const [hasSeenWelcome, setHasSeenWelcome] = useState<boolean | null>(null);
@@ -74,67 +72,54 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const prevUserRef = useRef<any>(undefined);
 
   useEffect(() => {
-    if (fontsLoaded && !isLoading && !isThemeLoading) {
-      setTimeout(() => {
-        SplashScreen.hideAsync();
-      }, 100);
-    }
-  }, [fontsLoaded, isLoading, isThemeLoading]);
-
-  useEffect(() => {
     AsyncStorage.getItem("hasSeenWelcome").then((val) => {
       setHasSeenWelcome(val === "true");
     });
   }, []);
 
   useEffect(() => {
+    if (fontsLoaded && !isLoading && !isThemeLoading) {
+      setTimeout(() => SplashScreen.hideAsync(), 100);
+    }
+  }, [fontsLoaded, isLoading, isThemeLoading]);
+
+  useEffect(() => {
     if (isLoading || !fontsLoaded || isThemeLoading || hasSeenWelcome === null)
       return;
 
-    //detect logout
+    // Detect any user state transition (login or logout)
     const prevUser = prevUserRef.current;
-    const justLoggedOut = prevUser !== undefined && prevUser !== null && !user;
+    const userChanged = prevUser !== undefined && (!!prevUser !== !!user);
     prevUserRef.current = user;
 
-    if (justLoggedOut) {
-      hasNavigated.current = false; // Reset navigation flag on logout
-    }
+    if (userChanged) hasNavigated.current = false; // Reset on login OR logout
 
     if (hasNavigated.current) return; // Prevent multiple navigations
+
+    hasNavigated.current = true;
 
     //initializes the db tables
     LocalDB.init();
 
-    if (user) {
-      if (!user.hasFinishedSetup) {
-        // Force to onboarding
-          router.replace("/(onboarding)");
-      } else {
-          router.replace("/(tabs)");
-      }
-      hasNavigated.current = true; // Set navigation flag after handling auth state
-    } else {
-      if (!hasSeenWelcome) {
+    if(user) {
+      router.replace(user.hasFinishedSetup ? "/(tabs)" : "/(onboarding)");
+    } else{
+      if(!hasSeenWelcome){
+        AsyncStorage.setItem("hasSeenWelcome", "true");
+        setHasSeenWelcome(true);
         router.replace("/(auth)/welcome");
-        AsyncStorage.setItem("hasSeenWelcome", "true").then(() =>
-          setHasSeenWelcome(true),
-        );
-      } else {
-          router.replace("/(auth)/login");
+      } else{
+        router.replace("/(auth)/login");
       }
     }
-    hasNavigated.current = true;
-  }, [user, isLoading, isThemeLoading, hasSeenWelcome, segments, fontsLoaded, router]);
+  }, [user, isLoading, fontsLoaded, isThemeLoading, hasSeenWelcome, router]);
 
   return (
     <>
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-        <Stack.Screen
-          name="(onboarding)"
-          options={{ gestureEnabled: false, animation: "slide_from_right" }}
-        />
+        <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false, animation: "slide_from_right" }}/>
         <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
         <Stack.Screen
           name="(account)"
@@ -145,10 +130,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           }}
         />
         {/* Keep this hidden as it's just a logic handler */}
-        <Stack.Screen
-          name="oauth2redirect/google"
-          options={{ headerShown: false }}
-        />
+        <Stack.Screen name="oauth2redirect/google" options={{ headerShown: false }}/>
         <Stack.Screen
           name="priorities"
           options={{

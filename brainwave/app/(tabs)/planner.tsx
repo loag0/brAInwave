@@ -40,6 +40,7 @@ import BrainwaveLoader from "@/components/BrainwaveLoader";
 import { useContent } from "../hooks/useContent";
 import { LocalDB } from "../database/localDb";
 import {
+  ensureBatteryOptimizationExemption,
   scheduleDailyNotifications,
   sortTasksByTime,
   parseStartDate,
@@ -450,13 +451,15 @@ export default function Planner() {
     setLoading(false);
   }, [selectedDay, plans, weeklyTemplate, user?.id]);
 
-  // Schedule notifications when today's plan changes
   useEffect(() => {
     if (!user?.id || !planItems.length) return;
     if (selectedDay !== weekDays[0].id) return;
     if (!user?.studyPreferences?.notifications?.studyReminders) return;
     const leadMinutes = user?.studyPreferences?.notificationLeadMinutes ?? 10;
-    scheduleDailyNotifications(planItems, leadMinutes);
+    (async () => {
+      await ensureBatteryOptimizationExemption();
+      await scheduleDailyNotifications(planItems, leadMinutes);
+    })();
   }, [
     planItems,
     selectedDay,

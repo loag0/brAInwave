@@ -149,10 +149,10 @@ export default function OnboardingScreen() {
                 ]}
               >
                 {s === "short"
-                  ? "Short — 15–25 min"
+                  ? "Short - 15–25 min"
                   : s === "medium"
-                    ? "Medium — 30–45 min"
-                    : "Long — 60+ min"}
+                    ? "Medium - 30–45 min"
+                    : "Long - 60+ min"}
               </Text>
             </TouchableOpacity>
           );

@@ -21,6 +21,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAlert } from "../contexts/AlertContext";
 import { FontAwesome5 } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
+import { ICONS } from "@/components/Icons";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -134,10 +135,13 @@ export default function LoginScreen() {
   const handleAuth = async () => {
     setIsProcessing(true);
 
-    if (!isLogin && !name)
+    if (!isLogin && !name){
+      setIsProcessing(false);
       return showAlert({ title: "Error", message: "Please enter your name" });
+    }
 
     if (!isLogin && !validatePassword(password)) {
+      setIsProcessing(false);
       return showAlert({
         title: "Weak Password",
         message: "Password needs 6+ chars, uppercase, lowercase, and a number.",
@@ -145,18 +149,18 @@ export default function LoginScreen() {
     }
 
     try {
-      if(isLogin){
-        await login(email, password);
-      }else{
-        await signup({name, email, password});
-      }
+      if(isLogin) await login(email, password);
+      else await signup({name, email, password});
 
     } catch (error: any) {
-      setIsProcessing(false);
       showAlert({
         title: "Authentication Error!",
         message: error.message,
+        iconPath: ICONS.ERROR,
+        iconColor: theme.colors.error
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 

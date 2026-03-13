@@ -36,6 +36,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         const jwt = await firebaseUser.getIdToken();
         setToken(jwt);
 
+        // Never stuck loading
+        const loadingTimeout = setTimeout(() => {
+          setIsLoading(false);
+        }, 5000);
+
         try {
           // 1. HYDRATE IMMEDIATELY FROM SQLITE
           try {
@@ -49,7 +54,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
               setIsLoading(false); // UI moves to Home immediately
             }
           } catch (localDbError) {
-            console.log("LocalDB Error:", localDbError);
+            if(__DEV__) console.log("LocalDB Error:", localDbError);
           }
 
           // 2. BACKGROUND FETCH FROM FIRESTORE
@@ -59,18 +64,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           if (userSnap.exists()) {
             const data = userSnap.data() as User;
             setUser(data);
+
+            try{
+              LocalDB.saveUser(data); // Update local cache with latest data
+            } catch (saveError) {
+              if(__DEV__) console.log("Failed to save to LocalDB:", saveError);
+            }
+          } else{
+              await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate network delay
+              const retrySnap = await getDoc(userDocRef);
+              if(retrySnap.exists()){
+                const data = retrySnap.data() as User;
+                setUser(data);
             try {
               LocalDB.saveUser(data); // Update local cache
             } catch (saveError) {
-              console.log("Failed to save to LocalDB:", saveError);
+              if(__DEV__) console.log("Failed to save to LocalDB:", saveError);
             }
           }
+          }
         } catch (error) {
-          console.log(
-            "Offline mode: Using cached profile or fetching failed.",
-            error,
-          );
+          if(__DEV__) console.log("Offline mode: Using cached profile or fetching failed.", error);
         } finally {
+          clearTimeout(loadingTimeout);
           setIsLoading(false);
         }
       } else {

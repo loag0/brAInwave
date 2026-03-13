@@ -1,5 +1,58 @@
 import * as Notifications from "expo-notifications";
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
+import * as IntentLauncher from "expo-intent-launcher";
+
+/**Android Battery Optimization
+ * These helpers let the app request exemption from battery optimization.
+ */
+
+// Checks if battery optimization is enabled
+export async function isBatteryOptimizationEnabled(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  try {
+
+    const result = await IntentLauncher.startActivityAsync(
+      "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+      { data: `package:com.username0.brainwave` },
+    );
+    // resultCode -1 (RESULT_OK) = user accepted / already exempt
+    return result.resultCode !== -1;
+  } catch {
+    return false;
+  }
+}
+
+// Opens the Android system dialog asking the user to exempt the app from battery optimization
+// Doesnt request on iOS tho
+
+export async function requestBatteryOptimizationExemption(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    await IntentLauncher.startActivityAsync(
+      "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+      { data: `package:com.username0.brainwave` },
+    );
+  } catch {
+    // Fallback: open the full battery optimization list
+    try {
+      await IntentLauncher.startActivityAsync(
+        "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
+      );
+    } catch {
+      Linking.openSettings(); //opens generic phone settings if the above fails
+    }
+  }
+}
+
+
+ // Convenience: checks if battery optimization is enabled and prompts the user to disable it if so.
+export async function ensureBatteryOptimizationExemption(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  const optimized = await isBatteryOptimizationEnabled();
+  if (optimized) {
+    await requestBatteryOptimizationExemption();
+  }
+}
 
 // Notification Handler - taken from _layout.tsx
 Notifications.setNotificationHandler({
@@ -43,7 +96,7 @@ export function parseStartDate(item: any, referenceDate?: Date): Date | null {
     const timeMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
     if (!timeMatch) return null;
 
-    let [, hourStr, minStr, modifier] = timeMatch;
+    let [hourStr, minStr, modifier] = timeMatch;
     let hours = parseInt(hourStr, 10);
     const minutes = parseInt(minStr, 10);
 
