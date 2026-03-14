@@ -18,12 +18,16 @@ import {
   CloseIcon,
   UploadSyllabusIcon,
   ChevronRightIcon,
+  AddIcon,
 } from "@/components/Icons";
 import { useContent } from "../hooks/useContent";
 import { useAuth } from "../contexts/AuthContext";
 import { LocalDB } from "../database/localDb";
 import { useFocusEffect } from "@react-navigation/native";
 import Svg, { Path, SvgProps } from "react-native-svg";
+import { useAlert } from "../contexts/AlertContext";
+import BrainwaveLoader from "@/components/BrainwaveLoader";
+import * as DocumentPicker from "expo-document-picker";
 
 const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
   <View
@@ -71,11 +75,13 @@ export default function Library() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
-  const { refresh, materials, syncProgress, isLoading } = useContent();
+  const { refresh, createMaterial, materials, syncProgress, isLoading } = useContent();
 
   const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const { showAlert } = useAlert();
+  const [ isUploading, setIsUploading ] = useState(false);
 
   // Insights Data State
   const [streakCount, setStreakCount] = useState(0);
@@ -123,6 +129,48 @@ export default function Library() {
       }
     }, [refresh, activeTab, loadInsights]),
   );
+
+  const handleUploadSyllabus = useCallback(async () => {
+    if (!user?.id) {
+      showAlert?.({ title: "Error", message: "You must be logged in" });
+      return;
+    }
+
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["application/pdf", "image/*"],
+      copyToCacheDirectory: true,
+      multiple: true,
+    });
+
+    if (result.canceled || !result.assets) return;
+
+    setIsUploading(true);
+
+    try {
+      for (const asset of result.assets) {
+        const cleanTitle = decodeURIComponent(asset.name)
+          .replace(/%20/g, " ")
+          .replace(/\.[^/.]+$/, "")
+          .trim();
+
+        await createMaterial(
+          cleanTitle,
+          "",
+          asset.uri,
+          asset.mimeType || "application/pdf",
+        );
+      }
+      showAlert?.({
+        title: "Success",
+        message: "Syllabus imported and planning initiated!",
+      });
+    } catch (e: any) {
+      if(__DEV__) console.error(e.message);
+      showAlert?.({ title: "Import Failed", message: "Failed to read file." });
+    } finally {
+      setIsUploading(false);
+    }
+  }, [user?.id, createMaterial, showAlert]);
 
   const filteredMaterials = useMemo(() => {
     return materials.filter((item) =>
@@ -408,6 +456,35 @@ export default function Library() {
           </View>
         )}
       </ScrollView>
+
+      {/* Uploading overlay */}
+      {isUploading && (
+        <View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 999,
+          }}
+        >
+          <BrainwaveLoader theme={theme} />
+          <Text style={{ color: "#fff", marginTop: 16, fontWeight: "600" }}>
+            Importing syllabus...
+          </Text>
+        </View>
+      )}
+
+      {/* FAB — only show on library tab */}
+      {activeTab === "library" && (
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+          onPress={handleUploadSyllabus}
+          activeOpacity={0.8}
+        >
+          <AddIcon color={theme.colors.secondary} size={36} />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -629,5 +706,17 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 20,
       fontFamily: theme.fonts.bold,
       color: theme.colors.text.primary,
+    },
+    fab: {
+      position: "absolute",
+      bottom: 30,
+      right: 20,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primary,
+      elevation: 5,
     },
   });

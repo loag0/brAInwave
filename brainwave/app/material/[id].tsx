@@ -246,7 +246,7 @@ export default function MaterialDetail() {
     `;
 
       const { uri: printUri } = await Print.printToFileAsync({ html });
-      const fileName = `${data.title.replace(/\s+/g, "_")}.pdf`;
+      const fileName = `${data.title.replace(/\s+/g, " ")}.pdf`;
       const tempFile = new File(printUri);
       const targetFile = new File(Paths.cache, fileName);
 

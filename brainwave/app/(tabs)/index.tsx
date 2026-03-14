@@ -37,7 +37,6 @@ import {
   AssignmentIcon,
   ScheduleIcon,
   CalendarIcon,
-  UploadSyllabusIcon,
   AddAssignmentIcon,
   ChevronRightIcon,
   FireIcon,
@@ -86,7 +85,6 @@ export default function Home() {
     assignments,
     isLoading: contentLoading,
     refresh,
-    createMaterial,
     createAssignment,
     syncProgress,
   } = useContent();
@@ -124,51 +122,6 @@ export default function Home() {
     setIsLoading,
     setLoadingMessage,
   );
-
-  const handleUploadSyllabus = useCallback(async () => {
-    if (!user?.id) {
-      showAlert?.({ title: "Error", message: "You must be logged in" });
-      return;
-    }
-
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["application/pdf", "image/*"],
-      copyToCacheDirectory: true,
-      multiple: true,
-    });
-
-    if (result.canceled || !result.assets) return;
-
-    setIsLoading(true);
-    setLoadingMessage("Importing...");
-
-    try {
-      for (const asset of result.assets) {
-        setLoadingMessage("Importing material...");
-        const cleanTitle = decodeURIComponent(asset.name)
-          .replace(/%20/g, " ")
-          .replace(/\.[^/.]+$/, "")
-          .trim();
-
-        await createMaterial(
-          cleanTitle,
-          "",
-          asset.uri,
-          asset.mimeType || "application/pdf",
-        );
-      }
-
-      showAlert?.({
-        title: "Success",
-        message: "Syllabus imported and planning initiated!",
-      });
-    } catch (e) {
-      console.error(e);
-      showAlert?.({ title: "Import Failed", message: "Failed to read file." });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.id, createMaterial, showAlert, setIsLoading, setLoadingMessage]);
 
   const handleUploadAssignment = useCallback(async () => {
     try {
@@ -218,8 +171,8 @@ export default function Home() {
     if (!user) return;
     (async () => {
       const allowed = await ensureNotificationPermission();
-      if (!allowed) return;
       await ensureBatteryOptimizationExemption();
+      if (!allowed) return;
       if (user?.studyPreferences.notifications?.studyReminders) {
         await scheduleDailyNotifications(todaysSchedule, leadMinutes);
       }
@@ -560,7 +513,6 @@ export default function Home() {
           onClose={() => setShowUploadMenu(false)}
           onSelectOption={(opt: string) => {
             if (opt === "schedule") upload();
-            if (opt === "syllabus") handleUploadSyllabus();
             if (opt === "assignment") handleUploadAssignment();
           }}
         />
@@ -577,12 +529,6 @@ const UploadMenu = ({ theme, onClose, onSelectOption }: any) => {
       Icon: CalendarIcon,
       label: "Upload schedule",
       description: "Add your class timetable",
-    },
-    {
-      id: "syllabus",
-      Icon: UploadSyllabusIcon,
-      label: "Upload syllabus",
-      description: "Import course syllabus",
     },
     {
       id: "assignment",

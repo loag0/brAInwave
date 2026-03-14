@@ -133,7 +133,7 @@ export default function Planner() {
   const router = useRouter();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { plans, timetables, refresh } = useContent();
+  const { plans, timetables, materials, refresh } = useContent();
 
   const [planItems, setPlanItems] = useState<any[]>([]);
   const [isLoading, setLoading] = useState(true);
@@ -442,7 +442,7 @@ export default function Planner() {
         task: "Class Lecture",
         duration: "1 hour",
         completed: false,
-        difficulty: "unset",
+        difficulty: cls.difficulty || "unset",
         isTemplate: true,
       }));
       setPlanItems(sortTasksByTime(formattedItems));
@@ -814,6 +814,28 @@ export default function Planner() {
           </ScrollView>
         </View>
 
+        {materials.length === 0 && (
+          <TouchableOpacity
+            style={[
+              styles.nudgeCard,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.primary + "40",
+              },
+            ]}
+            onPress={() => router.push("/library")}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.nudgeTitle}>Make your plan smarter</Text>
+            <Text
+              style={[styles.nudgeText, { color: theme.colors.text.secondary }]}
+            >
+              Upload a syllabus and brAInwave will plan around your actual
+              course content
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.planContainer}>
           <View style={styles.planHeader}>
             <Text style={styles.planTitle}>
@@ -1134,7 +1156,10 @@ export default function Planner() {
                         setNewTask({
                           ...newTask,
                           subject: tag,
-                          deadline: (tag === "Exam Prep" || tag === "Test/Quiz") ? newTask.deadline : "",
+                          deadline:
+                            tag === "Exam Prep" || tag === "Test/Quiz"
+                              ? newTask.deadline
+                              : "",
                         })
                       }
                     >
@@ -1721,6 +1746,24 @@ const createStyles = (theme: Theme) =>
       marginTop: 4,
     },
     dayDateActive: { color: "#f5f5f5", opacity: 0.7 },
+    nudgeCard: {
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: 14,
+      borderWidth: 1,
+    },
+    nudgeTitle: {
+      fontSize: 14,
+      fontFamily: theme.fonts.semiBold,
+      color: theme.colors.text.primary,
+      marginBottom: 4,
+    },
+    nudgeText: {
+      fontSize: 13,
+      fontFamily: theme.fonts.regular,
+      lineHeight: 18,
+    },
     planContainer: { paddingHorizontal: theme.spacing.lg },
     planHeader: {
       flexDirection: "row",
