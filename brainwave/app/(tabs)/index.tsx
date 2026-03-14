@@ -26,6 +26,8 @@ import {
   ensureBatteryOptimizationExemption,
   scheduleDailyNotifications,
   formatTimeTo24h,
+  parseDurationMinutes,
+  parseStartDate,
 } from "@/utils/notifications";
 import {
   CloseIcon,
@@ -230,7 +232,16 @@ export default function Home() {
     leadMinutes,
   ]);
 
-  const tasksRemaining = todaysSchedule.filter((t) => !t.completed).length;
+  const isTaskPastHome = (item: any) => {
+    if (item.completed) return false;
+    const start = parseStartDate(item);
+    if (!start) return false;
+    const durationMins = parseDurationMinutes(item.duration);
+    const end = new Date(start.getTime() + durationMins * 60000);
+    return new Date() > end;
+  };
+
+  const tasksRemaining = todaysSchedule.filter((t) => !t.completed && !isTaskPastHome(t)).length;
   const hasNextClass = nextClass !== null && nextClass !== undefined;
 
   // Truncate long AI task titles for the status chip
@@ -393,6 +404,14 @@ export default function Home() {
                           item.name ||
                           "Unknown Class"}
                       </Text>
+                      {item.subject && item.task && item.task !== item.subject && (
+                        <Text
+                          style={[styles.classTime, {marginBottom: 2}]}
+                          numberOfLines={1}
+                        >
+                          {item.subject}
+                        </Text>
+                      )}
                       <View style={styles.classDetails}>
                         <ScheduleIcon
                           size={10}

@@ -173,7 +173,7 @@ export default function Planner() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const BUILT_IN_TAGS = useMemo(() => ["Personal", "Exam Prep"], []);
+  const BUILT_IN_TAGS = useMemo(() => ["Personal", "Test/Quiz", "Revision", "Exam Prep"], []);
 
   const availableTags = useMemo(() => {
     const subjectSet = new Set<string>();
@@ -1134,7 +1134,7 @@ export default function Planner() {
                         setNewTask({
                           ...newTask,
                           subject: tag,
-                          deadline: tag !== "Exam Prep" ? "" : newTask.deadline,
+                          deadline: (tag === "Exam Prep" || tag === "Test/Quiz") ? newTask.deadline : "",
                         })
                       }
                     >
@@ -1280,12 +1280,12 @@ export default function Planner() {
                   ))}
                 </View>
 
-                {(newTask.subject === "Assignment" ||
-                  newTask.subject === "Exam Prep") && (
+                {(newTask.subject === "Exam Prep" ||
+                  newTask.subject === "Test/Quiz") && (
                   <>
                     <Text style={styles.inputLabel}>
-                      {newTask.subject === "Assignment"
-                        ? "Deadline"
+                      {newTask.subject === "Test/Quiz"
+                        ? "Test Date"
                         : "Exam Date"}
                     </Text>
                     <TouchableOpacity

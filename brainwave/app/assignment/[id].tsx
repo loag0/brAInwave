@@ -305,13 +305,14 @@ export default function AssignmentDetail() {
             style={{
               body: {
                 color: theme.colors.text.primary,
-                fontSize: 16,
-                lineHeight: 24,
+                fontSize: 14,
+                lineHeight: 28,
               },
               heading1: {
                 color: theme.colors.primary,
                 marginVertical: 10,
                 fontFamily: theme.fonts.bold,
+                lineHeight: 32,
               },
               heading2: {
                 color: theme.colors.text.primary,
@@ -326,7 +327,7 @@ export default function AssignmentDetail() {
                 borderRadius: 8,
                 padding: 10,
               },
-            }}
+            }}            
           >
             {sanitizeAiMarkdown(data?.rawContent) ||
               "No AI-generated plan found for this assignment."}
@@ -363,7 +364,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 20,
+    marginBottom: 10,
   },
   dueDateLabel: {
     fontSize: 11,

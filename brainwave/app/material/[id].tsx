@@ -10,14 +10,16 @@ import {
   Modal,
   FlatList,
 } from "react-native";
-import { useLocalSearchParams, Stack } from "expo-router";
+import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import Markdown from "react-native-markdown-display";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useContent } from "../hooks/useContent";
+import { useAlert } from "../contexts/AlertContext";
 import brAInwaveApi from "@/api/brAInwaveApi";
 import { LocalDB } from "../database/localDb";
-import { ExportIcon } from "@/components/Icons";
+import { ExportIcon, ICONS } from "@/components/Icons";
 import BrainwaveLoader from "@/components/BrainwaveLoader";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -46,6 +48,10 @@ export default function MaterialDetail() {
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
   const [remoteId, setRemoteId] = useState<string | number | null>(null);
+  const { deleteMaterial } = useContent();
+  const router = useRouter();
+  const { showAlert } = useAlert();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const getSyllabus = useCallback(async () => {
     if (!user?.id || !id) return;
@@ -55,6 +61,7 @@ export default function MaterialDetail() {
       const localData = await LocalDB.getMaterialById(user.id, id as string);
 
       if (localData && localData.aiPlan) {
+        setRemoteId(localData.remote_id || null);
         setData({
           title: localData.title,
           aiPlan: localData.aiPlan,
@@ -132,6 +139,29 @@ export default function MaterialDetail() {
       getSyllabus();
     }, [getSyllabus]),
   );
+
+  const handleDelete = async () => {
+    showAlert({
+      title: "Confirm Deletion",
+      message:
+        "Are you sure you want to delete this study plan? This action cannot be undone.",
+      iconPath: ICONS.ERROR,
+      iconColor: theme.colors.error,
+      confirmText: "Delete",
+      showCancel: true,
+      cancelText: "Cancel",
+      onConfirm: async () => {
+        setIsDeleting(true);
+        try {
+          await deleteMaterial(id as string, remoteId as number);
+          router.back();
+        } catch (e) {
+          console.error("Failed to delete material:", e);
+          setIsDeleting(false);
+        }
+      },
+    });
+  };
 
   const exportToPDF = async () => {
     if (!data) return;
@@ -353,6 +383,24 @@ export default function MaterialDetail() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+
+          <View style={styles.buttonGroup}>
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                { backgroundColor: theme.colors.error || "#FF4B4B" },
+              ]}
+              onPress={handleDelete}
+              activeOpacity={0.8}
+              disabled={isDeleting}
+            >
+            {isDeleting && loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={{ color: "#fff", fontWeight: "600" }}>Delete</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </ScrollView>
       )}
