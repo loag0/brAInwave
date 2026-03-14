@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import {
   Stack,
   //Slot,
@@ -18,11 +19,12 @@ import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useKeepAwake } from "expo-keep-awake";
 import Toast from "react-native-toast-message";
-import { AlertProvider } from "./contexts/AlertContext";
+import { AlertProvider, useAlert } from "./contexts/AlertContext";
 import { TimerProvider } from "./contexts/TimerContext";
 import { LocalDB } from "./database/localDb";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Notifications from "expo-notifications";
+import { isBatteryOptimizationEnabled, requestBatteryOptimizationExemption } from "@/utils/notifications";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -66,6 +68,55 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const router = useRouter();
   const { theme, isDark, isThemeLoading } = useTheme();
   const [hasSeenWelcome, setHasSeenWelcome] = useState<boolean | null>(null);
+
+  const appState = useRef(AppState.currentState);
+  const [ isOptimized, setIsOptimized ] = useState<boolean | null>(null);
+  const showAlert = useAlert();
+
+  useEffect(() => {
+
+    //checks on initial mount
+    checkBatteryStatus();
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const checkBatteryStatus = async () => {
+    const enabled = await isBatteryOptimizationEnabled();
+    setIsOptimized(enabled);
+    if(__DEV__) console.log("Battery optimization is: ", enabled ? "ENABLED (BAD)" : "DISABLED (GOOD)");
+  };
+
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    if(appState.current.match(/inactive|background/) && nextAppState === "active"){
+      if(__DEV__) console.log("App is in the foreground. checking battery status");
+      await checkBatteryStatus();
+    }
+    appState.current = nextAppState;
+  };
+
+  useEffect(() => {
+    if (isOptimized === true) {
+      showAlert({
+        title: "Battery Optimization",
+        message:
+          "To ensure your Pomodoro timer and task reminders ring exactly on time, please disable battery optimization for Brainwave.",
+        confirmText: "Fix Now",
+        cancelText: "Later",
+        showCancel: true,
+        iconPath:
+          "M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z",
+        iconColor: theme.colors.primary,
+        onConfirm: () => {
+          requestBatteryOptimizationExemption();
+        },
+      });
+    }
+  }, [isOptimized]);
 
   // Ref to track if we've already navigated to prevent multiple redirects
   const hasNavigated = useRef(false);

@@ -1,6 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Linking, Platform } from "react-native";
 import * as IntentLauncher from "expo-intent-launcher";
+import * as Battery from "expo-battery";
 
 /**Android Battery Optimization
  * These helpers let the app request exemption from battery optimization.
@@ -9,17 +10,8 @@ import * as IntentLauncher from "expo-intent-launcher";
 // Checks if battery optimization is enabled
 export async function isBatteryOptimizationEnabled(): Promise<boolean> {
   if (Platform.OS !== "android") return false;
-  try {
-
-    const result = await IntentLauncher.startActivityAsync(
-      "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-      { data: `package:com.username0.brainwave` },
-    );
-    // resultCode -1 (RESULT_OK) = user accepted / already exempt
-    return result.resultCode !== -1;
-  } catch {
-    return false;
-  }
+  
+  return await Battery.isBatteryOptimizationEnabledAsync();
 }
 
 // Opens the Android system dialog asking the user to exempt the app from battery optimization
@@ -27,23 +19,17 @@ export async function isBatteryOptimizationEnabled(): Promise<boolean> {
 
 export async function requestBatteryOptimizationExemption(): Promise<void> {
   if (Platform.OS !== "android") return;
-  try {
+  
+  try{
     await IntentLauncher.startActivityAsync(
       "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-      { data: `package:com.username0.brainwave` },
+      { data: `package:com.username0.brainwave` }
     );
-  } catch {
-    // Fallback: open the full battery optimization list
-    try {
-      await IntentLauncher.startActivityAsync(
-        "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
-      );
-    } catch {
-      Linking.openSettings(); //opens generic phone settings if the above fails
-    }
+  } catch(e: any){
+    if(__DEV__) console.error(e.message)
+    await IntentLauncher.startActivityAsync("android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS");
   }
 }
-
 
  // Convenience: checks if battery optimization is enabled and prompts the user to disable it if so.
 export async function ensureBatteryOptimizationExemption(): Promise<void> {
@@ -179,6 +165,14 @@ function getNextOccurrence(dayName: string, now: Date): Date {
   return result;
 }
 
+if (Platform.OS === "android"){
+  Notifications.setNotificationChannelAsync("high-priority", {
+    name: "Urgent Reminders",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250]
+  });
+}
+
 export async function scheduleDailyNotifications(
   schedule: any[],
   leadMinutes: number,
@@ -213,11 +207,15 @@ export async function scheduleDailyNotifications(
         title: "Upcoming activity",
         body: `${taskName} starts in ${leadMinutes} minutes`,
         sound: true,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        vibrate: [0, 250, 250, 250],
         data: { taskId: item.id },
       },
       trigger: {
         type: "date",
         date: effectiveTrigger,
+        channelId: "high-priority",
+        allowWhileIdle: true,
       } as Notifications.DateTriggerInput,
     });
   }
