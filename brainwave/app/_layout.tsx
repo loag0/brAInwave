@@ -1,10 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import {
-  Stack,
-  //Slot,
-  useRouter,
-} from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import {
@@ -23,18 +19,12 @@ import { AlertProvider, useAlert } from "./contexts/AlertContext";
 import { TimerProvider } from "./contexts/TimerContext";
 import { LocalDB } from "./database/localDb";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import * as Notifications from "expo-notifications";
-import { isBatteryOptimizationEnabled, requestBatteryOptimizationExemption } from "@/utils/notifications";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+import {
+  isBatteryOptimizationEnabled,
+  requestBatteryOptimizationExemption,
+  setupAndroidNotificationChannel,
+} from "@/utils/notifications";
+import { ICONS } from "@/components/Icons";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -45,6 +35,11 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  // Set up Android notification channel once on boot
+  useEffect(() => {
+    setupAndroidNotificationChannel();
+  }, []);
 
   return (
     <GestureHandlerRootView>
@@ -68,57 +63,75 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const router = useRouter();
   const { theme, isDark, isThemeLoading } = useTheme();
   const [hasSeenWelcome, setHasSeenWelcome] = useState<boolean | null>(null);
+  const [isOptimized, setIsOptimized] = useState<boolean | null>(null);
+  const hasShownBatteryPrompt = useRef(false);
+  const { showAlert } = useAlert();
 
   const appState = useRef(AppState.currentState);
-  const [ isOptimized, setIsOptimized ] = useState<boolean | null>(null);
-  const showAlert = useAlert();
-
-  useEffect(() => {
-
-    //checks on initial mount
-    checkBatteryStatus();
-
-    const subscription = AppState.addEventListener("change", handleAppStateChange);
-    
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   const checkBatteryStatus = async () => {
     const enabled = await isBatteryOptimizationEnabled();
+    if (__DEV__){
+      console.log(
+        "Battery optimization is: ",
+        enabled ? "ENABLED (BAD)" : "DISABLED (GOOD)",
+      );
+      console.log("hasShownBatteryPrompt:", hasShownBatteryPrompt.current)
+    }
     setIsOptimized(enabled);
-    if(__DEV__) console.log("Battery optimization is: ", enabled ? "ENABLED (BAD)" : "DISABLED (GOOD)");
   };
 
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-    if(appState.current.match(/inactive|background/) && nextAppState === "active"){
-      if(__DEV__) console.log("App is in the foreground. checking battery status");
+    if (
+      appState.current.match(/inactive|background/) &&
+      nextAppState === "active"
+    ) {
+      if (__DEV__) console.log("App foregrounded — rechecking battery status");
       await checkBatteryStatus();
     }
     appState.current = nextAppState;
   };
 
+  // Check battery on mount + re-check whenever app comes to foreground
   useEffect(() => {
-    if (isOptimized === true) {
+    checkBatteryStatus();
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange,
+    );
+    return () => subscription.remove();
+  }, []);
+
+  // Show battery optimization alert (once a day tho)
+  useEffect(() => {
+    const checkSnoozeAndShow = async () => {
+      if (isOptimized !== true) return;
+      if (!user) return;
+
+      const lastPrompt = await AsyncStorage.getItem("lastBatteryPromptTime");
+      const now = Date.now();
+      if (lastPrompt && now - parseInt(lastPrompt) < 86400000) return;
+
+      await AsyncStorage.setItem("lastBatteryPromptTime", now.toString());
+
       showAlert({
         title: "Battery Optimization",
         message:
-          "To ensure your Pomodoro timer and task reminders ring exactly on time, please disable battery optimization for Brainwave.",
+          "To ensure your Pomodoro timer and task reminders ring exactly on time, please disable battery optimization for brAInwave.",
         confirmText: "Fix Now",
         cancelText: "Later",
         showCancel: true,
-        iconPath:
-          "M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z",
-        iconColor: theme.colors.primary,
+        iconPath: ICONS.BATTERY,
+        iconColor: theme.colors.error,
         onConfirm: () => {
           requestBatteryOptimizationExemption();
         },
       });
-    }
-  }, [isOptimized]);
+    };
 
-  // Ref to track if we've already navigated to prevent multiple redirects
+    checkSnoozeAndShow();
+  }, [isOptimized, user]);
+
   const hasNavigated = useRef(false);
   const prevUserRef = useRef<any>(undefined);
 
@@ -138,28 +151,24 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     if (isLoading || !fontsLoaded || isThemeLoading || hasSeenWelcome === null)
       return;
 
-    // Detect any user state transition (login or logout)
     const prevUser = prevUserRef.current;
-    const userChanged = prevUser !== undefined && (!!prevUser !== !!user);
+    const userChanged = prevUser !== undefined && !!prevUser !== !!user;
     prevUserRef.current = user;
 
-    if (userChanged) hasNavigated.current = false; // Reset on login OR logout
-
-    if (hasNavigated.current) return; // Prevent multiple navigations
+    if (userChanged) hasNavigated.current = false;
+    if (hasNavigated.current) return;
 
     hasNavigated.current = true;
-
-    //initializes the db tables
     LocalDB.init();
 
-    if(user) {
+    if (user) {
       router.replace(user.hasFinishedSetup ? "/(tabs)" : "/(onboarding)");
-    } else{
-      if(!hasSeenWelcome){
+    } else {
+      if (!hasSeenWelcome) {
         AsyncStorage.setItem("hasSeenWelcome", "true");
         setHasSeenWelcome(true);
         router.replace("/(auth)/welcome");
-      } else{
+      } else {
         router.replace("/(auth)/login");
       }
     }
@@ -170,7 +179,10 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
       <StatusBar style={isDark ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-        <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false, animation: "slide_from_right" }}/>
+        <Stack.Screen
+          name="(onboarding)"
+          options={{ gestureEnabled: false, animation: "slide_from_right" }}
+        />
         <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
         <Stack.Screen
           name="(account)"
@@ -180,8 +192,10 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
             animation: "slide_from_right",
           }}
         />
-        {/* Keep this hidden as it's just a logic handler */}
-        <Stack.Screen name="oauth2redirect/google" options={{ headerShown: false }}/>
+        <Stack.Screen
+          name="oauth2redirect/google"
+          options={{ headerShown: false }}
+        />
         <Stack.Screen
           name="priorities"
           options={{
@@ -196,7 +210,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen
           name="material/[id]"
           options={{
-            headerShown: true, // Show header so user can go back
+            headerShown: true,
             title: "Study Plan",
             headerStyle: { backgroundColor: theme.colors.background },
             headerTintColor: theme.colors.text.primary,
@@ -209,7 +223,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen
           name="assignment/[id]"
           options={{
-            headerShown: true, // Show header so user can go back
+            headerShown: true,
             title: "Assignment Plan",
             headerStyle: { backgroundColor: theme.colors.background },
             headerTintColor: theme.colors.text.primary,

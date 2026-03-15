@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -36,6 +36,7 @@ import {
   openAppSettings,
   getNotificationPermissionStatus,
 } from "@/utils/notifications";
+import { useFocusEffect } from "@react-navigation/native";
 
 interface IconProps {
   color: string;
@@ -47,6 +48,7 @@ export default function Settings() {
   const { user, logout, updateProfileData } = useAuth();
   const router = useRouter();
   const { showAlert } = useAlert();
+
   const [isNotificationExpanded, setIsNotificationExpanded] = useState(false);
   const [isFocusExpanded, setIsFocusExpanded] = useState(false);
   const [isUpdatingFocus, setIsUpdatingFocus] = useState(false);
@@ -54,10 +56,27 @@ export default function Settings() {
   const [isUpdatingSession, setIsUpdatingSession] = useState(false);
   const [isModeExpanded, setIsModeExpanded] = useState(false);
   const [isUpdatingMode, setIsUpdatingMode] = useState(false);
+  const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     user?.studyPreferences?.notifications?.studyReminders ?? false,
   );
-  const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
+
+  // Re-sync both notification toggle and battery dot every time screen comes into focus.
+  useFocusEffect(
+    useCallback(() => {
+      const syncStatuses = async () => {
+        // Notification permission sync
+        const permStatus = await getNotificationPermissionStatus();
+        const userWantsNotifications =
+          user?.studyPreferences?.notifications?.studyReminders ?? false;
+        setNotificationsEnabled(
+          permStatus === "granted" && userWantsNotifications,
+        );
+      };
+
+      syncStatuses();
+    }, [user?.studyPreferences?.notifications?.studyReminders]),
+  );
 
   const MoonIcon: React.FC<IconProps> = ({ color, size }) => (
     <Svg width={size} height={size} viewBox="0 -960 960 960" fill="none">
@@ -94,18 +113,14 @@ export default function Settings() {
   const handleNotificationToggle = async (value: boolean) => {
     if (!user) return;
     setIsTogglingNotifications(true);
-    setNotificationsEnabled(value);
-
-    const status = await getNotificationPermissionStatus();
-    console.log("Device permission status:", status); // ← add this
-    console.log("Trying to set notifications to:", value);
+    setNotificationsEnabled(value); // optimistic
 
     try {
       if (value) {
         const granted = await ensureNotificationPermission();
 
         if (!granted) {
-          setNotificationsEnabled(false); // revert — denied or blocked
+          setNotificationsEnabled(false);
           showAlert({
             title: "Notifications Blocked",
             message:
@@ -117,7 +132,6 @@ export default function Settings() {
           return;
         }
 
-        // Permission granted — save to user preferences
         await updateProfileData({
           studyPreferences: {
             ...user.studyPreferences,
@@ -130,10 +144,7 @@ export default function Settings() {
             },
           },
         });
-
-        console.log("Saved to Firestore:", user.studyPreferences.notifications);
       } else {
-        // Turning OFF — no permission check needed
         await updateProfileData({
           studyPreferences: {
             ...user.studyPreferences,
@@ -149,7 +160,7 @@ export default function Settings() {
       }
     } catch (e) {
       console.error("Failed to update notification preference:", e);
-      setNotificationsEnabled(!value); // revert on unexpected error
+      setNotificationsEnabled(!value);
     } finally {
       setTimeout(() => setIsTogglingNotifications(false), 500);
     }
@@ -235,7 +246,10 @@ export default function Settings() {
           {/* Notifications Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <NotificationSettingsIcon color={theme.colors.text.primary} size={22} />
+              <NotificationSettingsIcon
+                color={theme.colors.text.primary}
+                size={22}
+              />
               <Text style={styles.cardTitle}>Notifications</Text>
             </View>
             <View style={styles.cardContent}>
@@ -754,13 +768,8 @@ const Separator: React.FC<SeparatorProps> = ({ theme }) => (
 
 const createStyles = (theme: Theme, isDark: boolean) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    scrollView: {
-      flex: 1,
-    },
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    scrollView: { flex: 1 },
     header: {
       backgroundColor: theme.colors.surface,
       borderBottomWidth: 1,
@@ -778,10 +787,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontFamily: theme.fonts.regular,
       color: theme.colors.text.secondary,
     },
-    content: {
-      padding: theme.spacing.lg,
-      paddingBottom: 100,
-    },
+    content: { padding: theme.spacing.lg, paddingBottom: 100 },
     card: {
       backgroundColor: theme.colors.surface,
       borderRadius: 16,
@@ -795,11 +801,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       shadowRadius: 4,
       elevation: 2,
     },
-    profileContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 16,
-    },
+    profileContainer: { flexDirection: "row", alignItems: "center", gap: 16 },
     avatar: {
       width: 64,
       height: 64,
@@ -814,9 +816,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       color: theme.colors.text.primary,
       textTransform: "uppercase",
     },
-    profileInfo: {
-      flex: 1,
-    },
+    profileInfo: { flex: 1 },
     profileName: {
       fontSize: 18,
       fontFamily: theme.fonts.semiBold,
@@ -834,9 +834,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontFamily: theme.fonts.semiBold,
       color: theme.colors.text.primary,
     },
-    cardContent: {
-      gap: 0,
-    },
+    cardContent: { gap: 0 },
     helperText: {
       alignSelf: "center",
       fontSize: 12,
@@ -888,9 +886,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       gap: 12,
       flex: 1,
     },
-    menuItemText: {
-      flex: 1,
-    },
+    menuItemText: { flex: 1 },
     menuItemTitle: {
       fontSize: 14,
       fontFamily: theme.fonts.medium,
@@ -926,12 +922,8 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontFamily: theme.fonts.medium,
       color: theme.colors.text.primary,
     },
-    logoutButton: {
-      marginTop: 4,
-    },
-    logoutButtonText: {
-      color: theme.colors.error,
-    },
+    logoutButton: { marginTop: 4 },
+    logoutButtonText: { color: theme.colors.error },
     version: {
       fontSize: 12,
       fontFamily: theme.fonts.regular,
@@ -940,9 +932,7 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       paddingVertical: theme.spacing.lg,
       marginBottom: -67,
     },
-    accordionContainer: {
-      width: "100%",
-    },
+    accordionContainer: { width: "100%" },
     expandedContent: {
       paddingHorizontal: 12,
       paddingBottom: 16,

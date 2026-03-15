@@ -6,13 +6,14 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import * as Notifications from "expo-notifications";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { Theme } from "../types";
 import { useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
+import { ensureNotificationPermission, openAppSettings } from "@/utils/notifications";
+import { useAlert } from "../contexts/AlertContext";
 
 type SessionLength = "short" | "medium" | "long";
 type Mode = "stay_consistent" | "exam_prep" | "catch_up";
@@ -31,47 +32,90 @@ export default function OnboardingScreen() {
   const [mode, setMode] = useState<Mode>("stay_consistent");
   const [sessionLength, setSessionLength] = useState<SessionLength>("medium");
   const [isSaving, setIsSaving] = useState(false);
-
-  const requestNotificationPermission = async (): Promise<boolean> => {
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status === "granted") return true;
-    const { status: newStatus } = await Notifications.requestPermissionsAsync();
-    return newStatus === "granted";
-  };
+  const { showAlert } = useAlert()
 
   const handleFinish = async () => {
     if (!user?.id) return;
     setIsSaving(true);
 
     try {
-      const granted = await requestNotificationPermission();
-      const userRef = doc(firestore, "users", user.id);
+      showAlert({
+        title: "Stay on track",
+        message:
+          "brAInwave works best with notifications enabled. We'll remind you before classes and study sessions.",
+        confirmText: "Allow",
+        showCancel: true,
+        cancelText: "Maybe later",
+        onConfirm: async () => {
+          const granted = await ensureNotificationPermission();
 
-      const payload = {
-        hasFinishedSetup: true,
-        studyPreferences: {
-          mode,
-          isMorningPerson: true,
-          preferredSessionLength: sessionLength,
-          notificationLeadMinutes: 10,
-          notifications: {
-            studyReminders: granted,
-            assignmentDeadlines: granted,
-            goalAchievements: granted,
-            dailySummary: false,
-          },
+          if (!granted) {
+            // Show blocked alert but still proceed to app with false
+            showAlert({
+              title: "Notifications Blocked",
+              message:
+                "Enable notifications in your phone settings to get study reminders.",
+              confirmText: "Open Settings",
+              showCancel: true,
+              cancelText: "Skip",
+              onConfirm: async () => {
+                openAppSettings();
+                await saveAndProceed(false); // ← proceed regardless
+              },
+              onCancel: async () => await saveAndProceed(false), // ← proceed on skip too
+            }, 300);
+            return; // ← don't call saveAndProceed here, the nested alert handles it
+          }
+
+          await saveAndProceed(granted);
         },
-        updatedAt: new Date().toISOString(),
-      };
-
-      await setDoc(userRef, payload, { merge: true });
-      updateProfileData(payload);
-      router.replace("/(tabs)");
-    } catch (err) {
-      console.error("Onboarding error:", err);
-    } finally {
-      setIsSaving(false);
+        onCancel: async () => {
+          // ← add async here
+          await saveAndProceed(false);
+        },
+      });
+      } catch(e){
+        if(__DEV__) console.error("Onboarding error:", e);
+      } finally{
+        setIsSaving(false);
     }
+  };
+
+  const saveAndProceed = async (granted: boolean) => {
+    if (__DEV__)
+      console.log(
+        "saveAndProceed called, user:",
+        user?.id,
+        "granted:",
+        granted,
+      );
+    if (!user?.id) {
+      if (__DEV__) console.log("returning early — no user id");
+      return;
+    }
+    if (__DEV__) console.log("proceeding with save...");
+    const userRef = doc(firestore, "users", user.id);
+
+    const payload = {
+      hasFinishedSetup: true,
+      studyPreferences: {
+        mode,
+        isMorningPerson: true,
+        preferredSessionLength: sessionLength,
+        notificationLeadMinutes: 10,
+        notifications: {
+          studyReminders: granted,
+          assignmentDeadlines: granted,
+          goalAchievements: granted,
+          dailySummary: false,
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    };
+
+    await setDoc(userRef, payload, { merge: true });
+    await updateProfileData(payload);
+    router.replace("/(tabs)");
   };
 
   const styles = createStyles(theme, isDark);
@@ -107,9 +151,7 @@ export default function OnboardingScreen() {
             <Text
               style={[
                 styles.goalOptionText,
-                {
-                  color: mode === m ? "#fff" : theme.colors.primary,
-                },
+                { color: mode === m ? "#fff" : theme.colors.primary },
               ]}
             >
               {m === "exam_prep"
@@ -137,9 +179,7 @@ export default function OnboardingScreen() {
               onPress={() => setSessionLength(s)}
               style={[
                 styles.sessionOption,
-                {
-                  backgroundColor: isActive ? color : color + "20",
-                },
+                { backgroundColor: isActive ? color : color + "20" },
               ]}
             >
               <Text
@@ -180,62 +220,35 @@ export default function OnboardingScreen() {
 
 const createStyles = (theme: Theme, isDark: boolean) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      padding: 24,
-      justifyContent: "center",
-    },
+    container: { flex: 1, padding: 24, justifyContent: "center" },
     title: {
       fontSize: 30,
       fontWeight: "bold",
       marginBottom: 32,
       textAlign: "center",
     },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: "600",
-      marginBottom: 12,
-    },
-    row: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 10,
-      marginBottom: 28,
-    },
+    sectionTitle: { fontSize: 16, fontWeight: "600", marginBottom: 12 },
+    row: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 28 },
     goalOption: {
       paddingVertical: 12,
       paddingHorizontal: 16,
       borderRadius: 999,
       borderWidth: 1,
     },
-    goalOptionText: {
-      fontWeight: "600",
-      fontSize: 14,
-    },
+    goalOptionText: { fontWeight: "600", fontSize: 14 },
     sessionOption: {
       width: "100%",
       borderRadius: 14,
       paddingVertical: 14,
       alignItems: "center",
     },
-    sessionOptionText: {
-      fontSize: 14,
-      fontWeight: "600",
-    },
+    sessionOptionText: { fontSize: 14, fontWeight: "600" },
     button: {
       marginTop: 12,
       padding: 18,
       borderRadius: 16,
       alignItems: "center",
     },
-    buttonText: {
-      color: "#fff",
-      fontSize: 18,
-      fontWeight: "bold",
-    },
-    footnote: {
-      marginTop: 16,
-      textAlign: "center",
-      fontSize: 13,
-    },
+    buttonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+    footnote: { marginTop: 16, textAlign: "center", fontSize: 13 },
   });

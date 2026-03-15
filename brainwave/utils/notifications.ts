@@ -3,53 +3,41 @@ import { Linking, Platform } from "react-native";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as Battery from "expo-battery";
 
-/**Android Battery Optimization
- * These helpers let the app request exemption from battery optimization.
- */
-
-// Checks if battery optimization is enabled
+// Battery optimization for Android
 export async function isBatteryOptimizationEnabled(): Promise<boolean> {
   if (Platform.OS !== "android") return false;
-  
   return await Battery.isBatteryOptimizationEnabledAsync();
 }
 
-// Opens the Android system dialog asking the user to exempt the app from battery optimization
-// Doesnt request on iOS tho
+let isBatteryDialogOpen = false;
 
 export async function requestBatteryOptimizationExemption(): Promise<void> {
   if (Platform.OS !== "android") return;
-  
-  try{
+  if (isBatteryDialogOpen) return;
+
+  isBatteryDialogOpen = true;
+  try {
     await IntentLauncher.startActivityAsync(
       "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-      { data: `package:com.username0.brainwave` }
+      { data: `package:com.username0.brainwave` },
     );
-  } catch(e: any){
-    if(__DEV__) console.error(e.message)
-    await IntentLauncher.startActivityAsync("android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS");
+  } catch (e: any) {
+    if (__DEV__) console.error(e.message);
+    await IntentLauncher.startActivityAsync(
+      "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
+    );
+  } finally{
+    isBatteryDialogOpen = false;
   }
 }
 
- // Convenience: checks if battery optimization is enabled and prompts the user to disable it if so.
 export async function ensureBatteryOptimizationExemption(): Promise<void> {
   if (Platform.OS !== "android") return;
   const optimized = await isBatteryOptimizationEnabled();
-  if (optimized) {
-    await requestBatteryOptimizationExemption();
-  }
+  if (optimized) await requestBatteryOptimizationExemption();
 }
 
-// Notification Handler - taken from _layout.tsx
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
+// Notification permissions
 export async function getNotificationPermissionStatus(): Promise<
   "granted" | "denied" | "undetermined"
 > {
@@ -57,19 +45,26 @@ export async function getNotificationPermissionStatus(): Promise<
   return status as "granted" | "denied" | "undetermined";
 }
 
-//Requests notification permission from the OS.
 export async function ensureNotificationPermission(): Promise<boolean> {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   if (existingStatus === "granted") return true;
-  if (existingStatus === "denied") return false; // Can't prompt again on iOS
-
+  if (existingStatus === "denied") return false;
   const { status } = await Notifications.requestPermissionsAsync();
   return status === "granted";
 }
 
-// Opens the device's app settings page so the user can manually enable notifications
 export function openAppSettings(): void {
   Linking.openSettings();
+}
+
+// Notification channel for android
+export async function setupAndroidNotificationChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync("high-priority", {
+    name: "Urgent Reminders",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+  });
 }
 
 export function parseStartDate(item: any, referenceDate?: Date): Date | null {
@@ -82,7 +77,8 @@ export function parseStartDate(item: any, referenceDate?: Date): Date | null {
     const timeMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
     if (!timeMatch) return null;
 
-    let [hourStr, minStr, modifier] = timeMatch;
+    // Note the leading comma — skips the full match at index 0
+    let [, hourStr, minStr, modifier] = timeMatch;
     let hours = parseInt(hourStr, 10);
     const minutes = parseInt(minStr, 10);
 
@@ -102,7 +98,7 @@ export function parseStartDate(item: any, referenceDate?: Date): Date | null {
 
     return isNaN(target.getTime()) ? null : target;
   } catch (e: any) {
-    console.log("parseStartDate error: ", e.message);
+    if (__DEV__) console.log("parseStartDate error: ", e.message);
     return null;
   }
 }
@@ -163,14 +159,6 @@ function getNextOccurrence(dayName: string, now: Date): Date {
   if (daysAhead < 0) daysAhead += 7;
   result.setDate(now.getDate() + daysAhead);
   return result;
-}
-
-if (Platform.OS === "android"){
-  Notifications.setNotificationChannelAsync("high-priority", {
-    name: "Urgent Reminders",
-    importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 250, 250, 250]
-  });
 }
 
 export async function scheduleDailyNotifications(

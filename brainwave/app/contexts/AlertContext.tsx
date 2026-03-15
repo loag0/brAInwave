@@ -8,8 +8,8 @@ interface AlertOptions {
   message: string;
   iconPath?: string;
   iconColor?: string;
-  onConfirm?: () => void;
-  onCancel?: () => void;
+  onConfirm?: () => void | Promise<void>;
+  onCancel?: () => void | Promise<void>;
   confirmText?: string;
   cancelText?: string;
   showCancel?: boolean;
@@ -100,9 +100,10 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
                       styles.cancelButton,
                       { borderColor: theme.colors.border },
                     ]}
-                    onPress={() => {
-                      config.onCancel?.();
+                    onPress={async () => {
+                      const callback = config.onCancel;
                       hideAlert();
+                      await callback?.();
                     }}
                     activeOpacity={0.7}
                   >
@@ -123,9 +124,10 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
                     { backgroundColor: accentColor },
                     !config.showCancel && styles.confirmButtonFull,
                   ]}
-                  onPress={() => {
-                    config.onConfirm?.();
+                  onPress={async () => {
+                    const callback = config.onConfirm;
                     hideAlert();
+                    await callback?.();
                   }}
                   activeOpacity={0.8}
                 >
@@ -152,7 +154,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // Wider (90%) but capped at 400 — shorter because header is now a row not a column
   alertBox: {
     width: "90%",
     maxWidth: 400,
@@ -176,7 +177,6 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
 
-  // Icon + title side by side — M3 dialog header
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -184,7 +184,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  // Circular icon container — M3 uses circles not rounded squares
   iconCircle: {
     width: 40,
     height: 40,
@@ -207,7 +206,6 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
-  // Indent message to align under title text when icon present (icon=40 + gap=14)
   messageIndented: {
     paddingLeft: 54,
   },
@@ -218,7 +216,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-  // M3 outlined pill
   cancelButton: {
     paddingHorizontal: 18,
     paddingVertical: 9,
@@ -234,7 +231,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  // M3 filled pill
   confirmButton: {
     paddingHorizontal: 22,
     paddingVertical: 9,

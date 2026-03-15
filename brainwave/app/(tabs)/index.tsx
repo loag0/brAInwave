@@ -23,7 +23,6 @@ import { useTimetableUpload } from "../hooks/useTimetableUpload";
 import { useNextClass } from "../hooks/useNextClass";
 import {
   ensureNotificationPermission,
-  ensureBatteryOptimizationExemption,
   scheduleDailyNotifications,
   formatTimeTo24h,
   parseDurationMinutes,
@@ -171,7 +170,7 @@ export default function Home() {
     if (!user) return;
     (async () => {
       const allowed = await ensureNotificationPermission();
-      await ensureBatteryOptimizationExemption();
+
       if (!allowed) return;
       if (user?.studyPreferences.notifications?.studyReminders) {
         await scheduleDailyNotifications(todaysSchedule, leadMinutes);
