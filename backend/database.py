@@ -95,11 +95,11 @@ class DailyPlan(Base):
 class CompletionLog(Base):
     __tablename__ = "completion_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, index=True)
-    date = Column(String)  # YYYY-MM-DD
-    minutes_studied = Column(Integer, default=0)
-    module_tag = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    date: Mapped[str] = mapped_column(String)  # YYYY-MM-DD
+    minutes_studied: Mapped[int] = mapped_column(Integer, default=0)
+    module_tag: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
 def init_db():
     Base.metadata.create_all(bind=engine)

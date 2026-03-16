@@ -11,7 +11,7 @@ import os
 import json
 from typing import List, Optional
 from urllib.parse import unquote
-from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashcard, DailyPlan, init_db, engine
+from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashcard, DailyPlan, init_db, engine, CompletionLog
 from dotenv import load_dotenv
 
 # 1. Setup environment and Database
@@ -36,7 +36,7 @@ def on_startup():
     from sqlalchemy import text
     with engine.connect() as conn:
         try:
-            conn.execute(text("ALTER TABLE completion_logs ADD COLUMN module_tag VARCHAR"))
+            conn.execute(text("ALTER TABLE completion_logs ADD COLUMN is_dirty INTEGER DEFAULT 1"))
             conn.commit()
         except Exception:
             pass
@@ -122,6 +122,11 @@ class PlanRequest(BaseModel):
     classes: Optional[List[ClassItem]] = None
     customTasks: Optional[List[CustomTask]] = None
     userNote: Optional[str] = None
+    
+class CompletionLogEntry(BaseModel):
+    date: str
+    minutes_studied: int
+    module_tag: Optional[str] = None
 
 # --- Routes ---
 
@@ -689,6 +694,31 @@ async def listDailyPlans(user_id: str = Depends(verify_token), db: Session = Dep
         })
 
     return {"plans": result}
+
+@app.post("/completion-logs")
+async def syncCompletionLogs(
+    logs: List[CompletionLogEntry],
+    user_id: str = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    for entry in logs:
+        existing = db.query(CompletionLog).filter(
+            CompletionLog.user_id == user_id,
+            CompletionLog.date == entry.date,
+            CompletionLog.module_tag == entry.module_tag
+        ).first()
+
+        if existing:
+            existing.minutes_studied += entry.minutes_studied
+        else:
+            db.add(CompletionLog(
+                user_id=user_id,
+                date=entry.date,
+                minutes_studied=entry.minutes_studied,
+                module_tag=entry.module_tag,
+            ))
+    db.commit()
+    return {"status": "success"}
 
 @app.get("/study-plan/{material_id}")
 async def getStudyMaterial(material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):

@@ -26,6 +26,7 @@ import {
   PauseIcon,
   PlayIcon,
   ICONS,
+  CheckIcon,
 } from "@/components/Icons";
 import { useNavigation, useRouter } from "expo-router";
 import { ensureNotificationPermission } from "@/utils/notifications";
@@ -310,7 +311,7 @@ export default function FocusScreen() {
                   </Text>
                   {s === selectedModules && (
                     <Text style={{ color: theme.colors.primary, fontSize: 12 }}>
-                      ✓
+                      <CheckIcon size={20} color={theme.colors.primary}/>
                     </Text>
                   )}
                 </TouchableOpacity>

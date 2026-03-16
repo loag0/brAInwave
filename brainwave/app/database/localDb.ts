@@ -55,7 +55,9 @@ export const LocalDB = {
         user_id TEXT,
         date TEXT,
         minutes_studied INTEGER DEFAULT 0,
-        UNIQUE(user_id, date)
+        module_tag TEXT,
+        is_dirty INTEGER DEFAULT 1,
+        UNIQUE(user_id, date, module_tag)
       );
 
       CREATE TABLE IF NOT EXISTS module_goals (
@@ -129,6 +131,11 @@ export const LocalDB = {
         UNIQUE(user_id, module_tag)
         )
       `);
+    } catch {}
+    try {
+      db.execSync(
+        `ALTER TABLE completion_logs ADD COLUMN is_dirty INTEGER DEFAULT 1`,
+      );
     } catch {}
   },
 
@@ -533,12 +540,34 @@ export const LocalDB = {
     moduleTag?: string,
   ) => {
     db.runSync(
-      `INSERT INTO completion_logs (user_id, date, minutes_studied, module_tag)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(user_id, date) DO UPDATE SET
+      `INSERT INTO completion_logs (user_id, date, minutes_studied, module_tag, is_dirty)
+     VALUES (?, ?, ?, ?, 1)
+     ON CONFLICT(user_id, date, module_tag) DO UPDATE SET
        minutes_studied = minutes_studied + ?,
-       module_tag = COALESCE(?, module_tag)`,
-      [userId, date, minutes, moduleTag ?? null, minutes, moduleTag ?? null],
+       is_dirty = 1`,
+      [userId, date, minutes, moduleTag ?? null, minutes],
+    );
+  },
+
+  getDirtyCompletionLogs: (userId: string) => {
+    return db.getAllSync(
+      `SELECT id, date, minutes_studied, module_tag FROM completion_logs
+     WHERE user_id = ? AND is_dirty = 1`,
+      [userId],
+    ) as {
+      id: number;
+      date: string;
+      minutes_studied: number;
+      module_tag: string | null;
+    }[];
+  },
+
+  markCompletionLogsSynced: (userId: string, ids: number[]) => {
+    if (!ids.length) return;
+    const placeholders = ids.map(() => "?").join(",");
+    db.runSync(
+      `UPDATE completion_logs SET is_dirty = 0 WHERE user_id = ? AND id IN (${placeholders})`,
+      [userId, ...ids],
     );
   },
 

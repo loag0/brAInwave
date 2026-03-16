@@ -374,7 +374,7 @@ export default function Planner() {
     if (topSubject && hasHardestSubject) {
       return {
         title: "Priority Focus",
-        text: `I've prioritized ${topSubjectRaw} today. Get it done early!`,
+        text: `${topSubjectRaw} has top priority today. Get it done early!`,
         icon: "rocket",
       };
     }

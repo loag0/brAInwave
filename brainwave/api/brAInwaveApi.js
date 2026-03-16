@@ -233,6 +233,11 @@ class BrAInwaveAPI {
     }
   }
 
+  async syncCompletionLogs(logs) {
+    const response = await axios.post(`${API_BASE_URL}/completion-logs`, logs);
+    return response.data;
+  }
+
   async generateFlashcards(userId, materialId) {
     const response = await axios.post(
       `${API_BASE_URL}/generate-flashcards`,

@@ -80,12 +80,14 @@ export const useContent = () => {
         (a) => a.is_dirty === 1,
       );
       const dirtyPlans = currentPlans.filter((p) => p.is_dirty === 1);
+      const dirtyLogs = LocalDB.getDirtyCompletionLogs(user.id);
 
       const totalToSync =
         dirtyMaterials.length +
         dirtyTimetables.length +
         dirtyAssignments.length +
-        dirtyPlans.length;
+        dirtyPlans.length +
+        dirtyLogs.length;
 
       if (totalToSync === 0) {
         log("Nothing dirty to sync");
@@ -250,6 +252,28 @@ export const useContent = () => {
         } catch (e: any) {
           log(`Plan sync failed [${plan.date}]: ${e.message}`);
           // Stays dirty - retries on next reconnect
+        }
+      }
+
+      if (dirtyLogs.length > 0) {
+        try {
+          log(`Syncing ${dirtyLogs.length} completion log(s)`);
+          await BrainwaveAPI.syncCompletionLogs(
+            dirtyLogs.map((l) => ({
+              date: l.date,
+              minutes_studied: l.minutes_studied,
+              module_tag: l.module_tag,
+            })),
+          );
+          LocalDB.markCompletionLogsSynced(
+            user.id,
+            dirtyLogs.map((l) => l.id),
+          );
+          completed += dirtyLogs.length;
+          setSyncProgress({ current: completed, total: totalToSync });
+          log(`Completion logs synced`);
+        } catch (e: any) {
+          log(`Completion logs sync failed: ${e.message}`);
         }
       }
 
