@@ -74,17 +74,28 @@ export function parseStartDate(item: any, referenceDate?: Date): Date | null {
   const base = referenceDate || new Date();
 
   try {
-    const timeMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
-    if (!timeMatch) return null;
+    let hours = 0;
+    let minutes = 0;
 
-    // Note the leading comma — skips the full match at index 0
-    let [, hourStr, minStr, modifier] = timeMatch;
-    let hours = parseInt(hourStr, 10);
-    const minutes = parseInt(minStr, 10);
+    // Format: "0800", "1050" — 24h no colon
+    const militaryMatch = startTimeStr.match(/^(\d{2})(\d{2})$/);
+    // Format: "10:00 AM", "8:30 pm" — 12h with colon
+    const colonMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
 
-    if (modifier) {
-      if (modifier.toLowerCase() === "pm" && hours < 12) hours += 12;
-      if (modifier.toLowerCase() === "am" && hours === 12) hours = 0;
+    if (militaryMatch) {
+      hours = parseInt(militaryMatch[1], 10);
+      minutes = parseInt(militaryMatch[2], 10);
+    } else if (colonMatch) {
+      let [, hourStr, minStr, modifier] = colonMatch;
+      hours = parseInt(hourStr, 10);
+      minutes = parseInt(minStr, 10);
+
+      if (modifier) {
+        if (modifier.toLowerCase() === "pm" && hours < 12) hours += 12;
+        if (modifier.toLowerCase() === "am" && hours === 12) hours = 0;
+      }
+    } else {
+      return null;
     }
 
     const target = new Date(
@@ -92,7 +103,7 @@ export function parseStartDate(item: any, referenceDate?: Date): Date | null {
       base.getMonth(),
       base.getDate(),
       hours,
-      minutes || 0,
+      minutes,
       0,
     );
 

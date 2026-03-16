@@ -95,6 +95,8 @@ export default function Home() {
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
 
+  const [, setTick] = useState<number>(0);
+
   const leadMinutes = user?.studyPreferences.notificationLeadMinutes ?? 10;
   const styles = createStyles(theme, isDark);
 
@@ -113,6 +115,13 @@ export default function Home() {
       }
     }, [refresh, user?.id]),
   );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick((prev: number) => prev + 1);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const { upload } = useTimetableUpload(
     user?.id,
@@ -336,7 +345,7 @@ export default function Home() {
                 todaysSchedule.slice(0, 3).map((item, idx) => (
                   <View
                     key={idx}
-                    style={[styles.classItem, idx !== 2 && styles.itemMargin]}
+                    style={[styles.classItem, idx !== 2 && styles.itemMargin, isTaskPastHome(item) && { opacity: 0.4 }]}
                   >
                     <View
                       style={[

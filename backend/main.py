@@ -11,7 +11,7 @@ import os
 import json
 from typing import List, Optional
 from urllib.parse import unquote
-from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashcard, DailyPlan, init_db
+from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashcard, DailyPlan, init_db, engine
 from dotenv import load_dotenv
 
 # 1. Setup environment and Database
@@ -32,6 +32,14 @@ if not firebase_admin._apps:
 @app.on_event("startup")
 def on_startup():
     init_db()
+    
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE completion_logs ADD COLUMN module_tag VARCHAR"))
+            conn.commit()
+        except Exception:
+            pass
     print("Database initialized.")
 
 app.add_middleware(

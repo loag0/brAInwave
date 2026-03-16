@@ -12,6 +12,8 @@ import * as Haptics from "expo-haptics";
 import { useTimer } from "../contexts/TimerContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAlert } from "../contexts/AlertContext";
+import { useAuth } from "../contexts/AuthContext";
+import { LocalDB } from "../database/localDb";
 import MinutePicker from "@/components/MinutePicker";
 import { Theme } from "../types";
 import { useKeepAwake } from "expo-keep-awake";
@@ -42,6 +44,7 @@ Notifications.setNotificationHandler({
 });
 
 export default function FocusScreen() {
+  const { user } = useAuth(); 
   const { theme, isDark } = useTheme();
   const { showAlert } = useAlert();
   const router = useRouter();
@@ -51,6 +54,9 @@ export default function FocusScreen() {
   const [customDurations, setCustomDurations] = useState<number[]>([]);
   const [pressedDuration, setPressedDuration] = useState<number | null>(null);
   const [notificationId, setNotificationId] = useState<string | null>(null);
+
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [moduleDropdownOpen, setModuleDropdownOpen] = useState(false);
 
   const AnimatedCircle = Animated.createAnimatedComponent(Circle);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -65,6 +71,8 @@ export default function FocusScreen() {
     startSession,
     setDuration,
     totalSeconds,
+    selectedModules,
+    setSelectedModules,
   } = useTimer();
 
   useKeepAwake();
@@ -72,6 +80,13 @@ export default function FocusScreen() {
   useEffect(() => {
     ensureNotificationPermission();
   }, []);
+
+  useEffect(() => {
+    if(!user?.id) return;
+    
+    const s = LocalDB.getSubjectsFromTimetable(user.id);
+    setSubjects(s);
+  }, [user?.id]);
 
   useEffect(() => {
     const parent = navigation.getParent()?.getParent();
@@ -250,6 +265,60 @@ export default function FocusScreen() {
           )}
         </View>
       </TouchableOpacity>
+
+      {/* Module selector — only show when not running */}
+      {!isRunning && (
+        <View style={styles.moduleCard}>
+          <TouchableOpacity
+            style={styles.moduleDropdownBtn}
+            onPress={() => setModuleDropdownOpen((v) => !v)}
+            activeOpacity={0.7}
+          >
+            <View>
+              <Text style={styles.moduleLabel}>Studying for</Text>
+              <Text style={styles.moduleValue}>
+                {selectedModules ?? "None (free focus)"}
+              </Text>
+            </View>
+            <ChevronDownIcon
+              size={16}
+              color={theme.colors.text.secondary}
+              style={{
+                transform: [{ rotate: moduleDropdownOpen ? "180deg" : "0deg" }],
+              }}
+            />
+          </TouchableOpacity>
+
+          {moduleDropdownOpen && (
+            <View style={styles.moduleList}>
+              {[null, ...subjects].map((s) => (
+                <TouchableOpacity
+                  key={s ?? "__none__"}
+                  style={styles.moduleItem}
+                  onPress={() => {
+                    setSelectedModules(s);
+                    setModuleDropdownOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.moduleItemText,
+                      s === selectedModules && { color: theme.colors.primary },
+                    ]}
+                  >
+                    {s ?? "None (free focus)"}
+                  </Text>
+                  {s === selectedModules && (
+                    <Text style={{ color: theme.colors.primary, fontSize: 12 }}>
+                      ✓
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Controls */}
       <View style={{ width: "80%", alignItems: "center", marginTop: 40 }}>
@@ -477,6 +546,52 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       top: 50,
       left: 15,
       padding: 10,
+    },
+    moduleCard: {
+      width: "80%",
+      backgroundColor: theme.colors.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      overflow: "hidden",
+      marginTop: 20,
+    },
+    moduleDropdownBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: 14,
+    },
+    moduleLabel: {
+      fontSize: 11,
+      color: theme.colors.text.secondary,
+      fontFamily: theme.fonts.medium,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 2,
+    },
+    moduleValue: {
+      fontSize: 14,
+      color: theme.colors.text.primary,
+      fontFamily: theme.fonts.semiBold,
+    },
+    moduleList: {
+      borderTopWidth: 0.5,
+      borderTopColor: theme.colors.border,
+    },
+    moduleItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      borderBottomWidth: 0.5,
+      borderBottomColor: theme.colors.border,
+    },
+    moduleItemText: {
+      fontSize: 14,
+      color: theme.colors.text.primary,
+      fontFamily: theme.fonts.regular,
     },
     stopBtn: {
       padding: 10,

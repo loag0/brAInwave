@@ -30,6 +30,8 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
   const timeLeftInSeconds = minutes * 60 + seconds;
   const progress = totalSeconds > 0 ? timeLeftInSeconds / totalSeconds : 0;
 
+  const [selectedModules, setSelectedModules] = useState<string | null>(null);
+
   const syncTimer = () => {
     if (!isRunning || !expectedEndTimeRef.current) return;
     const remainingMs = expectedEndTimeRef.current - Date.now();
@@ -47,7 +49,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (user?.id) {
         // Log locally for streaks/charts
-        LocalDB.logStudyTime(user.id, today, studyMins);
+        LocalDB.logStudyTime(user.id, today, studyMins, selectedModules ?? undefined);
 
         // Sync to cloud
         const activityRef = doc(firestore, "users", user.id, "activity", today);
@@ -64,7 +66,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       showAlert({
-        title: "Session Complete! 🏆",
+        title: "Session Complete!",
         message: `Nice work! You focused for ${studyMins} minutes.`,
         confirmText: "LFG!",
       });
@@ -145,6 +147,8 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
         startSession,
         setDuration,
         totalSeconds,
+        selectedModules,
+        setSelectedModules,
       }}
     >
       {children}

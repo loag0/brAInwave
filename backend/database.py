@@ -99,6 +99,7 @@ class CompletionLog(Base):
     user_id = Column(String, index=True)
     date = Column(String)  # YYYY-MM-DD
     minutes_studied = Column(Integer, default=0)
+    module_tag = Column(String, nullable=True)
 
 def init_db():
     Base.metadata.create_all(bind=engine)

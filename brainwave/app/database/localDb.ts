@@ -58,6 +58,14 @@ export const LocalDB = {
         UNIQUE(user_id, date)
       );
 
+      CREATE TABLE IF NOT EXISTS module_goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        module_tag TEXT,
+        weekly_goal_minutes INTEGER,
+        UNIQUE(user_id, module_tag)
+      );
+
       CREATE TABLE IF NOT EXISTS assignments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT,
@@ -107,6 +115,20 @@ export const LocalDB = {
     } catch {}
     try {
       db.execSync(`ALTER TABLE daily_plans ADD COLUMN remote_id INTEGER`);
+    } catch {}
+    try {
+      db.execSync(`ALTER TABLE completion_logs ADD COLUMN module_tag TEXT`);
+    } catch {}
+    try {
+      db.execSync(`
+        CREATE TABLE IF NOT EXISTS module_goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        module_tag TEXT,
+        weekly_goal_minutes INTEGER,
+        UNIQUE(user_id, module_tag)
+        )
+      `);
     } catch {}
   },
 
@@ -504,12 +526,19 @@ export const LocalDB = {
 
   // COMPLETION & STREAKS
 
-  logStudyTime: (userId: string, date: string, minutes: number) => {
+  logStudyTime: (
+    userId: string,
+    date: string,
+    minutes: number,
+    moduleTag?: string,
+  ) => {
     db.runSync(
-      `INSERT INTO completion_logs (user_id, date, minutes_studied)
-       VALUES (?, ?, ?)
-       ON CONFLICT(user_id, date) DO UPDATE SET minutes_studied = minutes_studied + ?`,
-      [userId, date, minutes, minutes],
+      `INSERT INTO completion_logs (user_id, date, minutes_studied, module_tag)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id, date) DO UPDATE SET
+       minutes_studied = minutes_studied + ?,
+       module_tag = COALESCE(?, module_tag)`,
+      [userId, date, minutes, moduleTag ?? null, minutes, moduleTag ?? null],
     );
   },
 
@@ -520,6 +549,72 @@ export const LocalDB = {
        ORDER BY date ASC`,
       [userId],
     );
+  },
+
+  getSubjectsFromTimetable: (userId: string): string[] => {
+    const rows = db.getAllSync(
+      `SELECT structuredData FROM timetables WHERE user_id = ? AND is_deleted = 0 ORDER BY id DESC LIMIT 1`,
+      [userId],
+    ) as { structuredData: string }[];
+
+    if (!rows.length) return [];
+
+    try {
+      const data = JSON.parse(rows[0].structuredData);
+      const stripTypes = (name: string) =>
+        name
+          .replace(/\s+(LAB|LECTURE|TUTORIAL|SEMINAR|PRACTICAL)$/i, "")
+          .trim();
+
+      const seen = new Set<string>();
+      const subjects: string[] = [];
+
+      Object.values(data).forEach((dayEntries: any) => {
+        dayEntries.forEach((entry: any) => {
+          const clean = stripTypes(entry.subject);
+          if (!seen.has(clean)) {
+            seen.add(clean);
+            subjects.push(clean);
+          }
+        });
+      });
+
+      return subjects.sort();
+    } catch {
+      return [];
+    }
+  },
+
+  getModuleStudyHours: (userId: string) => {
+    return db.getAllSync(
+      `SELECT module_tag, SUM(minutes_studied) as total_minutes
+     FROM completion_logs
+     WHERE user_id = ? AND module_tag IS NOT NULL
+     AND date >= date('now', '-7 days')
+     GROUP BY module_tag
+     ORDER BY total_minutes DESC`,
+      [userId],
+    ) as { module_tag: string; total_minutes: number }[];
+  },
+
+  setModuleGoal: (
+    userId: string,
+    moduleTag: string,
+    weeklyGoalMinutes: number,
+  ) => {
+    db.runSync(
+      `INSERT INTO module_goals (user_id, module_tag, weekly_goal_minutes)
+     VALUES (?, ?, ?)
+     ON CONFLICT(user_id, module_tag) DO UPDATE SET weekly_goal_minutes = ?`,
+      [userId, moduleTag, weeklyGoalMinutes, weeklyGoalMinutes],
+    );
+  },
+
+  getModuleGoals: (userId: string) => {
+    return db.getAllSync(
+      `SELECT module_tag, weekly_goal_minutes FROM module_goals WHERE user_id = ?`,
+      [userId],
+    ) as { module_tag: string; weekly_goal_minutes: number }[];
   },
 
   getStreakCount: (userId: string) => {

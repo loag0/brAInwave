@@ -88,7 +88,7 @@ export const useContent = () => {
         dirtyPlans.length;
 
       if (totalToSync === 0) {
-        log("✅", "Nothing dirty to sync");
+        log("Nothing dirty to sync");
         return;
       }
 

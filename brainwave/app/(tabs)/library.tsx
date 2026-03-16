@@ -87,6 +87,11 @@ export default function Library() {
   const [streakCount, setStreakCount] = useState(0);
   const [weeklyActivity, setWeeklyActivity] = useState<any[]>([]);
 
+  const [moduleHours, setModuleHours] = useState<{ module_tag: string; total_minutes: number }[]>([]);
+  const [moduleGoals, setModuleGoals] = useState<{ module_tag: string; weekly_goal_minutes: number }[]>([]);
+  const [editingGoal, setEditingGoal] = useState<string | null>(null);
+  const [goalInput, setGoalInput] = useState("");
+
   const styles = createStyles(theme, isDark);
 
   const SearchQueryIcon: React.FC<IconProps> = ({ size, color }) => (
@@ -116,8 +121,12 @@ export default function Library() {
     if (!user?.id) return;
     const streak = LocalDB.getStreakCount(user.id);
     const activity = LocalDB.getWeeklyActivity(user.id);
+    const modules = LocalDB.getModuleStudyHours(user.id);
+    const goals = LocalDB.getModuleGoals(user.id);
     setStreakCount(streak);
     setWeeklyActivity(activity);
+    setModuleHours(modules);
+    setModuleGoals(goals);
   }, [user?.id]);
 
   useFocusEffect(
@@ -247,6 +256,9 @@ export default function Library() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingBottom: 200 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -452,6 +464,196 @@ export default function Library() {
                   h
                 </Text>
               </View>
+            </View>
+
+            {/* Module Study Hours */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Hours by Module</Text>
+              <Text
+                style={[
+                  styles.insightText,
+                  { marginTop: -8, marginBottom: 12 },
+                ]}
+              >
+                This week · Tap a module to set a goal
+              </Text>
+              {moduleHours.length === 0 ? (
+                <Text
+                  style={[
+                    styles.insightText,
+                    { textAlign: "center", paddingVertical: 12 },
+                  ]}
+                >
+                  Complete a tagged focus session to see module hours.
+                </Text>
+              ) : (
+                <View style={{ gap: 14 }}>
+                  {moduleHours.map(({ module_tag, total_minutes }) => {
+                    const goal = moduleGoals.find(
+                      (g) => g.module_tag === module_tag,
+                    );
+                    const goalMins = goal?.weekly_goal_minutes ?? null;
+                    const pct = goalMins
+                      ? Math.min(
+                          Math.round((total_minutes / goalMins) * 100),
+                          100,
+                        )
+                      : null;
+                    const hrs = Math.floor(total_minutes / 60);
+                    const mins = total_minutes % 60;
+                    const actualLabel =
+                      hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+                    const goalLabel = goalMins
+                      ? `/ ${Math.floor(goalMins / 60)}h ${goalMins % 60 > 0 ? `${goalMins % 60}m` : ""}`.trim()
+                      : "";
+
+                    const barColor =
+                      pct === null
+                        ? theme.colors.primary
+                        : pct >= 80
+                          ? theme.colors.success
+                          : pct >= 50
+                            ? theme.colors.warning
+                            : theme.colors.error;
+
+                    const isEditing = editingGoal === module_tag;
+
+                    return (
+                      <TouchableOpacity
+                        key={module_tag}
+                        onPress={() => {
+                          if (isEditing) return;
+                          setEditingGoal(module_tag);
+                          setGoalInput(
+                            goalMins ? String(Math.floor(goalMins / 60)) : "",
+                          );
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        {/* Row header */}
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            marginBottom: 6,
+                          }}
+                        >
+                          <Text style={styles.moduleRowLabel}>
+                            {module_tag}
+                          </Text>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "baseline",
+                              gap: 4,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.moduleRowValue,
+                                { color: barColor },
+                              ]}
+                            >
+                              {actualLabel}
+                            </Text>
+                            {goalLabel ? (
+                              <Text style={[styles.moduleRowGoal]}>
+                                {goalLabel}
+                              </Text>
+                            ) : (
+                              <Text style={styles.moduleRowGoal}>
+                                · set goal
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Bar */}
+                        <View style={styles.moduleBarTrack}>
+                          <View
+                            style={[
+                              styles.moduleBarFill,
+                              {
+                                width:
+                                  pct !== null
+                                    ? `${Math.max(pct, 3)}%`
+                                    : "100%",
+                                backgroundColor: barColor,
+                                opacity: pct === null ? 0.3 : 1,
+                              },
+                            ]}
+                          />
+                        </View>
+
+                        {/* Inline goal editor */}
+                        {isEditing && (
+                          <View style={styles.goalEditor}>
+                            <TextInput
+                              style={styles.goalInput}
+                              keyboardType="numeric"
+                              placeholder="Hours per week"
+                              placeholderTextColor={
+                                theme.colors.text.secondary + "80"
+                              }
+                              value={goalInput}
+                              onChangeText={setGoalInput}
+                              autoFocus
+                              maxLength={3}
+                            />
+                            <TouchableOpacity
+                              style={[
+                                styles.goalConfirmBtn,
+                                { backgroundColor: theme.colors.primary },
+                              ]}
+                              onPress={() => {
+                                const hrs = parseFloat(goalInput);
+                                if (!isNaN(hrs) && hrs > 0 && user?.id) {
+                                  LocalDB.setModuleGoal(
+                                    user.id,
+                                    module_tag,
+                                    Math.round(hrs * 60),
+                                  );
+                                  setModuleGoals(
+                                    LocalDB.getModuleGoals(user.id),
+                                  );
+                                }
+                                setEditingGoal(null);
+                                setGoalInput("");
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "#fff",
+                                  fontSize: 13,
+                                  fontFamily: theme.fonts.semiBold,
+                                }}
+                              >
+                                Save
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setEditingGoal(null);
+                                setGoalInput("");
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: theme.colors.error,
+                                  fontSize: 13,
+                                  fontFamily: theme.fonts.medium,
+                                }}
+                              >
+                                Cancel
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -706,6 +908,56 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       fontSize: 20,
       fontFamily: theme.fonts.bold,
       color: theme.colors.text.primary,
+    },
+    moduleRowLabel: {
+      fontSize: 13,
+      fontFamily: theme.fonts.medium,
+      color: theme.colors.text.primary,
+    },
+    moduleRowValue: {
+      fontSize: 13,
+      fontFamily: theme.fonts.semiBold,
+    },
+    moduleRowGoal: {
+      fontSize: 12,
+      fontFamily: theme.fonts.regular,
+      color: theme.colors.text.secondary,
+    },
+    moduleBarTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.colors.border,
+      overflow: "hidden",
+    },
+    moduleBarFill: {
+      height: "100%",
+      borderRadius: 3,
+    },
+    goalEditor: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 0.5,
+      borderTopColor: theme.colors.border,
+    },
+    goalInput: {
+      flex: 1,
+      height: 36,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      paddingHorizontal: 10,
+      fontSize: 14,
+      color: theme.colors.text.primary,
+      fontFamily: theme.fonts.regular,
+      backgroundColor: theme.colors.background,
+    },
+    goalConfirmBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 8,
     },
     fab: {
       position: "absolute",
