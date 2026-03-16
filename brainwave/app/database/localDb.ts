@@ -700,6 +700,7 @@ export const LocalDB = {
       "assignments",
       "flashcards",
       "completion_logs",
+      "module_goals",
     ];
     for (const table of tables) {
       const col = table === "user_profile" ? "id" : "user_id";

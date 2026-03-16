@@ -556,8 +556,17 @@ export default function Library() {
                             >
                               {actualLabel}
                             </Text>
-                            {goalLabel ? (
-                              <Text style={[styles.moduleRowGoal]}>
+                            {pct !== null && pct >= 100 ? (
+                              <Text
+                                style={[
+                                  styles.moduleRowGoal,
+                                  { color: theme.colors.success },
+                                ]}
+                              >
+                                Goal reached!
+                              </Text>
+                            ) : goalLabel ? (
+                              <Text style={styles.moduleRowGoal}>
                                 {goalLabel}
                               </Text>
                             ) : (
