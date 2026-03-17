@@ -142,10 +142,10 @@ class BrAInwaveAPI {
     return response.data;
   }
 
-  async updateAssignmentDueDate(remoteId, newDueDate) {
+  async updateAssignmentDueDate(remoteId, newDueDate, newDueTime) {
     const response = await axios.patch(
       `${API_BASE_URL}/assignment/${remoteId}/due-date`,
-      { due_date: newDueDate },
+      { due_date: newDueDate, due_time: newDueTime },
     );
     return response.data;
   }
@@ -174,13 +174,8 @@ class BrAInwaveAPI {
     return response.data;
   }
 
-  async getStudyPlan(userId, planId) {
+  async getStudyPlanDetails(userId, planId) {
     const response = await axios.get(`${API_BASE_URL}/study-plan/${planId}`);
-    return response.data;
-  }
-
-  async deleteStudyPlan(userId, planId) {
-    const response = await axios.delete(`${API_BASE_URL}/study-plan/${planId}`);
     return response.data;
   }
 
@@ -223,16 +218,6 @@ class BrAInwaveAPI {
     return response.data;
   }
 
-  async getDailyPlan(userId, date) {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/daily-plan/${date}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching daily plan for ${date}:`, error);
-      return null;
-    }
-  }
-
   async syncCompletionLogs(logs) {
     const response = await axios.post(`${API_BASE_URL}/completion-logs`, logs);
     return response.data;
@@ -261,11 +246,6 @@ class BrAInwaveAPI {
     const response = await axios.delete(
       `${API_BASE_URL}/daily-plan/${date}/${taskId}`,
     );
-    return response.data;
-  }
-
-  async checkHealth() {
-    const response = await axios.get(`${API_BASE_URL}/health`);
     return response.data;
   }
 }
