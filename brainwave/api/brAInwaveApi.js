@@ -142,10 +142,10 @@ class BrAInwaveAPI {
     return response.data;
   }
 
-  async updateAssignmentDueDate(remoteId, newDueDate) {
+  async updateAssignmentDueDate(remoteId, newDueDate, newDueTime) {
     const response = await axios.patch(
       `${API_BASE_URL}/assignment/${remoteId}/due-date`,
-      { due_date: newDueDate },
+      { due_date: newDueDate, due_time: newDueTime },
     );
     return response.data;
   }
@@ -261,6 +261,16 @@ class BrAInwaveAPI {
     const response = await axios.delete(
       `${API_BASE_URL}/daily-plan/${date}/${taskId}`,
     );
+    return response.data;
+  }
+
+  async getModuleGoals() {
+    const response = await axios.get(`${API_BASE_URL}/module-goals`);
+    return response.data;
+  }
+
+  async syncModuleGoals(goals) {
+    const response = await axios.post(`${API_BASE_URL}/module-goals`, goals);
     return response.data;
   }
 

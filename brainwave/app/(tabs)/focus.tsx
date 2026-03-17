@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -29,6 +29,7 @@ import {
   CheckIcon,
 } from "@/components/Icons";
 import { useNavigation, useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { ensureNotificationPermission } from "@/utils/notifications";
 
 const CIRCLE_LENGTH = 1000;
@@ -45,7 +46,7 @@ Notifications.setNotificationHandler({
 });
 
 export default function FocusScreen() {
-  const { user } = useAuth(); 
+  const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const { showAlert } = useAlert();
   const router = useRouter();
@@ -58,6 +59,12 @@ export default function FocusScreen() {
 
   const [subjects, setSubjects] = useState<string[]>([]);
   const [moduleDropdownOpen, setModuleDropdownOpen] = useState(false);
+  const [moduleGoals, setModuleGoals] = useState<
+    { module_tag: string; weekly_goal_minutes: number }[]
+  >([]);
+  const [moduleHours, setModuleHours] = useState<
+    { module_tag: string; total_minutes: number }[]
+  >([]);
 
   const AnimatedCircle = Animated.createAnimatedComponent(Circle);
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -82,12 +89,26 @@ export default function FocusScreen() {
     ensureNotificationPermission();
   }, []);
 
-  useEffect(() => {
-    if(!user?.id) return;
-    
+  const fetchSubjectsAndGoals = useCallback(() => {
+    if (!user?.id) return;
+
     const s = LocalDB.getSubjectsFromTimetable(user.id);
+    const goals = LocalDB.getModuleGoals(user.id);
+    const hours = LocalDB.getModuleStudyHours(user.id);
     setSubjects(s);
+    setModuleGoals(goals);
+    setModuleHours(hours);
   }, [user?.id]);
+
+  useEffect(() => {
+    fetchSubjectsAndGoals();
+  }, [fetchSubjectsAndGoals, isRunning]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSubjectsAndGoals();
+    }, [fetchSubjectsAndGoals]),
+  );
 
   useEffect(() => {
     const parent = navigation.getParent()?.getParent();
@@ -311,7 +332,7 @@ export default function FocusScreen() {
                   </Text>
                   {s === selectedModules && (
                     <Text style={{ color: theme.colors.primary, fontSize: 12 }}>
-                      <CheckIcon size={20} color={theme.colors.primary}/>
+                      <CheckIcon size={20} color={theme.colors.primary} />
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -320,6 +341,66 @@ export default function FocusScreen() {
           )}
         </View>
       )}
+
+      {/* Goal Progress Badge */}
+      {!isRunning &&
+        selectedModules &&
+        (() => {
+          const goal = moduleGoals.find(
+            (g) => g.module_tag === selectedModules,
+          );
+          if (!goal || !goal.weekly_goal_minutes) return null;
+
+          const studied =
+            moduleHours.find((h) => h.module_tag === selectedModules)
+              ?.total_minutes || 0;
+          const remaining = Math.max(0, goal.weekly_goal_minutes - studied);
+
+          if (remaining === 0) {
+            return (
+              <View
+                style={[
+                  styles.goalBadge,
+                  {
+                    backgroundColor: theme.colors.success + "20",
+                    borderColor: theme.colors.success + "40",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.goalBadgeText,
+                    { color: theme.colors.success },
+                  ]}
+                >
+                  Weekly goal reached! 🎉
+                </Text>
+              </View>
+            );
+          }
+
+          const hrs = Math.floor(remaining / 60);
+          const mins = remaining % 60;
+          const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
+          return (
+            <View
+              style={[
+                styles.goalBadge,
+                {
+                  backgroundColor: theme.colors.primary + "15",
+                  borderColor: theme.colors.primary + "30",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.goalBadgeText, { color: theme.colors.primary }]}
+              >
+                {timeStr} left to hit weekly goal
+              </Text>
+            </View>
+          );
+        })()}
 
       {/* Controls */}
       <View style={{ width: "80%", alignItems: "center", marginTop: 40 }}>
@@ -379,64 +460,82 @@ export default function FocusScreen() {
             </Text>
 
             <View style={styles.presetRow}>
-              {[15, 25, 45, ...customDurations].map((m) => {
-                const isCustom = ![15, 25, 45].includes(m);
-                return (
-                  <TouchableOpacity
-                    key={m}
-                    style={[
-                      styles.presetBtn,
-                      {
-                        backgroundColor:
-                          pressedDuration === m
-                            ? theme.colors.primary
-                            : isDark
-                              ? "rgba(255,255,255,0.07)"
-                              : "rgba(0,0,0,0.05)",
-                        borderWidth: isCustom ? 1 : 0,
-                        borderColor: theme.colors.primary + "50",
-                      },
-                    ]}
-                    onPress={() => handlePreset(m)}
-                    onLongPress={() => {
-                      if (customDurations.includes(m)) {
-                        setCustomDurations((prev) =>
-                          prev.filter((x) => x !== m),
-                        );
-                        Toast.show({
-                          type: "info",
-                          text1: `${m}m removed`,
-                          position: "bottom",
-                        });
-                      }
-                    }}
-                    delayLongPress={500}
-                    activeOpacity={0.7}
-                  >
-                    <Text
+              {Array.from(
+                new Set([
+                  15,
+                  25,
+                  45,
+                  user?.studyPreferences?.preferredSessionLength === "short"
+                    ? 25
+                    : user?.studyPreferences?.preferredSessionLength ===
+                        "medium"
+                      ? 45
+                      : user?.studyPreferences?.preferredSessionLength ===
+                          "long"
+                        ? 90
+                        : 25,
+                  ...customDurations,
+                ]),
+              )
+                .sort((a, b) => a - b)
+                .map((m) => {
+                  const isCustom = ![15, 25, 45, 90].includes(m);
+                  return (
+                    <TouchableOpacity
+                      key={m}
                       style={[
-                        styles.presetText,
+                        styles.presetBtn,
                         {
-                          color:
+                          backgroundColor:
                             pressedDuration === m
-                              ? "#fff"
-                              : theme.colors.text.primary,
+                              ? theme.colors.primary
+                              : isDark
+                                ? "rgba(255,255,255,0.07)"
+                                : "rgba(0,0,0,0.05)",
+                          borderWidth: isCustom ? 1 : 0,
+                          borderColor: theme.colors.primary + "50",
                         },
                       ]}
+                      onPress={() => handlePreset(m)}
+                      onLongPress={() => {
+                        if (customDurations.includes(m)) {
+                          setCustomDurations((prev) =>
+                            prev.filter((x) => x !== m),
+                          );
+                          Toast.show({
+                            type: "info",
+                            text1: `${m}m removed`,
+                            position: "bottom",
+                          });
+                        }
+                      }}
+                      delayLongPress={500}
+                      activeOpacity={0.7}
                     >
-                      {m}m
-                    </Text>
-                    {isCustom && (
-                      <View
+                      <Text
                         style={[
-                          styles.customDot,
-                          { backgroundColor: theme.colors.primary },
+                          styles.presetText,
+                          {
+                            color:
+                              pressedDuration === m
+                                ? "#fff"
+                                : theme.colors.text.primary,
+                          },
                         ]}
-                      />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+                      >
+                        {m}m
+                      </Text>
+                      {isCustom && (
+                        <View
+                          style={[
+                            styles.customDot,
+                            { backgroundColor: theme.colors.primary },
+                          ]}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
 
               {/* + closes preset modal, opens drum scroll */}
               <TouchableOpacity
@@ -579,6 +678,19 @@ const createStyles = (theme: Theme, isDark: boolean) =>
     moduleList: {
       borderTopWidth: 0.5,
       borderTopColor: theme.colors.border,
+    },
+    goalBadge: {
+      marginTop: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    goalBadgeText: {
+      fontSize: 12,
+      fontWeight: "600",
     },
     moduleItem: {
       flexDirection: "row",

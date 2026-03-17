@@ -27,7 +27,7 @@ import { Theme } from "../types";
 import { useFocusEffect } from "@react-navigation/native";
 import brainwaveApi from "@/api/brAInwaveApi";
 import { useAlert } from "../contexts/AlertContext";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { useDatePicker } from "../contexts/DatePickerContext";
 import {
   PlannerIcon,
   SunIcon,
@@ -130,10 +130,11 @@ const PlannerSkeleton = ({ theme }: { theme: any }) => {
 
 export default function Planner() {
   const { theme } = useTheme();
+  const { showPicker } = useDatePicker();
   const router = useRouter();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { plans, timetables, materials, refresh } = useContent();
+  const { plans, timetables, materials, assignments, refresh } = useContent();
 
   const [planItems, setPlanItems] = useState<any[]>([]);
   const [isLoading, setLoading] = useState(true);
@@ -156,16 +157,31 @@ export default function Planner() {
     subject: "Personal",
     deadline: "",
   });
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
-  const [timeValue, setTimeValue] = useState(new Date());
-  const [deadlineValue, setDeadlineValue] = useState(new Date());
 
   // AI Regeneration modal state
   const [isRegenerateModalVisible, setRegenerateModalVisible] = useState(false);
   const [tempIntensity, setTempIntensity] = useState("Balanced");
   const [tempSessionLength, setTempSessionLength] = useState("medium");
   const [aiUserNote, setAiUserNote] = useState("");
+
+  // When opening the modal, pre-fill with saved preferences
+  useEffect(() => {
+    if (isRegenerateModalVisible && user?.studyPreferences) {
+      const modeMap = {
+        catch_up: "Light",
+        stay_consistent: "Balanced",
+        exam_prep: "Intense",
+      };
+      setTempIntensity(
+        modeMap[user.studyPreferences.mode as keyof typeof modeMap] ||
+          "Balanced",
+      );
+      setTempSessionLength(
+        user.studyPreferences.preferredSessionLength || "medium",
+      );
+      setAiUserNote(""); // clear previous note
+    }
+  }, [isRegenerateModalVisible, user?.studyPreferences]);
 
   const [selectedDifficultyTask, setSelectedDifficultyTask] = useState<
     string | null
@@ -360,36 +376,71 @@ export default function Planner() {
       .trim() ?? "";
 
   const aiInsight = useMemo(() => {
-    const priorities = user?.studyPreferences?.subjectPriorities || [];
-    const topSubjectRaw = priorities[0];
-    const topSubject = normalizeSubject(topSubjectRaw);
-
-    const hasHardestSubject =
-      !!topSubject &&
-      planItems.some((item) => {
-        const subject = normalizeSubject(item.subject);
-        return subject === topSubject || subject.includes(topSubject);
-      });
-
-    if (topSubject && hasHardestSubject) {
+    if (planItems.length === 0) {
       return {
-        title: "Priority Focus",
-        text: `${topSubjectRaw} has top priority today. Get it done early!`,
-        icon: "rocket",
-      };
-    }
-    if (topSubject && !hasHardestSubject) {
-      return {
-        title: "Light Day?",
-        text: `No ${topSubjectRaw} sessions today. Use this extra headspace to review your #2 priority: ${priorities[1] || "your notes"}.`,
+        title: "Blank Slate",
+        text: "No tasks or classes today! Enjoy the break or read ahead.",
         icon: "leaf",
       };
     }
-    return {
-      title: "AI Insight",
-      text: "You're most productive in the evening. I've planned challenging tasks after 6pm.",
-      icon: "bulb",
-    };
+
+    const priorities = user?.studyPreferences?.subjectPriorities || [];
+
+    // Find the highest priority subject that IS actually on the schedule
+    let highestScheduledPriorityRaw = null;
+    let highestScheduledPriorityIndex = -1;
+
+    for (let i = 0; i < priorities.length; i++) {
+      const topSubjectNorm = normalizeSubject(priorities[i]);
+      const isOnSchedule =
+        !!topSubjectNorm &&
+        planItems.some((item) => {
+          const itemSubNorm = normalizeSubject(item.subject);
+          return (
+            itemSubNorm === topSubjectNorm ||
+            itemSubNorm.includes(topSubjectNorm)
+          );
+        });
+
+      if (isOnSchedule) {
+        highestScheduledPriorityRaw = priorities[i];
+        highestScheduledPriorityIndex = i;
+        break;
+      }
+    }
+
+    if (highestScheduledPriorityIndex === 0) {
+      return {
+        title: "Priority Focus",
+        text: `${highestScheduledPriorityRaw} has top priority today. Get it done early!`,
+        icon: "rocket",
+      };
+    } else if (highestScheduledPriorityIndex > 0) {
+      return {
+        title: "Focus Shift",
+        text: `No ${priorities[0]} today. Your highest scheduled priority is ${highestScheduledPriorityRaw}.`,
+        icon: "bulb",
+      };
+    } else {
+      // None of the priority subjects are on the schedule today
+      const firstSubject = planItems.find(
+        (item) => item.subject && item.subject.toLowerCase() !== "break",
+      )?.subject;
+
+      if (firstSubject) {
+        return {
+          title: "Light Day?",
+          text: `Use this extra headspace to review your notes on ${firstSubject} or relax!`,
+          icon: "leaf",
+        };
+      } else {
+        return {
+          title: "Blank Slate",
+          text: "No main classes today! Enjoy the break or read ahead.",
+          icon: "leaf",
+        };
+      }
+    }
   }, [planItems, user?.studyPreferences?.subjectPriorities]);
 
   const weekDays = useMemo(() => {
@@ -438,18 +489,38 @@ export default function Planner() {
       const formattedItems = templateClasses.map((cls: any, index: number) => ({
         id: `temp-${index}`,
         time: cls.time,
-        subject: cls.subject,
+        subject: cls.subject || cls.course || cls.name || "Class",
         task: "Class Lecture",
         duration: "1 hour",
         completed: false,
         difficulty: cls.difficulty || "unset",
         isTemplate: true,
       }));
-      setPlanItems(sortTasksByTime(formattedItems));
+
+      // Inject assignments due on this day
+      const dueAssignments =
+        assignments?.filter((a: any) => a.due_date === selectedDay) || [];
+      const assignmentItems = dueAssignments.map((ass: any) => ({
+        id: `ass-${ass.id}`,
+        time: "11:59 PM",
+        subject: ass.subject || "Assignment",
+        task: `Deadline: ${ass.title}`,
+        duration: "",
+        completed: false,
+        difficulty:
+          ass.priority?.toLowerCase() === "high"
+            ? "hard"
+            : ass.priority?.toLowerCase() === "medium"
+              ? "medium"
+              : "easy",
+        isTemplate: true,
+      }));
+
+      setPlanItems(sortTasksByTime([...formattedItems, ...assignmentItems]));
     }
 
     setLoading(false);
-  }, [selectedDay, plans, weeklyTemplate, user?.id]);
+  }, [selectedDay, plans, weeklyTemplate, assignments, user?.id]);
 
   useEffect(() => {
     if (!user?.id || !planItems.length) return;
@@ -578,19 +649,6 @@ export default function Planner() {
     }
   };
 
-  const onTimeChange = (event: any, selectedDate?: Date) => {
-    setShowTimePicker(false);
-    if (selectedDate) {
-      setTimeValue(selectedDate);
-      const formattedTime = selectedDate.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-      setNewTask({ ...newTask, time: formattedTime });
-    }
-  };
-
   const handleAddTask = async () => {
     if (!user?.id) return;
     if (!newTask.task.trim()) {
@@ -640,7 +698,7 @@ export default function Planner() {
         message: "Failed to save your changes.",
       });
       console.error("Error saving plan:", e);
-    } finally{
+    } finally {
       setIsSavingTask(false);
       setNewTask({
         task: "",
@@ -738,6 +796,7 @@ export default function Planner() {
 
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -838,18 +897,64 @@ export default function Planner() {
 
         <View style={styles.planContainer}>
           <View style={styles.planHeader}>
-            <Text style={styles.planTitle}>
-              {planItems.some((item) => item.isTemplate)
-                ? "Class Schedule"
-                : "Daily Plan"}
-            </Text>
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                marginRight: 8,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                style={styles.planTitle}
+              >
+                {planItems.some((item) => item.isTemplate)
+                  ? "Class Schedule"
+                  : "Daily Plan"}
+              </Text>
+              {user?.studyPreferences?.mode && (
+                <View
+                  style={{
+                    backgroundColor: theme.colors.primary + "15",
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: theme.colors.primary + "30",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      color: theme.colors.primary,
+                      fontWeight: "700",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    {user.studyPreferences.mode.replace("_", " ")}
+                  </Text>
+                </View>
+              )}
+            </View>
             {!isLoading && planItems.length > 0 && (
               <TouchableOpacity
                 onPress={() => setRegenerateModalVisible(true)}
                 disabled={isOptimizing}
-                style={{ paddingVertical: 4, paddingHorizontal: 8 }}
+                style={{
+                  paddingVertical: 4,
+                  paddingHorizontal: 8,
+                  flexShrink: 0,
+                }}
               >
                 <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
                   style={[
                     styles.regenerateButton,
                     { color: theme.colors.primary },
@@ -874,8 +979,16 @@ export default function Planner() {
             </View>
           ) : (
             planItems.map((item) => {
-              const isHighPriority =
-                user?.studyPreferences?.subjectPriorities?.[0] === item.subject;
+              const topPriority =
+                user?.studyPreferences?.subjectPriorities?.[0];
+              let isHighPriority = false;
+              if (topPriority) {
+                const topNorm = normalizeSubject(topPriority);
+                const itemNorm = normalizeSubject(item.subject);
+                isHighPriority =
+                  !!topNorm &&
+                  (itemNorm === topNorm || itemNorm.includes(topNorm));
+              }
               return (
                 <View
                   key={item.id}
@@ -908,11 +1021,7 @@ export default function Planner() {
                         subject: item.subject || "Personal",
                         deadline: item.deadline || "",
                       });
-                      const start = parseStartDate(item);
-                      if (start) setTimeValue(start);
-                      if (item.deadline)
-                        setDeadlineValue(new Date(item.deadline));
-                      setModalVisible(true);
+                      if (item.deadline) setModalVisible(true);
                     }}
                   >
                     <View style={styles.planTimeContainer}>
@@ -1241,20 +1350,31 @@ export default function Planner() {
                 <Text style={styles.inputLabel}>Set Time</Text>
                 <TouchableOpacity
                   style={styles.timePickerButton}
-                  onPress={() => setShowTimePicker(true)}
+                  onPress={() => {
+                    const timeArr = newTask.time.split(" ");
+                    const [h, m] = timeArr[0].split(":").map(Number);
+                    const isPM = timeArr[1] === "PM";
+                    const d = new Date();
+                    d.setHours(isPM ? (h % 12) + 12 : h % 12, m);
+
+                    showPicker({
+                      value: d,
+                      mode: "time",
+                      title: "Set Task Time",
+                      onConfirm: (date) => {
+                        const hours = date.getHours();
+                        const minutes = date.getMinutes();
+                        const ampm = hours >= 12 ? "PM" : "AM";
+                        const h12 = hours % 12 || 12;
+                        const timeStr = `${h12}:${minutes < 10 ? "0" + minutes : minutes} ${ampm}`;
+                        setNewTask({ ...newTask, time: timeStr });
+                      },
+                    });
+                  }}
                 >
                   <TimerIcon size={20} color={theme.colors.primary} />
                   <Text style={styles.timePickerText}>{newTask.time}</Text>
                 </TouchableOpacity>
-                {showTimePicker && (
-                  <DateTimePicker
-                    value={timeValue}
-                    mode="time"
-                    is24Hour={true}
-                    display="spinner"
-                    onChange={onTimeChange}
-                  />
-                )}
 
                 <Text style={[styles.inputLabel, { marginTop: 15 }]}>
                   Difficulty
@@ -1315,7 +1435,21 @@ export default function Planner() {
                     </Text>
                     <TouchableOpacity
                       style={styles.timePickerButton}
-                      onPress={() => setShowDeadlinePicker(true)}
+                      onPress={() => {
+                        showPicker({
+                          value: newTask.deadline
+                            ? new Date(newTask.deadline)
+                            : new Date(),
+                          mode: "date",
+                          minimumDate: new Date(),
+                          onConfirm: (date) => {
+                            setNewTask({
+                              ...newTask,
+                              deadline: date.toISOString().split("T")[0],
+                            });
+                          },
+                        });
+                      }}
                     >
                       <TimerIcon size={20} color={theme.colors.primary} />
                       <Text style={styles.timePickerText}>
@@ -1345,26 +1479,6 @@ export default function Planner() {
                         </TouchableOpacity>
                       ) : null}
                     </TouchableOpacity>
-                    {showDeadlinePicker && (
-                      <DateTimePicker
-                        value={deadlineValue}
-                        mode="date"
-                        minimumDate={new Date()}
-                        display="spinner"
-                        onChange={(event, selectedDate) => {
-                          setShowDeadlinePicker(false);
-                          if (selectedDate) {
-                            setDeadlineValue(selectedDate);
-                            setNewTask({
-                              ...newTask,
-                              deadline: selectedDate
-                                .toISOString()
-                                .split("T")[0],
-                            });
-                          }
-                        }}
-                      />
-                    )}
                   </>
                 )}
 

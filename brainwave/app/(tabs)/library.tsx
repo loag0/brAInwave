@@ -19,6 +19,7 @@ import {
   UploadSyllabusIcon,
   ChevronRightIcon,
   AddIcon,
+  FireIcon,
 } from "@/components/Icons";
 import { useContent } from "../hooks/useContent";
 import { useAuth } from "../contexts/AuthContext";
@@ -81,7 +82,7 @@ export default function Library() {
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const { showAlert } = useAlert();
-  const [ isUploading, setIsUploading ] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Insights Data State
   const [streakCount, setStreakCount] = useState(0);
@@ -174,7 +175,7 @@ export default function Library() {
         message: "Syllabus imported and planning initiated!",
       });
     } catch (e: any) {
-      if(__DEV__) console.error(e.message);
+      if (__DEV__) console.error(e.message);
       showAlert?.({ title: "Import Failed", message: "Failed to read file." });
     } finally {
       setIsUploading(false);
@@ -258,7 +259,7 @@ export default function Library() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingBottom: 200 }}
+        contentContainerStyle={{ paddingBottom: 250 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -368,9 +369,7 @@ export default function Library() {
                     { backgroundColor: theme.colors.primary },
                   ]}
                 >
-                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                    <Path d="M12,2C12,2 10.5,5.5 10.5,8C10.5,10.21 12.29,12 14.5,12C16.71,12 18.5,10.21 18.5,8C18.5,5.5 17,2 17,2C17,2 22,8 22,13C22,18.52 17.52,23 12,23C6.48,23 2,18.52 2,13C2,8 7,2 7,2C7,2 6,5 6,8C6,10.21 7.79,12 10,12C12.21,12 14,10.21 14,8C14,5.5 12,2 12,2Z" />
-                  </Svg>
+                  <FireIcon size={28} color={theme.colors.background} />
                 </View>
                 <View>
                   <Text
