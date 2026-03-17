@@ -65,6 +65,7 @@ export const LocalDB = {
         user_id TEXT,
         module_tag TEXT,
         weekly_goal_minutes INTEGER,
+        is_dirty INTEGER DEFAULT 1,
         UNIQUE(user_id, module_tag)
       );
 
@@ -75,6 +76,7 @@ export const LocalDB = {
         title TEXT,
         subject TEXT,
         due_date TEXT,
+        due_time TEXT,
         priority TEXT,
         rawContent TEXT,
         file_uri TEXT,
@@ -111,6 +113,9 @@ export const LocalDB = {
       );
     } catch {}
     try {
+      db.execSync(`ALTER TABLE assignments ADD COLUMN due_time TEXT`);
+    } catch {}
+    try {
       db.execSync(
         `ALTER TABLE daily_plans ADD COLUMN is_dirty INTEGER DEFAULT 0`,
       );
@@ -128,9 +133,15 @@ export const LocalDB = {
         user_id TEXT,
         module_tag TEXT,
         weekly_goal_minutes INTEGER,
+        is_dirty INTEGER DEFAULT 1,
         UNIQUE(user_id, module_tag)
         )
       `);
+    } catch {}
+    try {
+      db.execSync(
+        `ALTER TABLE module_goals ADD COLUMN is_dirty INTEGER DEFAULT 1`,
+      );
     } catch {}
     try {
       db.execSync(
@@ -395,10 +406,14 @@ export const LocalDB = {
     );
   },
 
-  updateAssignmentDueDate: (id: number, newDueDate: string) => {
+  updateAssignmentDueDate: (
+    id: number,
+    newDueDate: string,
+    newDueTime: string,
+  ) => {
     db.runSync(
-      `UPDATE assignments SET due_date = ?, is_dirty = 1 WHERE id = ?`,
-      [newDueDate, id],
+      `UPDATE assignments SET due_date = ?, due_time = ?, is_dirty = 1 WHERE id = ?`,
+      [newDueDate, newDueTime, id],
     );
   },
 
@@ -413,13 +428,14 @@ export const LocalDB = {
     type?: string,
   ) => {
     const result = db.runSync(
-      `INSERT INTO assignments (user_id, title, subject, due_date, priority, rawContent, file_uri, file_type, is_dirty, is_deleted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+      `INSERT INTO assignments (user_id, title, subject, due_date, due_time, priority, rawContent, file_uri, file_type, is_dirty, is_deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
       [
         userId,
         title,
         subject,
         dueDate,
+        "11:59 PM",
         priority,
         rawContent,
         uri || null,
@@ -444,14 +460,15 @@ export const LocalDB = {
     }
     for (const a of assignments) {
       db.runSync(
-        `INSERT OR REPLACE INTO assignments (user_id, remote_id, title, subject, due_date, priority, rawContent, is_dirty, is_deleted)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+        `INSERT OR REPLACE INTO assignments (user_id, remote_id, title, subject, due_date, due_time, priority, rawContent, is_dirty, is_deleted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
         [
           userId,
           a.id,
           a.title,
           a.subject,
           a.due_date,
+          a.due_time,
           a.priority,
           a.rawContent,
         ],
@@ -466,13 +483,14 @@ export const LocalDB = {
   ) => {
     if (extraData) {
       db.runSync(
-        `UPDATE assignments SET is_dirty = 0, remote_id = ?, title = ?, subject = ?, due_date = ?, priority = ?, rawContent = ?
+        `UPDATE assignments SET is_dirty = 0, remote_id = ?, title = ?, subject = ?, due_date = ?, due_time = ?, priority = ?, rawContent = ?
          WHERE id = ?`,
         [
           remoteId,
           extraData.title,
           extraData.subject,
           extraData.due_date,
+          extraData.due_time,
           extraData.priority,
           extraData.rawContent,
           localId,
@@ -632,11 +650,40 @@ export const LocalDB = {
     weeklyGoalMinutes: number,
   ) => {
     db.runSync(
-      `INSERT INTO module_goals (user_id, module_tag, weekly_goal_minutes)
-     VALUES (?, ?, ?)
-     ON CONFLICT(user_id, module_tag) DO UPDATE SET weekly_goal_minutes = ?`,
+      `INSERT INTO module_goals (user_id, module_tag, weekly_goal_minutes, is_dirty)
+     VALUES (?, ?, ?, 1)
+     ON CONFLICT(user_id, module_tag) DO UPDATE SET
+       weekly_goal_minutes = ?,
+       is_dirty = 1`,
       [userId, moduleTag, weeklyGoalMinutes, weeklyGoalMinutes],
     );
+  },
+
+  getDirtyModuleGoals: (userId: string) => {
+    return db.getAllSync(
+      `SELECT module_tag, weekly_goal_minutes FROM module_goals WHERE user_id = ? AND is_dirty = 1`,
+      [userId],
+    ) as { module_tag: string; weekly_goal_minutes: number }[];
+  },
+
+  markModuleGoalsSynced: (userId: string) => {
+    db.runSync(`UPDATE module_goals SET is_dirty = 0 WHERE user_id = ?`, [
+      userId,
+    ]);
+  },
+
+  syncModuleGoalsFromServer: (userId: string, goals: any[]) => {
+    // Overwrite behavior as remote is truth for synced records
+    db.runSync(`DELETE FROM module_goals WHERE user_id = ? AND is_dirty = 0`, [
+      userId,
+    ]);
+    for (const g of goals) {
+      db.runSync(
+        `INSERT OR REPLACE INTO module_goals (user_id, module_tag, weekly_goal_minutes, is_dirty)
+         VALUES (?, ?, ?, 0)`,
+        [userId, g.module_tag, g.weekly_goal_minutes],
+      );
+    }
   },
 
   getModuleGoals: (userId: string) => {

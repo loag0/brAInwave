@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
 from datetime import datetime, timezone
 
@@ -62,6 +62,7 @@ class Assignment(Base):
     title: Mapped[str] = mapped_column(String, index=True)
     subject: Mapped[str] = mapped_column(String, index=True)
     due_date: Mapped[str] = mapped_column(String)  # YYYY-MM-DD
+    due_time: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     priority: Mapped[str] = mapped_column(String)  # low, medium, high
     rawContent: Mapped[str] = mapped_column(Text)
     file_uri: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -100,6 +101,14 @@ class CompletionLog(Base):
     date: Mapped[str] = mapped_column(String)  # YYYY-MM-DD
     minutes_studied: Mapped[int] = mapped_column(Integer, default=0)
     module_tag: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+class ModuleGoal(Base):
+    __tablename__ = "module_goals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    module_tag: Mapped[str] = mapped_column(String, index=True)
+    weekly_goal_minutes: Mapped[int] = mapped_column(Integer, default=0)
 
 def init_db():
     Base.metadata.create_all(bind=engine)

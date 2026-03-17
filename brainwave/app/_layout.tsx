@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -10,21 +10,19 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
+import { useAuth } from "./contexts/AuthContext";
+import { useTheme } from "./contexts/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useKeepAwake } from "expo-keep-awake";
-import Toast from "react-native-toast-message";
-import { AlertProvider, useAlert } from "./contexts/AlertContext";
-import { TimerProvider } from "./contexts/TimerContext";
+import { useAlert } from "./contexts/AlertContext";
 import { LocalDB } from "./database/localDb";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   isBatteryOptimizationEnabled,
   requestBatteryOptimizationExemption,
   setupAndroidNotificationChannel,
 } from "@/utils/notifications";
 import { ICONS } from "@/components/Icons";
+import { Providers } from "./providers";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,18 +40,9 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <GestureHandlerRootView>
-      <ThemeProvider>
-        <AuthProvider>
-          <AlertProvider>
-            <TimerProvider>
-              <NavigationHandler fontsLoaded={fontsLoaded} />
-              <Toast />
-            </TimerProvider>
-          </AlertProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <Providers>
+      <NavigationHandler fontsLoaded={fontsLoaded} />
+    </Providers>
   );
 }
 
@@ -69,38 +58,41 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   const appState = useRef(AppState.currentState);
 
-  const checkBatteryStatus = async () => {
+  const checkBatteryStatus = useCallback(async () => {
     const enabled = await isBatteryOptimizationEnabled();
-    if (__DEV__){
+    if (__DEV__) {
       console.log(
         "Battery optimization is: ",
         enabled ? "ENABLED (BAD)" : "DISABLED (GOOD)",
       );
-      console.log("hasShownBatteryPrompt:", hasShownBatteryPrompt.current)
+      console.log("hasShownBatteryPrompt:", hasShownBatteryPrompt.current);
     }
     setIsOptimized(enabled);
-  };
+  }, []);
 
-  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-    if (
-      appState.current.match(/inactive|background/) &&
-      nextAppState === "active"
-    ) {
-      if (__DEV__) console.log("App foregrounded — rechecking battery status");
-      await checkBatteryStatus();
-    }
-    appState.current = nextAppState;
-  };
+  const handleAppStateChange = useCallback(
+    async (nextAppState: AppStateStatus) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        if (__DEV__)
+          console.log("App foregrounded — rechecking battery status");
+        await checkBatteryStatus();
+      }
+      appState.current = nextAppState;
+    },
+    [checkBatteryStatus],
+  );
 
   // Check battery on mount + re-check whenever app comes to foreground
   useEffect(() => {
-    checkBatteryStatus();
     const subscription = AppState.addEventListener(
       "change",
       handleAppStateChange,
     );
     return () => subscription.remove();
-  }, []);
+  }, [handleAppStateChange]);
 
   // Show battery optimization alert (once a day tho)
   useEffect(() => {
@@ -130,7 +122,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
     };
 
     checkSnoozeAndShow();
-  }, [isOptimized, user]);
+  }, [isOptimized, user, showAlert, theme.colors.error]);
 
   const hasNavigated = useRef(false);
   const prevUserRef = useRef<any>(undefined);

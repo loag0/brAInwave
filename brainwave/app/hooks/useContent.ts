@@ -81,13 +81,15 @@ export const useContent = () => {
       );
       const dirtyPlans = currentPlans.filter((p) => p.is_dirty === 1);
       const dirtyLogs = LocalDB.getDirtyCompletionLogs(user.id);
+      const dirtyModuleGoals = LocalDB.getDirtyModuleGoals(user.id);
 
       const totalToSync =
         dirtyMaterials.length +
         dirtyTimetables.length +
         dirtyAssignments.length +
         dirtyPlans.length +
-        dirtyLogs.length;
+        dirtyLogs.length +
+        (dirtyModuleGoals.length > 0 ? 1 : 0);
 
       if (totalToSync === 0) {
         log("Nothing dirty to sync");
@@ -277,6 +279,24 @@ export const useContent = () => {
         }
       }
 
+      if (dirtyModuleGoals.length > 0) {
+        try {
+          log(`Syncing ${dirtyModuleGoals.length} module goal(s)`);
+          await BrainwaveAPI.syncModuleGoals(
+            dirtyModuleGoals.map((g) => ({
+              module_tag: g.module_tag,
+              weekly_goal_minutes: g.weekly_goal_minutes,
+            })),
+          );
+          LocalDB.markModuleGoalsSynced(user.id);
+          completed++;
+          setSyncProgress({ current: completed, total: totalToSync });
+          log(`Module goals synced`);
+        } catch (e: any) {
+          log(`Module goals sync failed: ${e.message}`);
+        }
+      }
+
       log(`Sync complete — ${completed}/${totalToSync} succeeded`);
 
       setTimeout(() => setSyncProgress({ current: 0, total: 0 }), 2000);
@@ -371,6 +391,12 @@ export const useContent = () => {
               remoteAssignments.assignments,
             );
             log(`Pulled ${remoteAssignments.assignments.length} assignments`);
+          }
+
+          const remoteGoals = await BrainwaveAPI.getModuleGoals();
+          if (remoteGoals?.goals) {
+            LocalDB.syncModuleGoalsFromServer(user.id, remoteGoals.goals);
+            log(`Pulled ${remoteGoals.goals.length} module goals`);
           }
 
           await AsyncStorage.setItem("lastPlansSync", String(Date.now()));

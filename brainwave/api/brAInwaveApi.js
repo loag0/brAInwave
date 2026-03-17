@@ -248,6 +248,21 @@ class BrAInwaveAPI {
     );
     return response.data;
   }
+
+  async getModuleGoals() {
+    const response = await axios.get(`${API_BASE_URL}/module-goals`);
+    return response.data;
+  }
+
+  async syncModuleGoals(goals) {
+    const response = await axios.post(`${API_BASE_URL}/module-goals`, goals);
+    return response.data;
+  }
+
+  async checkHealth() {
+    const response = await axios.get(`${API_BASE_URL}/health`);
+    return response.data;
+  }
 }
 
 export default new BrAInwaveAPI();

@@ -84,6 +84,7 @@ class FlashcardList(BaseModel):
 
 class DueDateUpdate(BaseModel):
     due_date: str
+    due_time: Optional[str] = None
 
 class TimetableSync(BaseModel):
     title: str
@@ -119,6 +120,10 @@ class CompletionLogEntry(BaseModel):
     date: str
     minutes_studied: int
     module_tag: Optional[str] = None
+
+class ModuleGoalSync(BaseModel):
+    module_tag: str
+    weekly_goal_minutes: int
 
 # --- Routes ---
 
@@ -224,6 +229,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         - title: A clear, descriptive title for the assignment (not just the filename).
         - subject: The academic subject or course this belongs to (e.g., "Software Engineering", "Macroeconomics").
         - due_date: The submission deadline in YYYY-MM-DD format. ONLY extract this if a date is explicitly written in the document. If no date is found, return null — do NOT guess or infer.
+        - due_time: The submission time if explicitly specified (e.g., "23:59", "11:59 PM"). Return null if not found.
         - priority: Assess complexity, weight, and scope. Return one of: 'low', 'medium', or 'high'.
         - estimated_hours: Estimate realistic total hours needed to complete this assignment well. Return an integer.
         - assignment_type: Classify the work. One of: 'essay', 'report', 'project', 'coding', 'presentation', 'research', 'problem_set', or 'other'.
@@ -250,6 +256,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         assignment_type = meta_data.get("assignment_type", "other")
         estimated_hours = meta_data.get("estimated_hours", "unknown")
         due_date = meta_data.get("due_date", "Not specified")
+        due_time = meta_data.get("due_time")
         key_requirements = meta_data.get("key_requirements", [])
         marking_criteria = meta_data.get("marking_criteria", [])
 
@@ -259,7 +266,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         --- ASSIGNMENT CONTEXT (already extracted) ---
         - Type: {assignment_type}
         - Estimated Hours to Complete: {estimated_hours}
-        - Due Date: {due_date}
+        - Due Date: {due_date} {due_time or ""}
         - Key Requirements: {json.dumps(key_requirements)}
         - Marking Criteria: {json.dumps(marking_criteria)}
 
@@ -323,6 +330,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
             title=meta_data.get("title", "Unknown Assignment"),
             subject=meta_data.get("subject", "General"),
             due_date=meta_data.get("due_date"),
+            due_time=meta_data.get("due_time"),
             priority=meta_data.get("priority", "medium"),
             rawContent=master_plan,
             file_uri=fileName,
@@ -382,6 +390,8 @@ async def updateAssignmentDueDate(assignment_id: int, data: DueDateUpdate, user_
     if assignment.user_id != str(user_id):
         raise HTTPException(status_code=403, detail=f"Forbidden: token={user_id} stored={assignment.user_id}")
     assignment.due_date = data.due_date
+    if data.due_time is not None:
+        assignment.due_time = data.due_time
     db.commit()
     return {"status": "success"}
 
@@ -498,6 +508,32 @@ async def syncStudyMaterial(data: StudyMaterialSync, user_id: str = Depends(veri
 
 @app.post("/daily-plan")
 async def saveDailyPlan(data: DailyPlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    pass
+
+# --- Module Goal Sync ---
+
+@app.get("/module-goals")
+async def getModuleGoals(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    from database import ModuleGoal
+    goals = db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).all()
+    return {"goals": goals}
+
+@app.post("/module-goals")
+async def syncModuleGoals(goals: List[ModuleGoalSync], user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    from database import ModuleGoal
+
+    db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).delete()
+    
+    new_goals = [
+        ModuleGoal(
+            user_id=user_id,
+            module_tag=g.module_tag,
+            weekly_goal_minutes=g.weekly_goal_minutes
+        ) for g in goals
+    ]
+    db.add_all(new_goals)
+    db.commit()
+    return {"status": "success"}
     items_json = json.dumps(data.items)
 
     plan = db.query(DailyPlan).filter(

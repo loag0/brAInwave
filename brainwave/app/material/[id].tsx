@@ -26,13 +26,13 @@ import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
 
 /**
- * This is so inline code backticks from the AI plan dont render as actual backticks 
+ * This is so inline code backticks from the AI plan dont render as actual backticks
  * but instead as just bold text because it was messing with the theme
  */
-function sanitizeAiMarkdown(markdown: any){
-  if(!markdown) return '';
+function sanitizeAiMarkdown(markdown: any) {
+  if (!markdown) return "";
 
-  return markdown.replace(/`([^`\n]+)`/g, '**$1**');
+  return markdown.replace(/`([^`\n]+)`/g, "**$1**");
 }
 
 export default function MaterialDetail() {
@@ -73,7 +73,7 @@ export default function MaterialDetail() {
       const rId = localData?.remote_id || id;
       setRemoteId(rId as string);
 
-      const response = await brAInwaveApi.getStudyPlan(user.id, rId);
+      const response = await brAInwaveApi.getStudyPlanDetails(user.id, rId);
 
       if (response) {
         setData(response);
@@ -395,10 +395,10 @@ export default function MaterialDetail() {
               activeOpacity={0.8}
               disabled={isDeleting}
             >
-            {isDeleting && loading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={{ color: "#fff", fontWeight: "600" }}>Delete</Text>
+              {isDeleting && loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={{ color: "#fff", fontWeight: "600" }}>Delete</Text>
               )}
             </TouchableOpacity>
           </View>

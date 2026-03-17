@@ -49,13 +49,13 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
           <View
             style={[styles.alertBox, { backgroundColor: theme.colors.surface }]}
           >
-            {/* M3 accent bar at the top */}
+            {/* Accent bar at the top */}
             <View
               style={[styles.accentBar, { backgroundColor: accentColor }]}
             />
 
             <View style={styles.body}>
-              {/* Icon + Title on the same row — M3 dialog header pattern */}
+              {/* Icon + Title */}
               <View style={styles.headerRow}>
                 {config.iconPath && (
                   <View
@@ -92,7 +92,7 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
                 {config.message}
               </Text>
 
-              {/* M3 pill buttons — right aligned */}
+              {/* Pill buttons */}
               <View style={styles.buttonRow}>
                 {config.showCancel && (
                   <TouchableOpacity

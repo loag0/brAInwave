@@ -7,13 +7,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   Text,
-  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import Markdown from "react-native-markdown-display";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTheme } from "../contexts/ThemeContext";
+import { useDatePicker } from "../contexts/DatePickerContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useAlert } from "../contexts/AlertContext";
 import { useContent } from "../hooks/useContent";
@@ -25,7 +24,7 @@ import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
 
 /**
- * This is so inline code backticks from the AI plan dont render as actual backticks 
+ * This is so inline code backticks from the AI plan dont render as actual backticks
  * but instead as just bold text because it was messing with the theme
  */
 function sanitizeAiMarkdown(markdown: any) {
@@ -42,8 +41,8 @@ export default function AssignmentDetail() {
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSavingDate, setIsSavingDate] = useState(false);
+  const { showPicker } = useDatePicker();
   const { deleteAssignment } = useContent();
   const router = useRouter();
   const { showAlert } = useAlert();
@@ -65,19 +64,19 @@ export default function AssignmentDetail() {
           await deleteAssignment(data.id, data.remote_id);
           router.back();
         } catch (e) {
-            console.error("Failed to delete assignment:", e);
-            setIsDeleting(false);
-            setLoading(false);
-            showAlert({
-              title: "Deletion Failed",
+          console.error("Failed to delete assignment:", e);
+          setIsDeleting(false);
+          setLoading(false);
+          showAlert({
+            title: "Deletion Failed",
               message: "Sorry, we couldn't delete the assignment. Please try again.",
-              iconPath: ICONS.ERROR,
-              iconColor: theme.colors.error,
-              confirmText: "OK",
-            });
-          }
-        },
-      });
+            iconPath: ICONS.ERROR,
+            iconColor: theme.colors.error,
+            confirmText: "OK",
+          });
+        }
+      },
+    });
   };
 
   const getAssignment = useCallback(async () => {
@@ -109,58 +108,91 @@ export default function AssignmentDetail() {
   );
 
   // For due date handling
-  const handleDateChange = async (_event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (!selectedDate || !data?.id) return;
+  const handleDatePress = () => {
+    if (!data?.id) return;
 
-    // Guard: reject past dates
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (selectedDate < today) {
-      showAlert({
-        title: "Invalid Date",
-        message: "Buddy, due date cannot be in the past. Select a valid date before you pmo",
-        iconPath:ICONS.ERROR,
-        iconColor: theme.colors.error,
-        confirmText: "Got it",
-      });
-      return;
-    }
+    showPicker({
+      value: data.due_date ? new Date(data.due_date + "T00:00:00") : new Date(),
+      mode: "date",
+      title: "Set Due Date",
+      minimumDate: new Date(),
+      onConfirm: async (selectedDate) => {
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
+        const day = String(selectedDate.getDate()).padStart(2, "0");
+        const newDate = `${year}-${month}-${day}`;
 
-    const newDate = selectedDate.toISOString().split("T")[0];
-    setData((prev: any) => ({ ...prev, due_date: newDate })); // optimistic
+        const existingTime = data.due_time || "";
+        updateDueDate(newDate, existingTime);
+      },
+    });
+  };
+
+  const handleTimePress = () => {
+    if (!data?.id) return;
+
+    const baseDate = data.due_date || new Date().toISOString().split("T")[0];
+    const initialDate = data.due_time
+      ? new Date(`${baseDate}T${data.due_time}`)
+      : new Date(`${baseDate}T12:00:00`);
+
+    showPicker({
+      value: initialDate,
+      mode: "time",
+      title: "Set Due Time",
+      onConfirm: async (selectedTime) => {
+        const hours = String(selectedTime.getHours()).padStart(2, "0");
+        const minutes = String(selectedTime.getMinutes()).padStart(2, "0");
+        const newTime = `${hours}:${minutes}:00`;
+
+        updateDueDate(data.due_date, newTime);
+      },
+    });
+  };
+
+  const updateDueDate = async (dateStr: string, timeStr: string) => {
+    setData((prev: any) => ({ ...prev, due_date: dateStr, due_time: timeStr }));
     setIsSavingDate(true);
     try {
       const localId = Number(data.id);
-      if(!localId || isNaN(localId)){
-        console.error("Invalid local id:", data.id);
-        return;
-      }
-      console.log("data id:", data.id, "type:", typeof data.id);
-      console.log("remote_id:", data.remote_id, "local id:", data.id);
-      
-      await LocalDB.updateAssignmentDueDate(localId, newDate);
+      await LocalDB.updateAssignmentDueDate(localId, dateStr, timeStr);
       if (data.remote_id) {
-        await brAInwaveApi.updateAssignmentDueDate(data.remote_id, newDate);
+        await brAInwaveApi.updateAssignmentDueDate(
+          data.remote_id,
+          dateStr,
+          timeStr,
+        );
         LocalDB.markAssignmentSynced(localId, data.remote_id);
       }
     } catch (e) {
-      console.error("Failed to save due date:", e);
-      // Revert optimistic update on failure
-      setData((prev: any) => ({ ...prev, due_date: data.due_date }));
+      console.error("Failed to save due date/time:", e);
+      setData((prev: any) => ({
+        ...prev,
+        due_date: data.due_date,
+        due_time: data.due_time,
+      }));
     } finally {
       setIsSavingDate(false);
     }
   };
 
-  const formatDueDate = (dateStr?: string | null) => {
+  const formatDueDate = (dateStr?: string | null, timeStr?: string | null) => {
     if (!dateStr) return "Tap to set a due date";
-    return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    const date = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
       year: "numeric",
     });
+
+    if (timeStr) {
+      const [h, m] = timeStr.split(":");
+      const hh = parseInt(h);
+      const ampm = hh >= 12 ? "PM" : "AM";
+      const h12 = hh % 12 || 12;
+      return `${date} at ${h12}:${m} ${ampm}`;
+    }
+    return date;
   };
 
   const getDueDateState = (dateStr?: string | null) => {
@@ -256,49 +288,74 @@ export default function AssignmentDetail() {
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Due date banner */}
-          <TouchableOpacity
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
-            style={[
-              styles.dueDateBanner,
-              {
-                backgroundColor: dueDateColor + "15",
-                borderColor: dueDateColor + "40",
-              },
-            ]}
-          >
-            <View style={{ flex: 1 }}>
+          <View style={styles.dateBannerRow}>
+            <TouchableOpacity
+              onPress={handleDatePress}
+              activeOpacity={0.7}
+              style={[
+                styles.dueDateBanner,
+                {
+                  backgroundColor: dueDateColor + "15",
+                  borderColor: dueDateColor + "40",
+                  flex: 1,
+                },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.dueDateLabel,
+                    { color: theme.colors.text.secondary },
+                  ]}
+                >
+                  {dueDateLabel}
+                </Text>
+                <Text style={[styles.dueDateValue, { color: dueDateColor }]}>
+                  {formatDueDate(data?.due_date)}
+                </Text>
+              </View>
+              <Text
+                style={{ color: dueDateColor, fontSize: 12, fontWeight: "600" }}
+              >
+                {isSavingDate ? "Saving..." : "Edit"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleTimePress}
+              activeOpacity={0.7}
+              style={[
+                styles.dueTimeBanner,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
               <Text
                 style={[
                   styles.dueDateLabel,
                   { color: theme.colors.text.secondary },
                 ]}
               >
-                {dueDateLabel}
+                Time
               </Text>
-              <Text style={[styles.dueDateValue, { color: dueDateColor }]}>
-                {formatDueDate(data?.due_date)}
+              <Text
+                style={[
+                  styles.dueDateValue,
+                  { color: theme.colors.text.primary },
+                ]}
+              >
+                {data?.due_time
+                  ? (() => {
+                      const [h, m] = data.due_time.split(":");
+                      const hh = parseInt(h);
+                      return `${hh % 12 || 12}:${m} ${hh >= 12 ? "PM" : "AM"}`;
+                    })()
+                  : "11:59 PM"}
               </Text>
-            </View>
-            <Text
-              style={{ color: dueDateColor, fontSize: 12, fontWeight: "600" }}
-            >
-              {isSavingDate ? "Saving..." : "Edit"}
-            </Text>
-          </TouchableOpacity>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={
-                data?.due_date
-                  ? new Date(data.due_date + "T00:00:00")
-                  : new Date()
-              }
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={handleDateChange}
-            />
-          )}
+            </TouchableOpacity>
+          </View>
 
           {/* Markdown plan content */}
           <Markdown
@@ -327,7 +384,7 @@ export default function AssignmentDetail() {
                 borderRadius: 8,
                 padding: 10,
               },
-            }}            
+            }}
           >
             {sanitizeAiMarkdown(data?.rawContent) ||
               "No AI-generated plan found for this assignment."}
@@ -358,13 +415,23 @@ export default function AssignmentDetail() {
 
 const styles = StyleSheet.create({
   scrollContent: { padding: 20, paddingBottom: 100 },
+  dateBannerRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+  dueTimeBanner: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: 110,
+  },
   dueDateBanner: {
     flexDirection: "row",
     alignItems: "center",
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 10,
   },
   dueDateLabel: {
     fontSize: 11,
