@@ -222,6 +222,7 @@ export const useContent = () => {
               title: result.assignment.title,
               subject: result.assignment.subject,
               due_date: result.assignment.due_date,
+              due_time: result.assignment.due_time,
               priority: result.assignment.priority,
               rawContent: result.assignment.rawContent || ass.rawContent,
             });
@@ -535,6 +536,7 @@ export const useContent = () => {
           title: result.assignment.title,
           subject: result.assignment.subject,
           due_date: result.assignment.due_date,
+          due_time: result.assignment.due_time,
           priority: result.assignment.priority,
           rawContent: result.assignment.rawContent || "",
         });

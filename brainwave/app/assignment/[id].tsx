@@ -132,9 +132,25 @@ export default function AssignmentDetail() {
     if (!data?.id) return;
 
     const baseDate = data.due_date || new Date().toISOString().split("T")[0];
-    const initialDate = data.due_time
-      ? new Date(`${baseDate}T${data.due_time}`)
-      : new Date(`${baseDate}T12:00:00`);
+    let initialDate = new Date(`${baseDate}T12:00:00`);
+
+    if (data.due_time) {
+      const timeStr = data.due_time;
+      // Handle HH:MM:SS or HH:MM
+      if (timeStr.includes(":") && !timeStr.includes("M")) {
+        const [h, m] = timeStr.split(":");
+        initialDate.setHours(parseInt(h), parseInt(m), 0);
+      } 
+      // Handle "11:59 PM" style
+      else if (timeStr.includes("AM") || timeStr.includes("PM")) {
+        const [time, ampm] = timeStr.trim().split(/\s+/);
+        let [h, m] = time.split(":");
+        let hh = parseInt(h);
+        if (ampm === "PM" && hh < 12) hh += 12;
+        if (ampm === "AM" && hh === 12) hh = 0;
+        initialDate.setHours(hh, parseInt(m), 0);
+      }
+    }
 
     showPicker({
       value: initialDate,
@@ -186,11 +202,24 @@ export default function AssignmentDetail() {
     });
 
     if (timeStr) {
-      const [h, m] = timeStr.split(":");
-      const hh = parseInt(h);
+      let hh = 0, mm = 0;
+      if (timeStr.includes("AM") || timeStr.includes("PM")) {
+        const [time, ampm] = timeStr.trim().split(/\s+/);
+        let [h, m] = time.split(":");
+        hh = parseInt(h);
+        mm = parseInt(m);
+        if (ampm === "PM" && hh < 12) hh += 12;
+        if (ampm === "AM" && hh === 12) hh = 0;
+      } else {
+        const [h, m] = timeStr.split(":");
+        hh = parseInt(h);
+        mm = parseInt(m);
+      }
+      
       const ampm = hh >= 12 ? "PM" : "AM";
       const h12 = hh % 12 || 12;
-      return `${date} at ${h12}:${m} ${ampm}`;
+      const mPad = String(mm).padStart(2, "0");
+      return `${date} at ${h12}:${mPad} ${ampm}`;
     }
     return date;
   };
@@ -348,9 +377,22 @@ export default function AssignmentDetail() {
               >
                 {data?.due_time
                   ? (() => {
-                      const [h, m] = data.due_time.split(":");
-                      const hh = parseInt(h);
-                      return `${hh % 12 || 12}:${m} ${hh >= 12 ? "PM" : "AM"}`;
+                      let hh = 0, mm = 0;
+                      const timeStr = data.due_time;
+                      if (timeStr.includes("AM") || timeStr.includes("PM")) {
+                        const [time, ampm] = timeStr.trim().split(/\s+/);
+                        let [h, m] = time.split(":");
+                        hh = parseInt(h);
+                        mm = parseInt(m);
+                        if (ampm === "PM" && hh < 12) hh += 12;
+                        if (ampm === "AM" && hh === 12) hh = 0;
+                      } else {
+                        const [h, m] = timeStr.split(":");
+                        hh = parseInt(h);
+                        mm = parseInt(m);
+                      }
+                      const mPad = String(mm).padStart(2, "0");
+                      return `${hh % 12 || 12}:${mPad} ${hh >= 12 ? "PM" : "AM"}`;
                     })()
                   : "11:59 PM"}
               </Text>
