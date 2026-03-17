@@ -30,6 +30,7 @@ import {
   MobileIcon,
   SettingsIcon,
   LogoutIcon,
+  ICONS,
 } from "@/components/Icons";
 import {
   ensureNotificationPermission,
@@ -99,6 +100,8 @@ export default function Settings() {
       message: "Are you sure you want to sign out of brAInwave?",
       showCancel: true,
       confirmText: "Log out",
+      iconPath: ICONS.ERROR,
+      iconColor: theme.colors.error,
       onConfirm: () => logout(),
     });
   };

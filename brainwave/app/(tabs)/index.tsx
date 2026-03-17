@@ -815,8 +815,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
 
 const menuStyles = StyleSheet.create({
   overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   modal: {
@@ -825,6 +823,7 @@ const menuStyles = StyleSheet.create({
     padding: 24,
     paddingBottom: 40,
     overflow: "hidden",
+    elevation: 10,
   },
   header: {
     flexDirection: "row",
