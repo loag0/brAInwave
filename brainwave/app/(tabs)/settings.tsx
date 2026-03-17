@@ -14,6 +14,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useAlert } from "../contexts/AlertContext";
 import { Theme } from "../types";
 import { useRouter } from "expo-router";
+import Toast from "react-native-toast-message";
 import Svg, { Path } from "react-native-svg";
 import {
   ChevronRightIcon,
@@ -176,6 +177,12 @@ export default function Settings() {
       await updateProfileData({
         studyPreferences: { ...user.studyPreferences, isMorningPerson: value },
       });
+      Toast.show({
+        type: "success",
+        text1: "Settings Updated",
+        text2: `Peak focus window set to ${value ? "Early Bird" : "Night Owl"}`,
+        position: "bottom",
+      });
     } finally {
       setTimeout(() => setIsUpdatingFocus(false), 500);
     }
@@ -192,6 +199,12 @@ export default function Settings() {
           preferredSessionLength: length,
         },
       });
+      Toast.show({
+        type: "success",
+        text1: "Settings Updated",
+        text2: `Session length set to ${length.charAt(0).toUpperCase() + length.slice(1)}`,
+        position: "bottom",
+      });
     } finally {
       setTimeout(() => setIsUpdatingSession(false), 500);
     }
@@ -206,8 +219,35 @@ export default function Settings() {
       await updateProfileData({
         studyPreferences: { ...user.studyPreferences, mode },
       });
+      Toast.show({
+        type: "success",
+        text1: "Settings Updated",
+        text2: `Study mode set to ${mode.charAt(0).toUpperCase() + mode.slice(1).replace("_", " ")}`,
+        position: "bottom",
+      });
     } finally {
       setTimeout(() => setIsUpdatingMode(false), 500);
+    }
+  };
+
+  const handleLeadTimeUpdate = async (min: number) => {
+    if (!user) return;
+    if (user.studyPreferences.notificationLeadMinutes === min) return;
+    try {
+      await updateProfileData({
+        studyPreferences: {
+          ...user.studyPreferences,
+          notificationLeadMinutes: min,
+        },
+      });
+      Toast.show({
+        type: "success",
+        text1: "Settings Updated",
+        text2: `Reminders set to ${min} minutes before`,
+        position: "bottom",
+      });
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -353,14 +393,7 @@ export default function Settings() {
                                   .notificationLeadMinutes ?? 10) === min &&
                                   styles.segmentActive,
                               ]}
-                              onPress={() =>
-                                updateProfileData({
-                                  studyPreferences: {
-                                    ...user?.studyPreferences,
-                                    notificationLeadMinutes: min,
-                                  },
-                                })
-                              }
+                              onPress={() => handleLeadTimeUpdate(min)}
                             >
                               <Text
                                 style={[

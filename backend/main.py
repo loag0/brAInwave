@@ -585,9 +585,16 @@ async def generateDailyPlan(request: PlanRequest, user_id: str = Depends(verify_
         ).all()
         assignment_list = [{"title": a.title, "due_date": a.due_date, "priority": a.priority} for a in assignments]
 
+        materials = db.query(StudyMaterial).filter(
+            StudyMaterial.user_id == user_id,
+            StudyMaterial.is_deleted == 0
+        ).all()
+        materials_list = [{"title": m.title, "summary": m.aiPlan[:300] if m.aiPlan else "No details"} for m in materials]
+
         generatedItems = await aiOptimization(
             classes=todaysClasses,
             assignments=assignment_list,
+            materials=materials_list,
             date=request.date,
             dayOfWeek=dayOfWeekName.capitalize(),
             prefs=prefs,
@@ -616,8 +623,9 @@ async def generateDailyPlan(request: PlanRequest, user_id: str = Depends(verify_
         print(f"Error generating plan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTasks=None, userNote=None):
+async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs, customTasks=None, userNote=None):
     customContext = json.dumps(customTasks) if customTasks else "None"
+    materialsContext = json.dumps(materials) if materials else "None"
 
     lengthMap = {"short": "25-45", "medium": "45-75", "long": "90-120"}
     targetRange = lengthMap.get(prefs.get('sessionLength', ''), "45-75")
@@ -648,6 +656,7 @@ async def aiOptimization(classes, assignments, date, dayOfWeek, prefs, customTas
         --- DATA INPUTS ---
         - Today's Classes: {json.dumps(classes)}
         - Pending Assignments (title, due_date, priority): {json.dumps(assignments)}
+        - Study Materials Context (Syllabus Snippets): {materialsContext}
         - User's Fixed Custom Tasks: {customContext}
             FIXED TASK RULES (MANDATORY - violating these is a critical failure):
             - Every item in Fixed Custom Tasks MUST appear in the output. Zero exceptions.

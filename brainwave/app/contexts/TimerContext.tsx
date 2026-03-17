@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useRef,
+  useCallback,
 } from "react";
 import * as Haptics from "expo-haptics";
 import { useAlert } from "./AlertContext";
@@ -18,13 +19,31 @@ const TimerContext = createContext<any>(null);
 export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
   const { showAlert } = useAlert();
   const { user } = useAuth();
-  const [minutes, setMinutes] = useState(25);
+  // Derive initial duration from user preferences
+  const getInitialMinutes = useCallback(() => {
+    const pref = user?.studyPreferences?.preferredSessionLength;
+    if (pref === "short") return 25;
+    if (pref === "medium") return 45;
+    if (pref === "long") return 90;
+    return 25; // default
+  }, [user]);
+
+  const [minutes, setMinutes] = useState(getInitialMinutes());
   const [seconds, setSeconds] = useState(0);
-  const [totalSeconds, setTotalSeconds] = useState(25 * 60); // Total duration
+  const [totalSeconds, setTotalSeconds] = useState(getInitialMinutes() * 60); // Total duration
   const [isRunning, setIsRunning] = useState(false);
   const [isKeepAwake, setIsKeepAwake] = useState(false); // Screen always on
   const intervalRef = useRef<any>(null);
   const expectedEndTimeRef = useRef<number | null>(null);
+
+  // Update initial minutes if user preferences load/change while not running
+  useEffect(() => {
+    if (!isRunning) {
+      const newMins = getInitialMinutes();
+      setMinutes(newMins);
+      setTotalSeconds(newMins * 60);
+    }
+  }, [getInitialMinutes, isRunning]);
 
   // Derived value for the progress ring: (Current Seconds / Total Seconds)
   const timeLeftInSeconds = minutes * 60 + seconds;
