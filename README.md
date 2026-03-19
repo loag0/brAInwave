@@ -102,7 +102,7 @@ Environment variables use the `EXPO_PUBLIC_` prefix.
 ### 4. Run the app
 
 ```bash
-# Development build (required — Expo Go is not supported)
+# Development build (required - Expo Go is not supported)
 npx expo run:android
 # or
 npx expo run:ios
@@ -169,7 +169,7 @@ Select your production profile and confirm EAS is using the managed keystore who
 
 For iOS, EAS handles provisioning profiles and certificates. Ensure the bundle identifier in `app.json` matches the one registered in your Firebase iOS app exactly.
 
-### Step 5 — Environment variables
+### Step 5 - Environment variables
 
 Add the following to your `/brainwave/.env` (and to the Expo Dashboard for EAS builds):
 
@@ -184,10 +184,10 @@ EXPO_PUBLIC_FIREBASE_APP_ID=            # From Firebase project settings
 ### Common failure points
 
 - **NEVER EVER use Expo Go** - If you're testing Google auth locally, always use a dev build otherwise it won't work (ask me how I know).
-- **Sign-in works in dev but fails in production** — The EAS production keystore SHA fingerprint is not registered in Firebase or Google Cloud. Run `eas credentials` and cross-check.
-- **iOS Sign-In fails** — The bundle identifier in `app.json` does not match the one in the Firebase iOS app registration.
-- **`DEVELOPER_ERROR` on Android** — Almost always a SHA fingerprint mismatch. Double-check both the debug and production fingerprints are registered.
-- **Web client ID missing** — Passing the Android client ID as `webClientId` instead of the Web client ID will cause auth to fail on all platforms.
+- **Sign-in works in dev but fails in production** - The EAS production keystore SHA fingerprint is not registered in Firebase or Google Cloud. Run `eas credentials` and cross-check.
+- **iOS Sign-In fails** - The bundle identifier in `app.json` does not match the one in the Firebase iOS app registration.
+- **`DEVELOPER_ERROR` on Android** - Almost always a SHA fingerprint mismatch. Double-check both the debug and production fingerprints are registered.
+- **Web client ID missing** - Passing the Android client ID as `webClientId` instead of the Web client ID will cause auth to fail on all platforms.
 
 ---
 
