@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
@@ -78,6 +78,8 @@ export default function Home() {
   const { showAlert } = useAlert();
   const [refreshing, setRefreshing] = useState(false);
 
+  const hasShownOverdueAlert = useRef(false); //once per session, not when a screen is focused
+
   const {
     timetables,
     plans,
@@ -107,6 +109,15 @@ export default function Home() {
     contentLoading,
   );
 
+  // Returns true if assignment's due_date is strictly before today
+  const isOverdue = (dueDate?: string | null): boolean => {
+    if (!dueDate) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate + "T00:00:00");
+    return due < today;
+  };
+
   useFocusEffect(
     useCallback(() => {
       refresh();
@@ -115,6 +126,41 @@ export default function Home() {
       }
     }, [refresh, user?.id]),
   );
+
+  // Show overdue alert once per session after assignments load
+  useEffect(() => {
+    if (hasShownOverdueAlert.current) return;
+    if (contentLoading) return;
+    if (assignments.length === 0) return;
+
+    const overdueList = assignments.filter((a) => isOverdue(a.due_date));
+    if (overdueList.length === 0) return;
+
+    hasShownOverdueAlert.current = true;
+
+    const names = overdueList
+      .slice(0, 3)
+      .map((a) => `• ${a.title}`)
+      .join("\n");
+    const extra =
+      overdueList.length > 3 ? `\n+${overdueList.length - 3} more` : "";
+
+    showAlert({
+      title: `${overdueList.length} Overdue Assignment${overdueList.length > 1 ? "s" : ""}`,
+      message: `These assignments are past their due date:\n\n${names}${extra}\n\nHead to each one to update the deadline or delete it.`,
+      confirmText: "View Assignments",
+      showCancel: true,
+      cancelText: "Dismiss",
+      onConfirm: () => {
+        if (overdueList.length === 1) {
+          router.push({
+            pathname: "/assignment/[id]",
+            params: { id: overdueList[0].id },
+          });
+        }
+      },
+    });
+  }, [assignments, contentLoading, showAlert]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -202,10 +248,11 @@ export default function Home() {
     return new Date() > end;
   };
 
-  const tasksRemaining = todaysSchedule.filter((t) => !t.completed && !isTaskPastHome(t)).length;
+  const tasksRemaining = todaysSchedule.filter(
+    (t) => !t.completed && !isTaskPastHome(t),
+  ).length;
   const hasNextClass = nextClass !== null && nextClass !== undefined;
 
-  // Truncate long AI task titles for the status chip
   const rawNextTitle =
     nextClass?.task || nextClass?.title || nextClass?.subject || "Next task";
   const nextTitle =
@@ -281,7 +328,6 @@ export default function Home() {
         {/* Status Chip */}
         <View style={styles.content}>
           <View style={styles.statusChip}>
-            {/*Wraps so it doesnt overlap with right */}
             <View style={styles.statusLeft}>
               <View
                 style={[
@@ -313,7 +359,6 @@ export default function Home() {
               </View>
             </View>
 
-            {/* Fixed width, never shrinks or grows */}
             <View style={styles.statusRight}>
               <Text style={styles.statusTasksNumber}>{tasksRemaining}</Text>
               <Text style={styles.statusTasksLabel}>tasks left</Text>
@@ -345,7 +390,11 @@ export default function Home() {
                 todaysSchedule.slice(0, 3).map((item, idx) => (
                   <View
                     key={idx}
-                    style={[styles.classItem, idx !== 2 && styles.itemMargin, isTaskPastHome(item) && { opacity: 0.4 }]}
+                    style={[
+                      styles.classItem,
+                      idx !== 2 && styles.itemMargin,
+                      isTaskPastHome(item) && { opacity: 0.4 },
+                    ]}
                   >
                     <View
                       style={[
@@ -365,14 +414,16 @@ export default function Home() {
                           item.name ||
                           "Unknown Class"}
                       </Text>
-                      {item.subject && item.task && item.task !== item.subject && (
-                        <Text
-                          style={[styles.classTime, {marginBottom: 2}]}
-                          numberOfLines={1}
-                        >
-                          {item.subject}
-                        </Text>
-                      )}
+                      {item.subject &&
+                        item.task &&
+                        item.task !== item.subject && (
+                          <Text
+                            style={[styles.classTime, { marginBottom: 2 }]}
+                            numberOfLines={1}
+                          >
+                            {item.subject}
+                          </Text>
+                        )}
                       <View style={styles.classDetails}>
                         <ScheduleIcon
                           size={10}
@@ -443,63 +494,80 @@ export default function Home() {
               {assignments.length === 0 ? (
                 <Text style={styles.emptyText}>No upcoming assignments.</Text>
               ) : (
-                assignments.map((a, idx) => (
-                  <TouchableOpacity
-                    key={a.id || idx}
-                    activeOpacity={0.7}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/assignment/[id]",
-                        params: { id: a.id },
-                      })
-                    }
-                    style={[
-                      styles.assignmentItem,
-                      idx !== assignments.length - 1 && styles.itemMargin,
-                    ]}
-                  >
-                    <View style={styles.assignmentInfo}>
-                      <Text numberOfLines={1} style={styles.assignmentTitle}>
-                        {a.title}
-                      </Text>
-                      <Text style={styles.assignmentSubject}>{a.subject}</Text>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          marginTop: 4,
-                          gap: 8,
-                        }}
-                      >
+                assignments.map((a, idx) => {
+                  const overdue = isOverdue(a.due_date);
+                  return (
+                    <TouchableOpacity
+                      key={a.id || idx}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/assignment/[id]",
+                          params: { id: a.id },
+                        })
+                      }
+                      style={[
+                        styles.assignmentItem,
+                        idx !== assignments.length - 1 && styles.itemMargin,
+                        overdue && { opacity: 0.45 },
+                      ]}
+                    >
+                      <View style={styles.assignmentInfo}>
+                        <Text numberOfLines={1} style={styles.assignmentTitle}>
+                          {a.title}
+                        </Text>
+                        <Text style={styles.assignmentSubject}>
+                          {a.subject}
+                        </Text>
                         <View
-                          style={[
-                            styles.badge,
-                            {
-                              backgroundColor:
-                                getPriorityColor(a.priority) + "20",
-                            },
-                          ]}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginTop: 4,
+                            gap: 8,
+                          }}
                         >
-                          <Text
+                          <View
                             style={[
-                              styles.badgeText,
-                              { color: getPriorityColor(a.priority) },
+                              styles.badge,
+                              {
+                                backgroundColor: overdue
+                                  ? theme.colors.error + "20"
+                                  : getPriorityColor(a.priority) + "20",
+                              },
                             ]}
                           >
-                            Due{" "}
-                            {a.due_date
-                              ? a.due_date.split("-").reverse().join("/")
-                              : "N/A"}
-                          </Text>
+                            <Text
+                              style={[
+                                styles.badgeText,
+                                {
+                                  color: overdue
+                                    ? theme.colors.error
+                                    : getPriorityColor(a.priority),
+                                },
+                              ]}
+                            >
+                              {overdue
+                                ? "Overdue"
+                                : `Due ${
+                                    a.due_date
+                                      ? a.due_date
+                                          .split("-")
+                                          .reverse()
+                                          .join("/")
+                                      : "N/A"
+                                  }`}
+                            </Text>
+                          </View>
+                          <ChevronRightIcon
+                            size={16}
+                            color={theme.colors.text.accent}
+                          />
                         </View>
-                        <ChevronRightIcon
-                          size={16}
-                          color={theme.colors.text.accent}
-                        />
                       </View>
-                    </View>
-                  </TouchableOpacity>
-                ))
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </View>
           </View>
@@ -666,8 +734,6 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       color: "#FF9500",
     },
     content: { padding: 24 },
-
-    // Status chip
     statusChip: {
       flexDirection: "row",
       alignItems: "center",

@@ -76,7 +76,8 @@ export default function Library() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
-  const { refresh, createMaterial, materials, syncProgress, isLoading } = useContent();
+  const { refresh, createMaterial, materials, syncProgress, isLoading } =
+    useContent();
 
   const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
   const [searchQuery, setSearchQuery] = useState("");
@@ -88,8 +89,12 @@ export default function Library() {
   const [streakCount, setStreakCount] = useState(0);
   const [weeklyActivity, setWeeklyActivity] = useState<any[]>([]);
 
-  const [moduleHours, setModuleHours] = useState<{ module_tag: string; total_minutes: number }[]>([]);
-  const [moduleGoals, setModuleGoals] = useState<{ module_tag: string; weekly_goal_minutes: number }[]>([]);
+  const [moduleHours, setModuleHours] = useState<
+    { module_tag: string; total_minutes: number }[]
+  >([]);
+  const [moduleGoals, setModuleGoals] = useState<
+    { module_tag: string; weekly_goal_minutes: number }[]
+  >([]);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [goalInput, setGoalInput] = useState("");
 
@@ -410,7 +415,7 @@ export default function Library() {
                   return days.map((day, idx) => {
                     const mins = activityMap.get(idx) || 0;
                     //reduced the max height for demonstration properties
-                    const height = Math.min(100, (mins / 20) * 100); // 5h max height
+                    const height = Math.min(100, (mins / 20) * 100); // 5h max height - original is 300. replace 20
                     return (
                       <View key={day} style={styles.chartBar}>
                         <View style={styles.chartBarContainer}>
@@ -421,7 +426,7 @@ export default function Library() {
                             style={[
                               styles.chartBarFill,
                               {
-                                height: `${Math.max(5, height)}%`,
+                                height: `${Math.max(5, height)}%`, //min height - change 5
                                 opacity: mins > 0 ? 1 : 0.3,
                               },
                             ]}
@@ -685,7 +690,7 @@ export default function Library() {
         </View>
       )}
 
-      {/* FAB — only show on library tab */}
+      {/* FAB - only show on library tab */}
       {activeTab === "library" && (
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: theme.colors.primary }]}

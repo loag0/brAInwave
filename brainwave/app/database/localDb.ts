@@ -348,7 +348,7 @@ export const LocalDB = {
     }));
   },
 
-  // isDirty defaults true — only pass false when syncing inbound from server
+  // isDirty defaults true - only pass false when syncing inbound from server
   upsertPlan: (userId: string, date: string, items: any[], isDirty = true) => {
     const itemsJson = JSON.stringify(items || []);
     const dirtyFlag = isDirty ? 1 : 0;
@@ -379,7 +379,7 @@ export const LocalDB = {
     }
   },
 
-  // Inbound sync from server — always marks as clean
+  // Inbound sync from server - always marks as clean
   syncPlansFromServer: (userId: string, plans: any[]) => {
     db.runSync(`DELETE FROM daily_plans WHERE user_id = ?`, [userId]);
     for (const p of plans) {

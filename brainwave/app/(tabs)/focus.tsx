@@ -288,7 +288,7 @@ export default function FocusScreen() {
         </View>
       </TouchableOpacity>
 
-      {/* Module selector — only show when not running */}
+      {/* Module selector - only show when not running */}
       {!isRunning && (
         <View style={styles.moduleCard}>
           <TouchableOpacity
@@ -434,7 +434,7 @@ export default function FocusScreen() {
         </View>
       </View>
 
-      {/* Preset chips modal — tap circle to open */}
+      {/* Preset chips modal - tap circle to open */}
       <Modal visible={isPickerVisible} transparent animationType="none">
         <Animated.View style={styles.modalOverlay}>
           <TouchableOpacity
@@ -576,7 +576,7 @@ export default function FocusScreen() {
         </Animated.View>
       </Modal>
 
-      {/* Drum scroll — for adding a new custom duration */}
+      {/* Drum scroll - for adding a new custom duration */}
       <MinutePicker
         visible={isTimePickerVisible}
         onClose={() => {

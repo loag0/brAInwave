@@ -350,7 +350,7 @@ export default function Planner() {
         await brainwaveApi.saveDailyPlan(user.id, date, clean);
         LocalDB.markPlanSynced(user.id, date);
       } catch {
-        // Stays dirty — syncs on reconnect
+        // Stays dirty - syncs on reconnect
       }
     },
     [user?.id],

@@ -33,7 +33,7 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
   const hideAlert = () => setVisible(false);
 
   const accentColor = config.iconColor || theme.colors.primary;
-  // Soft tinted pill bg for the icon — works in both light and dark
+  // Soft tinted pill bg for the icon - works in both light and dark
   const iconBgColor = accentColor + "20";
 
   return (
@@ -81,7 +81,7 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
                 </Text>
               </View>
 
-              {/* Message — indented to align under title when icon present */}
+              {/* Message - indented to align under title when icon present */}
               <Text
                 style={[
                   styles.message,

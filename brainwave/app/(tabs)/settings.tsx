@@ -332,7 +332,7 @@ export default function Settings() {
                 )}
               </View>
 
-              {/* Lead Time — only shown when notifications are on */}
+              {/* Lead Time - only shown when notifications are on */}
               {notificationsEnabled && (
                 <>
                   <Separator theme={theme} />

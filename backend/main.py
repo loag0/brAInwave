@@ -60,7 +60,7 @@ def get_db():
 def verify_token(authorization: str = Header(...)):
     """
     Verifies the Firebase ID token and returns the UID.
-    All endpoints use this — user_id is never trusted from the client.
+    All endpoints use this - user_id is never trusted from the client.
     """
     try:
         token = authorization.replace("Bearer ", "")
@@ -144,22 +144,22 @@ async def processSyllabus(user_id: str = Depends(verify_token), file: UploadFile
 
         Your output MUST contain exactly these sections in this order:
 
-        ## 📌 Course Overview
+        ## Course Overview
         2-3 sentences summarizing what this course/material is about, what skills it builds, and what the final assessment looks like.
 
-        ## 🗂️ Key Topics & Concepts
-        List every major topic extracted from the syllabus. Group related subtopics under each. Be exhaustive — don't skip anything listed in the document.
+        ## Key Topics & Concepts
+        List every major topic extracted from the syllabus. Group related subtopics under each. Be exhaustive - don't skip anything listed in the document.
 
-        ## 📅 Week-by-Week Study Timeline
+        ## Week-by-Week Study Timeline
         Break the content into a realistic weekly schedule from now until the end of the course or exam. Each week entry must include:
         - Which topics to cover
         - Suggested hours for that week
-        - One specific study method suited to that week's content (e.g., "Use Cornell Notes for Week 1 — heavy theory load")
+        - One specific study method suited to that week's content (e.g., "Use Cornell Notes for Week 1 - heavy theory load")
 
-        ## ⏱️ Time Allocation Breakdown
+        ## Time Allocation Breakdown
         For each major topic, estimate total study hours needed and assign a priority level (High / Medium / Low) based on its weight in the course.
 
-        ## 🧠 Study Techniques by Topic Type
+        ## Study Techniques by Topic Type
         Match specific techniques to the types of content in this course. Examples:
         - Heavy theory → Spaced repetition + summary sheets
         - Problem-solving → Worked examples + timed practice
@@ -167,14 +167,14 @@ async def processSyllabus(user_id: str = Depends(verify_token), file: UploadFile
         - Essays/reports → Outline drafting + argument mapping
         Be specific to what is actually in THIS syllabus.
 
-        ## 📆 Important Dates & Milestones
-        Extract any explicitly stated deadlines, exam dates, or submission windows from the document. If none are found, write "No dates found in document — check with your lecturer."
+        ## Important Dates & Milestones
+        Extract any explicitly stated deadlines, exam dates, or submission windows from the document. If none are found, write "No dates found in document - check with your lecturer."
 
-        ## ✅ Progress Checkpoints
+        ## Progress Checkpoints
         Provide 4-6 self-assessment checkpoints spaced across the study timeline. Each checkpoint must include a specific question or mini-test the student can do to verify understanding before moving on.
 
-        ## 💡 Retention Strategy
-        3-5 evidence-based tips tailored to the content type in this course. Focus on long-term retention, not cramming. Be direct and specific — not generic advice.
+        ## Retention Strategy
+        3-5 evidence-based tips tailored to the content type in this course. Focus on long-term retention, not cramming. Be direct and specific - not generic advice.
 
         ---
         TONE: Sharp, encouraging, and honest. Write like a top tutor who knows what actually works for busy students.
@@ -228,7 +228,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         You are brAInwave, an academic intelligence engine. Analyze this assignment document and extract the following fields as a JSON object:
         - title: A clear, descriptive title for the assignment (not just the filename).
         - subject: The academic subject or course this belongs to (e.g., "Software Engineering", "Macroeconomics").
-        - due_date: The submission deadline in YYYY-MM-DD format. ONLY extract this if a date is explicitly written in the document. If no date is found, return null — do NOT guess or infer.
+        - due_date: The submission deadline in YYYY-MM-DD format. ONLY extract this if a date is explicitly written in the document. If no date is found, return null - do NOT guess or infer.
         - due_time: The submission time if explicitly specified (e.g., "23:59", "11:59 PM"). Return null if not found.
         - priority: Assess complexity, weight, and scope. Return one of: 'low', 'medium', or 'high'.
         - estimated_hours: Estimate realistic total hours needed to complete this assignment well. Return an integer.
@@ -236,7 +236,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         - key_requirements: A JSON array of strings, each being one core requirement extracted directly from the document (e.g., ["Minimum 2500 words", "Harvard referencing", "Include UML diagrams"]). Max 6 items.
         - marking_criteria: A JSON array of strings describing how marks are allocated, if stated in the document. Return an empty array if not found.
 
-        Be precise. Do not guess wildly — use only what is in the document.
+        Be precise. Do not guess wildly - use only what is in the document.
         """
 
         meta_response = client.models.generate_content(
@@ -270,7 +270,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         - Key Requirements: {json.dumps(key_requirements)}
         - Marking Criteria: {json.dumps(marking_criteria)}
 
-        Use this context to make every section of the plan specific and relevant. Do NOT write generic advice — every recommendation must reflect this assignment's type, scope, and requirements above.
+        Use this context to make every section of the plan specific and relevant. Do NOT write generic advice - every recommendation must reflect this assignment's type, scope, and requirements above.
 
         --- MASTER PLAN OUTPUT ---
         Produce the plan in clean, well-structured Markdown. Include all sections below, in this exact order:
@@ -279,7 +279,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         A concise 3-4 sentence breakdown of what this assignment requires, what the final deliverable looks like, and what a distinction-level submission achieves that a pass-level one does not.
 
         ## 2. Execution Checklist
-        A numbered, phase-by-phase checklist of every action needed — from first read to final submission.
+        A numbered, phase-by-phase checklist of every action needed - from first read to final submission.
         Group into these exact phases: **Understand → Research → Draft → Review → Submit**
         Each item must be specific and actionable. Reference the key requirements above where relevant.
         For a {assignment_type} assignment, include steps specific to this format (e.g., for 'coding': environment setup, testing, documentation; for 'essay': argument mapping, citation formatting).
@@ -292,7 +292,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         - Citation/referencing style if stated in requirements, otherwise recommend the most common for this subject area
 
         ## 4. Structure Blueprint
-        A detailed outline for the final deliverable — tailored to a {assignment_type}:
+        A detailed outline for the final deliverable - tailored to a {assignment_type}:
         - For written work (essay/report/research): title page → abstract → introduction → body sections with suggested headings → conclusion → references
         - For coding/project: file/folder structure → key components → expected outputs → README
         - For presentation: slide-by-slide outline with suggested talking points and time allocation per slide
@@ -307,7 +307,7 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         If marking criteria were found, reference them directly. Be blunt about what separates distinction from pass.
 
         ## 7. Red Flags & Common Mistakes
-        Top 3-5 mistakes students make on a {assignment_type} assignment. Be specific — not generic warnings.
+        Top 3-5 mistakes students make on a {assignment_type} assignment. Be specific - not generic warnings.
         Include how to avoid each one.
 
         ---
@@ -381,7 +381,7 @@ async def deleteAssignment(assignment_id: int, user_id: str = Depends(verify_tok
 
 @app.patch("/assignment/{assignment_id}/due-date")
 async def updateAssignmentDueDate(assignment_id: int, data: DueDateUpdate, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
-    # Fetch by id only — user_id verified via token, no filter needed
+    # Fetch by id only - user_id verified via token, no filter needed
     assignment = db.query(Assignment).filter(
         Assignment.id == assignment_id,
     ).first()
@@ -631,7 +631,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
     targetRange = lengthMap.get(prefs.get('sessionLength', ''), "45-75")
 
     priorityList = prefs.get('subjectPriorities', [])
-    priorityContext = ", ".join(priorityList) if priorityList else "No priorities set — distribute evenly"
+    priorityContext = ", ".join(priorityList) if priorityList else "No priorities set - distribute evenly"
 
     userInstruction = ""
     if userNote and userNote.strip():
@@ -648,7 +648,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         SCHEDULE DATE: {dayOfWeek}, {date}
 
         --- USER COGNITIVE PROFILE ---
-        - Energy Peak: {"MORNING — schedule Hard/high-priority study blocks before 12:00 PM" if prefs.get('isMorningPerson') else "EVENING — schedule Hard/high-priority study blocks after 4:00 PM"}
+        - Energy Peak: {"MORNING - schedule Hard/high-priority study blocks before 12:00 PM" if prefs.get('isMorningPerson') else "EVENING - schedule Hard/high-priority study blocks after 4:00 PM"}
         - Preferred Study Block Length: {targetRange} minutes
         - Goal Mode: {prefs.get('mode', 'stay_consistent').replace('_', ' ')}
         - Subject Priorities (index 0 = highest priority): {priorityContext}
@@ -662,7 +662,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
             - Every item in Fixed Custom Tasks MUST appear in the output. Zero exceptions.
             - Place each at its EXACT stated time. Do not move, merge, or skip any.
             - Set "isCustom": true for ALL fixed task items.
-            - If a fixed task overlaps a class block, keep BOTH — do not drop either.
+            - If a fixed task overlaps a class block, keep BOTH - do not drop either.
             - Do not reinterpret or rename fixed tasks. Use the exact "task" string provided.
 
         {userInstruction}
@@ -678,7 +678,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
             - Include ALL of them, at their exact times, with "isCustom": true.
             - Before finishing, verify: count Fixed Custom Tasks in input vs output. They must match.
         3. GAP ANALYSIS: Identify all free time gaps between fixed blocks.
-        4. STUDY BLOCK ALLOCATION — The 3 Pillar Rule:
+        4. STUDY BLOCK ALLOCATION - The 3 Pillar Rule:
            - PILLAR 1 (Priority): Subjects at index 0-1 in Subject Priorities get the longest blocks ({targetRange}m) scheduled during the Energy Peak window.
            - PILLAR 2 (Urgency): Any assignment due within 48 hours from {date} MUST be scheduled, overriding all other priorities.
            - PILLAR 3 (Mode):
@@ -688,7 +688,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         5. HEALTH RULES:
            - No study blocks between 11:00 PM and 7:00 AM.
            - Insert a 15-minute Brain Break after every study block longer than 60 minutes.
-        6. TASK DESCRIPTIONS: Each task's "task" field must be a specific, actionable instruction — not vague (e.g., "Complete Introduction section draft for Research Paper" not "Study Research Paper").
+        6. TASK DESCRIPTIONS: Each task's "task" field must be a specific, actionable instruction - not vague (e.g., "Complete Introduction section draft for Research Paper" not "Study Research Paper").
 
         --- OUTPUT FORMAT ---
         Return a JSON object with a single key "items" containing an array. Each item MUST follow this exact schema:

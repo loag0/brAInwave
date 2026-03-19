@@ -77,7 +77,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
         nextAppState === "active"
       ) {
         if (__DEV__)
-          console.log("App foregrounded — rechecking battery status");
+          console.log("App foregrounded - rechecking battery status");
         await checkBatteryStatus();
       }
       appState.current = nextAppState;
@@ -134,7 +134,12 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded && !isLoading && !isThemeLoading && hasSeenWelcome !== null) {
+    if (
+      fontsLoaded &&
+      !isLoading &&
+      !isThemeLoading &&
+      hasSeenWelcome !== null
+    ) {
       setTimeout(() => SplashScreen.hideAsync(), 100);
     }
   }, [fontsLoaded, isLoading, isThemeLoading, hasSeenWelcome]);

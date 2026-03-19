@@ -12,7 +12,10 @@ import { Theme } from "../types";
 import { useRouter } from "expo-router";
 import { doc, setDoc } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
-import { ensureNotificationPermission, openAppSettings } from "@/utils/notifications";
+import {
+  ensureNotificationPermission,
+  openAppSettings,
+} from "@/utils/notifications";
 import { useAlert } from "../contexts/AlertContext";
 
 type SessionLength = "short" | "medium" | "long";
@@ -32,7 +35,7 @@ export default function OnboardingScreen() {
   const [mode, setMode] = useState<Mode>("stay_consistent");
   const [sessionLength, setSessionLength] = useState<SessionLength>("medium");
   const [isSaving, setIsSaving] = useState(false);
-  const { showAlert } = useAlert()
+  const { showAlert } = useAlert();
 
   const handleFinish = async () => {
     if (!user?.id) return;
@@ -74,10 +77,10 @@ export default function OnboardingScreen() {
           await saveAndProceed(false);
         },
       });
-      } catch(e){
-        if(__DEV__) console.error("Onboarding error:", e);
-      } finally{
-        setIsSaving(false);
+    } catch (e) {
+      if (__DEV__) console.error("Onboarding error:", e);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -90,7 +93,7 @@ export default function OnboardingScreen() {
         granted,
       );
     if (!user?.id) {
-      if (__DEV__) console.log("returning early — no user id");
+      if (__DEV__) console.log("returning early - no user id");
       return;
     }
     if (__DEV__) console.log("proceeding with save...");

@@ -10,9 +10,8 @@ import * as Haptics from "expo-haptics";
 import { useAlert } from "./AlertContext";
 import { useAuth } from "./AuthContext";
 import { LocalDB } from "../database/localDb";
-import { doc, setDoc, increment } from "firebase/firestore";
-import { db as firestore } from "../../firebaseConfig";
 import { AppState } from "react-native";
+import { backgroundSync } from "@/utils/backgroundSync";
 
 const TimerContext = createContext<any>(null);
 
@@ -69,19 +68,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
       if (user?.id) {
         // Log locally for streaks/charts
         LocalDB.logStudyTime(user.id, today, studyMins, selectedModules ?? undefined);
-
-        // Sync to cloud
-        const activityRef = doc(firestore, "users", user.id, "activity", today);
-        setDoc(
-          activityRef,
-          {
-            minutes: increment(studyMins),
-            lastUpdated: new Date().toISOString(),
-            userId: user.id,
-            date: today,
-          },
-          { merge: true },
-        ).catch((e) => console.error("Cloud activity sync failed", e));
+        backgroundSync(user.id);
       }
 
       showAlert({

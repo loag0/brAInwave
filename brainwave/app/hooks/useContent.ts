@@ -70,7 +70,7 @@ export const useContent = () => {
 
       const online = await isOnline();
       if (!online) {
-        log("Skipping sync — offline");
+        log("Skipping sync - offline");
         return;
       }
 
@@ -87,16 +87,14 @@ export const useContent = () => {
         dirtyMaterials.length +
         dirtyTimetables.length +
         dirtyAssignments.length +
-        dirtyPlans.length +
-        dirtyLogs.length +
-        (dirtyModuleGoals.length > 0 ? 1 : 0);
+        dirtyPlans.length;
 
       if (totalToSync === 0) {
         log("Nothing dirty to sync");
         return;
       }
 
-      log(`Starting sync — ${totalToSync} record(s) to push`, {
+      log(`Starting sync - ${totalToSync} record(s) to push`, {
         materials: dirtyMaterials.length,
         timetables: dirtyTimetables.length,
         assignments: dirtyAssignments.length,
@@ -298,7 +296,7 @@ export const useContent = () => {
         }
       }
 
-      log(`Sync complete — ${completed}/${totalToSync} succeeded`);
+      log(`Sync complete - ${completed}/${totalToSync} succeeded`);
 
       setTimeout(() => setSyncProgress({ current: 0, total: 0 }), 2000);
       isSyncing.current = false;
@@ -403,7 +401,7 @@ export const useContent = () => {
           await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
           log("Cache timestamp updated");
         } else {
-          log("Cache still fresh — skipping server pull");
+          log("Cache still fresh - skipping server pull");
         }
 
         // 4. Update app state after full sync
@@ -430,7 +428,7 @@ export const useContent = () => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = !!(state.isConnected && state.isInternetReachable);
       if (online && !isSyncing.current) {
-        log("Reconnected — triggering sync");
+        log("Reconnected - triggering sync");
         fetchData();
       }
     });
@@ -465,7 +463,7 @@ export const useContent = () => {
 
     const online = await isOnline();
     if (!online) {
-      log(`Offline — material saved locally, will sync later: ${title}`);
+      log(`Offline - material saved locally, will sync later: ${title}`);
       return localId;
     }
 
@@ -520,7 +518,7 @@ export const useContent = () => {
 
       const online = await isOnline();
       if (!online) {
-        log(`Offline — assignment saved locally, will sync later: ${title}`);
+        log(`Offline - assignment saved locally, will sync later: ${title}`);
         return localId;
       }
 
@@ -648,7 +646,7 @@ export const useContent = () => {
           LocalDB.markPlanSynced(user.id, date);
           log(`Plan pushed to server and marked clean for ${date}`);
         } catch {
-          log(`Plan push failed — stays dirty, will retry on reconnect: ${date}`);
+          log(`Plan push failed - stays dirty, will retry on reconnect: ${date}`);
         }
 
         const updatedPlans = await LocalDB.getAllPlans(user.id);

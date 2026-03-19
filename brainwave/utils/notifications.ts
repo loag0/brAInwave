@@ -26,7 +26,7 @@ export async function requestBatteryOptimizationExemption(): Promise<void> {
     await IntentLauncher.startActivityAsync(
       "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
     );
-  } finally{
+  } finally {
     isBatteryDialogOpen = false;
   }
 }
@@ -77,9 +77,9 @@ export function parseStartDate(item: any, referenceDate?: Date): Date | null {
     let hours = 0;
     let minutes = 0;
 
-    // Format: "0800", "1050" — 24h no colon
+    // Format: "0800", "1050" - 24h no colon
     const militaryMatch = startTimeStr.match(/^(\d{2})(\d{2})$/);
-    // Format: "10:00 AM", "8:30 pm" — 12h with colon
+    // Format: "10:00 AM", "8:30 pm" - 12h with colon
     const colonMatch = startTimeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
 
     if (militaryMatch) {
