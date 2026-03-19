@@ -756,6 +756,12 @@ async def syncCompletionLogs(
             ))
     db.commit()
     return {"status": "success"}
+
+@app.get("/completion-logs")
+async def getCompletionLogs(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    logs = db.query(CompletionLog).filter(CompletionLog.user_id == user_id).all()
+    return {"logs": [{"date": l.date, "minutes_studied": l.minutes_studied, "module_tag": l.module_tag} for l in logs]}
+
 @app.get("/study-plan/{material_id}")
 async def getStudyMaterial(material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     material = db.query(StudyMaterial).filter(

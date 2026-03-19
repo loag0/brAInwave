@@ -589,6 +589,19 @@ export const LocalDB = {
     );
   },
 
+  syncCompletionLogsFromServer: (userId: string, logs: any[]) => {
+    for (const l of logs) {
+      db.runSync(
+        `INSERT INTO completion_logs (user_id, date, minutes_studied, module_tag, is_dirty)
+       VALUES (?, ?, ?, ?, 0)
+       ON CONFLICT(user_id, date, module_tag) DO UPDATE SET
+         minutes_studied = excluded.minutes_studied,
+         is_dirty = CASE WHEN is_dirty = 1 THEN 1 ELSE 0 END`,
+        [userId, l.date, l.minutes_studied, l.module_tag ?? null],
+      );
+    }
+  },
+
   getWeeklyActivity: (userId: string) => {
     return db.getAllSync(
       `SELECT date, minutes_studied FROM completion_logs

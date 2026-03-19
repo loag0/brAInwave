@@ -398,6 +398,12 @@ export const useContent = () => {
             log(`Pulled ${remoteGoals.goals.length} module goals`);
           }
 
+          const remoteLogs = await BrainwaveAPI.getCompletionLogs();
+          if (remoteLogs?.logs) {
+            LocalDB.syncCompletionLogsFromServer(user.id, remoteLogs.logs);
+            log(`Pulled ${remoteLogs.logs.length} completion logs`);
+          }
+
           await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
           log("Cache timestamp updated");
         } else {

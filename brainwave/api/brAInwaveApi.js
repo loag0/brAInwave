@@ -223,6 +223,11 @@ class BrAInwaveAPI {
     return response.data;
   }
 
+  async getCompletionLogs() {
+    const response = await axios.get(`${API_BASE_URL}/completion-logs`);
+    return response.data;
+  }
+  
   async generateFlashcards(userId, materialId) {
     const response = await axios.post(
       `${API_BASE_URL}/generate-flashcards`,
