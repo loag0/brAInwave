@@ -77,6 +77,13 @@
           }
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/adaptive-icon.png",
+          "color": "#4772fa"
+        }
+      ],
       "expo-font",
       "expo-sqlite",
       "expo-web-browser",
