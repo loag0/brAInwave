@@ -134,10 +134,10 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded && !isLoading && !isThemeLoading) {
+    if (fontsLoaded && !isLoading && !isThemeLoading && hasSeenWelcome !== null) {
       setTimeout(() => SplashScreen.hideAsync(), 100);
     }
-  }, [fontsLoaded, isLoading, isThemeLoading]);
+  }, [fontsLoaded, isLoading, isThemeLoading, hasSeenWelcome]);
 
   useEffect(() => {
     if (isLoading || !fontsLoaded || isThemeLoading || hasSeenWelcome === null)

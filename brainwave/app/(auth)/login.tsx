@@ -79,47 +79,43 @@ export default function LoginScreen() {
 
   // --- Handle Google Auth Response ---
   useEffect(() => {
-    if (response?.type === "success") {
-      setIsProcessing(true);
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
+    if (response?.type !== "success") return;
 
-      const handleGoogleFirebaseSync = async () => {
-        try {
-          const userCredential = await signInWithCredential(auth, credential);
-          const firebaseUser = userCredential.user;
+    //setIsProcessing(true);
+    const { id_token } = response.params;
+    const credential = GoogleAuthProvider.credential(id_token);
 
-          const userDocRef = doc(firestore, "users", firebaseUser.uid);
-          const userSnap = await getDoc(userDocRef);
+    const handleGoogleFirebaseSync = async () => {
+      try {
+        const userCredential = await signInWithCredential(auth, credential);
+        const firebaseUser = userCredential.user;
+        const userDocRef = doc(firestore, "users", firebaseUser.uid);
+        const userSnap = await getDoc(userDocRef);
 
-          if (!userSnap.exists()) {
-            const newProfile = {
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || "User",
-              email: firebaseUser.email || "",
-              hasFinishedSetup: false,
-              studyPreferences: {
-                isMorningPerson: true,
-                preferredSessionLength: "medium" as const,
-              },
-              createdAt: new Date().toISOString(),
-            };
-            await setDoc(userDocRef, newProfile);
-          }
-          // Note: Root Layout NavigationHandler handles the redirect from here
-        } catch (err: any) {
-          setIsProcessing(false);
-          showAlert({
-            title: "Google Sync Error",
-            message: err.message,
-          });
+        if (!userSnap.exists()) {
+          const newProfile = {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || "User",
+            email: firebaseUser.email || "",
+            hasFinishedSetup: false,
+            studyPreferences: {
+              isMorningPerson: true,
+              preferredSessionLength: "medium" as const,
+            },
+            createdAt: new Date().toISOString(),
+          };
+          await setDoc(userDocRef, newProfile);
         }
-      };
+      } catch (err: any) {
+        setIsProcessing(false);
+        showAlert({
+          title: "Google Sync Error",
+          message: err.message,
+        });
+      }
+    };
 
       handleGoogleFirebaseSync();
-    } else if (response?.type === "cancel" || response?.type === "error") {
-      setIsProcessing(false);
-    }
   }, [response, showAlert]);
 
   // --- Helper Functions ---
@@ -287,9 +283,10 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={[styles.googleButton, { borderColor: theme.colors.primary }]}
-          onPress={() => {
+          onPress={async () => {
             setIsProcessing(true);
-            promptAsync();
+            const result = await promptAsync();
+            if (!result || result.type !== "success") setIsProcessing(false);
           }}
           disabled={!request}
         >
