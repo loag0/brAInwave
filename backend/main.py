@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from google import genai
 from google.genai import types
 from sqlalchemy.orm import Session
@@ -13,10 +14,37 @@ from typing import List, Optional
 from urllib.parse import unquote
 from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashcard, DailyPlan, init_db, engine, CompletionLog
 from dotenv import load_dotenv
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 
 # 1. Setup environment and Database
 load_dotenv()
+
+# Maximum file upload size: 10MB
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
+# Rate limiting setup
+def _rate_limit_key(request: Request) -> str:
+    """Extract the Firebase token from the Authorization header as the rate limit key."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "")
+    return token or (request.client.host if request.client else "unknown")
+
+limiter = Limiter(key_func=_rate_limit_key)
+
 app = FastAPI(title="brAInwave API", version="1.0.0")
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "rate_limit_exceeded",
+            "detail": f"Too many requests. Slow down cuh",
+            "retry_after": exc.detail,
+        },
+    )
 
 # Initialize Firebase Admin
 firebase_env = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
@@ -128,7 +156,8 @@ class ModuleGoalSync(BaseModel):
 # --- Routes ---
 
 @app.post("/upload-syllabus")
-async def processSyllabus(user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def processSyllabus(request: Request, user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Analyzes a syllabus PDF/image and generates a study plan using Gemini.
     Saves to Supabase (via SQLAlchemy).
@@ -137,6 +166,8 @@ async def processSyllabus(user_id: str = Depends(verify_token), file: UploadFile
         fileName = unquote(file.filename or "Uploaded_syllabus")
         cleanTitle = fileName.rsplit('.', 1)[0].replace('_', ' ')
         content = await file.read()
+        if len(content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         mime_type = file.content_type or "text/plain"
 
         prompt = """
@@ -214,7 +245,8 @@ async def processSyllabus(user_id: str = Depends(verify_token), file: UploadFile
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload-assignment")
-async def processAssignment(user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def processAssignment(request: Request, user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Extracts metadata from an assignment PDF and generates a master study plan.
     Saves to Supabase.
@@ -222,6 +254,8 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
     try:
         fileName = unquote(file.filename or "Uploaded_assignment")
         content = await file.read()
+        if len(content) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         mime_type = file.content_type or "application/pdf"
 
         meta_prompt = """
@@ -348,7 +382,8 @@ async def processAssignment(user_id: str = Depends(verify_token), file: UploadFi
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/assignments")
-async def listAssignments(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def listAssignments(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     assignments = db.query(Assignment).filter(
         Assignment.user_id == user_id,
         Assignment.is_deleted == 0
@@ -356,7 +391,8 @@ async def listAssignments(user_id: str = Depends(verify_token), db: Session = De
     return {"assignments": assignments}
 
 @app.get("/assignment/{assignment_id}")
-async def getAssignment(assignment_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def getAssignment(request: Request, assignment_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     assignment = db.query(Assignment).filter(
         Assignment.id == assignment_id,
         Assignment.user_id == user_id,
@@ -367,7 +403,8 @@ async def getAssignment(assignment_id: int, user_id: str = Depends(verify_token)
     return assignment
 
 @app.delete("/assignment/{assignment_id}")
-async def deleteAssignment(assignment_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def deleteAssignment(request: Request, assignment_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     assignment = db.query(Assignment).filter(
         Assignment.id == assignment_id,
         Assignment.user_id == user_id
@@ -380,7 +417,8 @@ async def deleteAssignment(assignment_id: int, user_id: str = Depends(verify_tok
     return {"status": "success", "message": "Assignment deleted successfully"}
 
 @app.patch("/assignment/{assignment_id}/due-date")
-async def updateAssignmentDueDate(assignment_id: int, data: DueDateUpdate, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def updateAssignmentDueDate(request: Request, assignment_id: int, data: DueDateUpdate, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     # Fetch by id only - user_id verified via token, no filter needed
     assignment = db.query(Assignment).filter(
         Assignment.id == assignment_id,
@@ -396,12 +434,15 @@ async def updateAssignmentDueDate(assignment_id: int, data: DueDateUpdate, user_
     return {"status": "success"}
 
 @app.post("/upload-timetable")
-async def uploadTimetable(user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def uploadTimetable(request: Request, user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
     Parses a timetable PDF to extract a weekly class template.
     Saves to Supabase.
     """
     content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
     prompt = """
         You are brAInwave, a smart study planning assistant for college students.
         Extract the class schedule from this document.
@@ -448,7 +489,8 @@ async def uploadTimetable(user_id: str = Depends(verify_token), file: UploadFile
     return {"id": newTimetable.id, "user_id": user_id, "weekly_template": weeklyTemplate}
 
 @app.get("/timetables")
-async def listTimetables(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def listTimetables(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     timetables = db.query(Timetable).filter(
         Timetable.user_id == user_id,
         Timetable.is_deleted == 0
@@ -465,7 +507,8 @@ async def listTimetables(user_id: str = Depends(verify_token), db: Session = Dep
     return {"timetables": result}
 
 @app.delete("/timetable/{timetable_id}")
-async def deleteTimetable(timetable_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def deleteTimetable(request: Request, timetable_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     timetable = db.query(Timetable).filter(
         Timetable.id == timetable_id,
         Timetable.user_id == user_id
@@ -478,7 +521,8 @@ async def deleteTimetable(timetable_id: int, user_id: str = Depends(verify_token
     return {"status": "success", "message": "Timetable deleted successfully"}
 
 @app.post("/timetables")
-async def syncTimetable(data: TimetableSync, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def syncTimetable(request: Request, data: TimetableSync, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     newTimetable = Timetable(
         user_id=user_id,
         title=data.title,
@@ -490,7 +534,8 @@ async def syncTimetable(data: TimetableSync, user_id: str = Depends(verify_token
     return {"id": newTimetable.id, "status": "synced"}
 
 @app.post("/study-materials")
-async def syncStudyMaterial(data: StudyMaterialSync, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def syncStudyMaterial(request: Request, data: StudyMaterialSync, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     """
     Syncs a text-only study material to Supabase.
     Used by syncDirtyRecords for materials without a file.
@@ -507,19 +552,22 @@ async def syncStudyMaterial(data: StudyMaterialSync, user_id: str = Depends(veri
     return {"id": material.id, "status": "synced"}
 
 @app.post("/daily-plan")
-async def saveDailyPlan(data: DailyPlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def saveDailyPlan(request: Request, data: DailyPlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     pass
 
 # --- Module Goal Sync ---
 
 @app.get("/module-goals")
-async def getModuleGoals(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def getModuleGoals(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     from database import ModuleGoal
     goals = db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).all()
     return {"goals": goals}
 
 @app.post("/module-goals")
-async def syncModuleGoals(goals: List[ModuleGoalSync], user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def syncModuleGoals(request: Request, goals: List[ModuleGoalSync], user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     from database import ModuleGoal
 
     db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).delete()
@@ -553,7 +601,8 @@ async def syncModuleGoals(goals: List[ModuleGoalSync], user_id: str = Depends(ve
     return {"status": "success", "id": plan.id}
 
 @app.post("/generate-plan")
-async def generateDailyPlan(request: PlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def generateDailyPlan(request: Request, plan_data: PlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     """
     Uses Gemini to generate a personalized daily study schedule.
     Saves the result to Supabase.
@@ -568,15 +617,15 @@ async def generateDailyPlan(request: PlanRequest, user_id: str = Depends(verify_
 
         weeklyTemplate = json.loads(str(timetable.structuredData))
 
-        dayOfWeekName = datetime.strptime(request.date, "%Y-%m-%d").strftime("%A")
+        dayOfWeekName = datetime.strptime(plan_data.date, "%Y-%m-%d").strftime("%A")
         todaysClasses = weeklyTemplate.get(dayOfWeekName.lower(), [])
-        customTaskList = [t.model_dump() for t in request.customTasks] if request.customTasks else []
+        customTaskList = [t.model_dump() for t in plan_data.customTasks] if plan_data.customTasks else []
 
         prefs = {
-            "isMorningPerson": request.isMorningPerson,
-            "sessionLength": request.preferredSessionLength,
-            "mode": request.mode,
-            "subjectPriorities": request.subjectPriorities
+            "isMorningPerson": plan_data.isMorningPerson,
+            "sessionLength": plan_data.preferredSessionLength,
+            "mode": plan_data.mode,
+            "subjectPriorities": plan_data.subjectPriorities
         }
 
         assignments = db.query(Assignment).filter(
@@ -595,24 +644,24 @@ async def generateDailyPlan(request: PlanRequest, user_id: str = Depends(verify_
             classes=todaysClasses,
             assignments=assignment_list,
             materials=materials_list,
-            date=request.date,
+            date=plan_data.date,
             dayOfWeek=dayOfWeekName.capitalize(),
             prefs=prefs,
             customTasks=customTaskList,
-            userNote=request.userNote
+            userNote=plan_data.userNote
         )
 
         items_json = json.dumps(generatedItems)
         plan = db.query(DailyPlan).filter(
             DailyPlan.user_id == user_id,
-            DailyPlan.date == request.date
+            DailyPlan.date == plan_data.date
         ).first()
 
         if plan:
             plan.items_json = items_json
             plan.generated_at = datetime.now(timezone.utc)
         else:
-            plan = DailyPlan(user_id=user_id, date=request.date, items_json=items_json)
+            plan = DailyPlan(user_id=user_id, date=plan_data.date, items_json=items_json)
             db.add(plan)
 
         db.commit()
@@ -718,7 +767,8 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
     return result.get("items", [])
 
 @app.get("/daily-plans")
-async def listDailyPlans(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def listDailyPlans(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     plans = db.query(DailyPlan).filter(
         DailyPlan.user_id == user_id
     ).order_by(DailyPlan.date.desc()).all()
@@ -733,7 +783,9 @@ async def listDailyPlans(user_id: str = Depends(verify_token), db: Session = Dep
     return {"plans": result}
 
 @app.post("/completion-logs")
+@limiter.limit("30/minute")
 async def syncCompletionLogs(
+    request: Request,
     logs: List[CompletionLogEntry],
     user_id: str = Depends(verify_token),
     db: Session = Depends(get_db)
@@ -758,12 +810,14 @@ async def syncCompletionLogs(
     return {"status": "success"}
 
 @app.get("/completion-logs")
-async def getCompletionLogs(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def getCompletionLogs(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     logs = db.query(CompletionLog).filter(CompletionLog.user_id == user_id).all()
     return {"logs": [{"date": l.date, "minutes_studied": l.minutes_studied, "module_tag": l.module_tag} for l in logs]}
 
 @app.get("/study-plan/{material_id}")
-async def getStudyMaterial(material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def getStudyMaterial(request: Request, material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     material = db.query(StudyMaterial).filter(
         StudyMaterial.id == material_id,
         StudyMaterial.user_id == user_id,
@@ -774,7 +828,8 @@ async def getStudyMaterial(material_id: int, user_id: str = Depends(verify_token
     return {"id": material.id, "title": material.title, "aiPlan": material.aiPlan, "createdAt": material.created_at}
 
 @app.get("/study-plans")
-async def listStudyPlans(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def listStudyPlans(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     materials = db.query(StudyMaterial).filter(
         StudyMaterial.user_id == user_id,
         StudyMaterial.is_deleted == 0
@@ -782,7 +837,8 @@ async def listStudyPlans(user_id: str = Depends(verify_token), db: Session = Dep
     return {"count": len(materials), "plans": [{"id": m.id, "title": m.title, "createdAt": m.created_at} for m in materials]}
 
 @app.get("/daily-plan/{date}")
-async def getDailyPlan(date: str, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def getDailyPlan(request: Request, date: str, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     try:
         plan = db.query(DailyPlan).filter(
             DailyPlan.user_id == user_id,
@@ -795,7 +851,8 @@ async def getDailyPlan(date: str, user_id: str = Depends(verify_token), db: Sess
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/study-plan/{material_id}")
-async def deleteStudyMaterial(material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def deleteStudyMaterial(request: Request, material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     material = db.query(StudyMaterial).filter(
         StudyMaterial.id == material_id,
         StudyMaterial.user_id == user_id
@@ -808,7 +865,8 @@ async def deleteStudyMaterial(material_id: int, user_id: str = Depends(verify_to
     return {"status": "success"}
 
 @app.post("/generate-flashcards")
-async def generateFlashcards(material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def generateFlashcards(request: Request, material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     try:
         material = db.query(StudyMaterial).filter(
             StudyMaterial.id == material_id,
@@ -893,7 +951,8 @@ async def generateFlashcards(material_id: int, user_id: str = Depends(verify_tok
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/flashcards/{material_id}")
-async def getFlashcards(material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("60/minute")
+async def getFlashcards(request: Request, material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     cards = db.query(Flashcard).filter(
         Flashcard.user_id == user_id,
         Flashcard.material_id == material_id
@@ -901,7 +960,8 @@ async def getFlashcards(material_id: int, user_id: str = Depends(verify_token), 
     return {"status": "success", "flashcards": cards}
 
 @app.delete("/daily-plan/{date}/{task_id}")
-async def deleteDailyTask(date: str, task_id: str, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def deleteDailyTask(request: Request, date: str, task_id: str, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     try:
         plan = db.query(DailyPlan).filter(
             DailyPlan.user_id == user_id,
@@ -923,9 +983,11 @@ async def deleteDailyTask(date: str, task_id: str, user_id: str = Depends(verify
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
-def readRoot():
+@limiter.limit("60/minute")
+def readRoot(request: Request):
     return {"message": "brAInwave API running", "version": "1.0.0"}
 
 @app.get("/health")
-def healthCheck():
+@limiter.limit("60/minute")
+def healthCheck(request: Request):
     return {"status": "ok"}

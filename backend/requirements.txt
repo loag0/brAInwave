@@ -10,3 +10,4 @@ PyPDF2
 python-multipart
 pydantic
 psycopg2-binary
+slowapi

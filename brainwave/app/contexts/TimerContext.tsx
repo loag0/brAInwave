@@ -103,7 +103,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
         syncTimer();
       }, 1000);
     } else {
-      expectedEndTimeRef.current = null;
+      //expectedEndTimeRef.current = null;
       clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
