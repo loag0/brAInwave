@@ -66,9 +66,12 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
       const today = new Date().toISOString().split("T")[0];
 
       if (user?.id) {
-        // Log locally for streaks/charts
-        LocalDB.logStudyTime(user.id, today, studyMins, selectedModules ?? undefined);
-        backgroundSync(user.id);
+        try {
+          LocalDB.logStudyTime(user.id, today, studyMins, selectedModules ?? undefined);
+          backgroundSync(user.id);
+        } catch (e) {
+          console.error('Failed to log study time:', e);
+        }
       }
 
       showAlert({

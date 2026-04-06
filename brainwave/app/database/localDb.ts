@@ -148,6 +148,26 @@ export const LocalDB = {
         `ALTER TABLE completion_logs ADD COLUMN is_dirty INTEGER DEFAULT 1`,
       );
     } catch {}
+    // Fix: deduplicate rows that accumulated due to NULL not conflicting in UNIQUE constraint
+    try {
+      db.execSync(`
+        DELETE FROM completion_logs WHERE rowid NOT IN (
+          SELECT MIN(rowid) FROM completion_logs
+          GROUP BY user_id, date, COALESCE(module_tag, '')
+        )
+      `);
+    } catch {}
+    // Fix: replace NULL module_tag with '' so UNIQUE(user_id, date, module_tag) works correctly
+    try {
+      db.execSync(`UPDATE completion_logs SET module_tag = '' WHERE module_tag IS NULL`);
+    } catch {}
+    // Fix: create the missing unique index on existing installs (ALTER TABLE only added the column, not the constraint)
+    try {
+      db.execSync(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_completion_logs_unique
+        ON completion_logs(user_id, date, module_tag)
+      `);
+    } catch {}
   },
 
   async saveUser(user: any) {
@@ -563,7 +583,7 @@ export const LocalDB = {
      ON CONFLICT(user_id, date, module_tag) DO UPDATE SET
        minutes_studied = minutes_studied + ?,
        is_dirty = 1`,
-      [userId, date, minutes, moduleTag ?? null, minutes],
+      [userId, date, minutes, moduleTag ?? '', minutes],
     );
   },
 
@@ -597,7 +617,7 @@ export const LocalDB = {
        ON CONFLICT(user_id, date, module_tag) DO UPDATE SET
          minutes_studied = excluded.minutes_studied,
          is_dirty = CASE WHEN is_dirty = 1 THEN 1 ELSE 0 END`,
-        [userId, l.date, l.minutes_studied, l.module_tag ?? null],
+        [userId, l.date, l.minutes_studied, l.module_tag ?? ''],
       );
     }
   },
@@ -649,7 +669,7 @@ export const LocalDB = {
     return db.getAllSync(
       `SELECT module_tag, SUM(minutes_studied) as total_minutes
      FROM completion_logs
-     WHERE user_id = ? AND module_tag IS NOT NULL
+     WHERE user_id = ? AND module_tag != ''
      AND date >= date('now', '-7 days')
      GROUP BY module_tag
      ORDER BY total_minutes DESC`,
