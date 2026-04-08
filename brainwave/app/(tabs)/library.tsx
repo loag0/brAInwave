@@ -138,7 +138,7 @@ export default function Library() {
   useFocusEffect(
     useCallback(() => {
       if (activeTab === "library") {
-        refresh(true);
+        refresh();
       } else {
         loadInsights();
       }

@@ -195,8 +195,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const logout = async () => {
+    // if (user?.id) LocalDB.clearUser(user.id);
     await signOut(auth);
-    // Optional: Clear SQLite on logout if you want security
   };
 
   const deleteAccount = async () => {

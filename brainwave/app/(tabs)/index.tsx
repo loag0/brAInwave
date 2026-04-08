@@ -44,7 +44,7 @@ import { LocalDB } from "../database/localDb";
 
 const HomeSkeleton = ({ styles, theme }: any) => (
   <View style={styles.container}>
-    <ScrollView style={styles.scrollView}>
+    <ScrollView style={[styles.scrollView, { paddingTop: 32 }]}>
       <View style={styles.headerBg}>
         <View style={styles.headerContent}>
           <Skeleton width={180} height={28} style={{ marginBottom: 8 }} />

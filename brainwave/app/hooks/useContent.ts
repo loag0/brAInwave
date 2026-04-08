@@ -4,6 +4,7 @@ import BrainwaveAPI from "@/api/brAInwaveApi";
 import { useAuth } from "../contexts/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
+import Toast from "react-native-toast-message";
 
 export interface StudyPlan {
   id: string;
@@ -34,6 +35,7 @@ export const useContent = () => {
   const [isOnlineStatus, setIsOnlineStatus] = useState<boolean | null>(null);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const isSyncing = useRef(false);
+  const lastErrorToast = useRef(0);
   const [error, setError] = useState<string | null>(null);
 
   //checks connectivity on mount
@@ -420,6 +422,17 @@ export const useContent = () => {
       } catch (err: any) {
         log(`fetchData error: ${err.message}`);
         setError("Failed to sync with cloud.");
+        const now = Date.now();
+        if (now - lastErrorToast.current > 30000) {
+          lastErrorToast.current = now;
+          Toast.show({
+            type: "error",
+            text1: "Couldn't reach the server",
+            text2: "Showing local data. Check your connection.",
+            position: "bottom",
+            visibilityTime: 4000,
+          });
+        }
       } finally {
         setIsLoading(false);
       }
