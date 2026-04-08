@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 from typing import Optional
+
+load_dotenv()
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column
 from datetime import datetime, timezone
