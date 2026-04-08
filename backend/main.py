@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from google import genai
 from google.genai import types
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 from datetime import datetime, timezone
 import firebase_admin
@@ -790,11 +791,15 @@ async def syncCompletionLogs(
     user_id: str = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
+    # Migrate any old NULL module_tag rows to '' for consistency with client
+    db.execute(text("UPDATE completion_logs SET module_tag = '' WHERE module_tag IS NULL"))
+
     for entry in logs:
+        tag = entry.module_tag if entry.module_tag is not None else ''
         existing = db.query(CompletionLog).filter(
             CompletionLog.user_id == user_id,
             CompletionLog.date == entry.date,
-            CompletionLog.module_tag == entry.module_tag
+            CompletionLog.module_tag == tag
         ).first()
 
         if existing:
@@ -804,7 +809,7 @@ async def syncCompletionLogs(
                 user_id=user_id,
                 date=entry.date,
                 minutes_studied=entry.minutes_studied,
-                module_tag=entry.module_tag,
+                module_tag=tag,
             ))
     db.commit()
     return {"status": "success"}

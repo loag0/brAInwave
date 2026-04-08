@@ -509,47 +509,34 @@ export const useContent = () => {
     createAssignment: async (title: string, uri: string, type: string) => {
       if (!user?.id) return null;
 
-      log(`Creating assignment locally: ${title}`);
-      const localId = await LocalDB.createAssignmentLocally(
+      const online = await isOnline();
+      if (!online) {
+        throw new Error("You're offline. Connect to the internet and try again.");
+      }
+
+      log(`Uploading assignment: ${title}`);
+      const result = await BrainwaveAPI.uploadAssignment(user.id, uri, title, type);
+
+      const localId = LocalDB.createAssignmentLocally(
         user.id,
-        title,
-        "Analyzing...",
-        "Pending",
-        "medium",
-        "brAInwave is analyzing your assignment...",
+        result.assignment.title || title,
+        result.assignment.subject,
+        result.assignment.due_date,
+        result.assignment.priority,
+        result.assignment.rawContent || "",
         uri,
         type,
       );
+      LocalDB.markAssignmentSynced(localId, result.id, {
+        title: result.assignment.title,
+        subject: result.assignment.subject,
+        due_date: result.assignment.due_date,
+        due_time: result.assignment.due_time,
+        priority: result.assignment.priority,
+        rawContent: result.assignment.rawContent || "",
+      });
       setAssignments(await LocalDB.getAllAssignments(user.id));
-
-      const online = await isOnline();
-      if (!online) {
-        log(`Offline - assignment saved locally, will sync later: ${title}`);
-        return localId;
-      }
-
-      try {
-        log(`Immediate assignment upload: ${title}`);
-        const result = await BrainwaveAPI.uploadAssignment(
-          user.id,
-          uri,
-          title,
-          type,
-        );
-        await LocalDB.markAssignmentSynced(localId, result.id, {
-          title: result.assignment.title,
-          subject: result.assignment.subject,
-          due_date: result.assignment.due_date,
-          due_time: result.assignment.due_time,
-          priority: result.assignment.priority,
-          rawContent: result.assignment.rawContent || "",
-        });
-        setAssignments(await LocalDB.getAllAssignments(user.id));
-        log(`Assignment uploaded: ${title} → remote id ${result.id}`);
-      } catch (err: any) {
-        log(`Immediate assignment upload failed, will retry: ${err.message}`);
-      }
-
+      log(`Assignment uploaded and saved: ${title} → remote id ${result.id}`);
       return localId;
     },
 
