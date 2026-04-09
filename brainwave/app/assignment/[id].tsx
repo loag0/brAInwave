@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Text,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -22,6 +23,7 @@ import { ExportIcon, ICONS } from "@/components/Icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 /**
  * This is so inline code backticks from the AI plan dont render as actual backticks
@@ -273,7 +275,7 @@ export default function AssignmentDetail() {
       </style></head><body>
         <div class="document-header">
           <h1>${data.title}</h1>
-          <p class="branding">Assignment Master Plan by <span style="color:${theme.colors.primary};font-weight:bold;">brAInwave</span></p>
+          <p class="branding">Assignment Master Plan by <span style="color:${theme.colors.primary};font-weight:bold; text-transform:none;">brAInwave</span></p>
         </div>
         <div class="meta-section">
           <div class="meta-item"><strong>Subject:</strong> ${data.subject}</div>
@@ -289,8 +291,29 @@ export default function AssignmentDetail() {
       const targetFile = new File(Paths.cache, fileName);
       if (targetFile.exists) await targetFile.delete();
       await tempFile.move(targetFile);
-      if (await Sharing.isAvailableAsync())
-        await Sharing.shareAsync(targetFile.uri);
+
+      const { StorageAccessFramework } = FileSystem;
+      if (Platform.OS === "android") {
+        const permissions =
+          await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const base64Content = await FileSystem.readAsStringAsync(
+            targetFile.uri,
+            { encoding: FileSystem.EncodingType.Base64 },
+          );
+          const destUri = await StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            fileName,
+            "application/pdf",
+          );
+          await FileSystem.writeAsStringAsync(destUri, base64Content, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        }
+      } else {
+        if (await Sharing.isAvailableAsync())
+          await Sharing.shareAsync(targetFile.uri);
+      }
     } catch (e) {
       console.error("PDF Export Error:", e);
     }

@@ -22,13 +22,27 @@ Most students don't fail because they're not smart, they fail because they're di
 
 ## Key Features
 
-- **Personalized Study Plans** - brAInwave learns your schedule, preferences, and goals to generate a realistic plan that fits your life, not the other way around.
+- **Personalized Study Plans** - brAInwave learns your schedule, preferences, and goals to generate a realistic plan that fits your life, not the other way around. Powered by Gemini 3.0 Flash with multimodal PDF parsing in a single pass.
 - **Intelligent Gap Analysis** - Unlike general-purpose AI tools, brAInwave queries your fixed timetable to find actual open windows, not just suggest arbitrary time slots.
-- **Offline-First Knowledge Vault** - All processed documents and study plans are stored locally. You can interact with your roadmap and export to PDF with no internet connection.
-- **Integrated Deep Work Timer (Pomodoro)** - Transition from planning to execution without leaving the app. Focus sessions are tracked locally and synced to the cloud.
-- **Contextual Push Notifications** - Native alerts tied to your daily schedule remind you when a study block is coming up, so your plan stays actionable.
+- **Offline-First Knowledge Vault** - All processed documents and study plans are stored locally in SQLite. You can interact with your roadmap and export to PDF with no internet connection.
+- **Integrated Deep Work Timer (Pomodoro)** - Transition from planning to execution without leaving the app. Focus sessions are tracked locally and synced to Supabase — works fully offline.
+- **Contextual Push Notifications** - Native alerts tied to your actual timetable gaps remind you when a study block is coming up. Not arbitrary reminders — reminders that know your schedule.
 - **Custom Task Support** - Add your own tasks alongside AI-generated ones. The engine incorporates them into the optimization process.
-- **Production-Grade Document Export** - Export study plans as polished PDFs with high-fidelity formatting.
+- **Production-Grade Document Export** - Export study plans as polished PDFs. On Android, files save directly to your chosen folder via the Storage Access Framework; on iOS, via the native share sheet.
+
+---
+
+## Core User Flow
+
+1. **Sign in** with Google via Firebase Authentication
+2. **Set up your timetable** — enter your fixed weekly class schedule so the app knows your unavailable windows
+3. **Upload a syllabus PDF** — brAInwave sends it to the backend where Gemini parses it and extracts topics, deadlines, and weightings
+4. **AI generates your study plan** — a conflict-aware roadmap is built around your open windows and returned as structured tasks
+5. **Study plan lands in your Library** — tasks are surfaced on the Home screen, ordered by priority and due date
+6. **Start a Pomodoro session** — tap any task to begin a focus block; sessions are logged locally and synced to the cloud
+7. **Push notifications** fire before upcoming study blocks based on your timetable
+8. **Export to PDF** — download a formatted version of your study plan directly to your device
+9. **Go offline** — all data remains accessible; any changes are flagged and synced automatically when you're back online
 
 ---
 
@@ -50,10 +64,10 @@ The application is built on a distributed architecture that prioritizes local pe
 
 brAInwave uses a **Write-Ahead Sync (Dirty Flag)** pattern to ensure seamless operation in low-connectivity environments like libraries or commutes.
 
-1. **Local Execution** - All user actions (uploading a syllabus, checking off a task) are first committed to the local SQLite database.
-2. **State Tracking** - Rows are marked with an `is_dirty` flag and assigned a temporary local UUID.
-3. **Cloud Reconciliation** - A background sync service pushes dirty records to the FastAPI backend. On a successful commit to Supabase, the backend returns a production `remote_id`.
-4. **Conflict Resolution** - The client updates local records with the `remote_id` and clears the `is_dirty` flag, ensuring consistency without duplicates.
+1. **Local Execution** - All user actions are first committed to the local SQLite database
+2. **State Tracking** - Rows are marked with an `is_dirty` flag and assigned a temporary local UUID
+3. **Cloud Reconciliation** - A background sync service pushes dirty records to the FastAPI backend; on success, the backend returns a production `remote_id`
+4. **Conflict Resolution** - The client updates local records with the `remote_id` and clears the `is_dirty` flag, ensuring consistency without duplicates
 
 ---
 
@@ -67,15 +81,13 @@ brAInwave uses a **Write-Ahead Sync (Dirty Flag)** pattern to ensure seamless op
 - A Railway account for backend hosting
 - A Supabase project for the cloud database
 - A Gemini API key
-- A Firebase project for Google authentication (a Google Cloud project is created automatically alongside it)
-- OAuth 2.0 credentials configured in Google Cloud (Android, iOS and Web clients)
+- A Firebase project for Google authentication
 
 ### 1. Clone the repository
 
 ```bash
 git clone https://github.com/loag0/brAInwave.git
-cd brainwave 
-#or cd backend
+cd brainwave
 ```
 
 ### 2. Configure the backend (`/backend`)
@@ -99,6 +111,8 @@ Environment variables use the `EXPO_PUBLIC_` prefix.
 
 > Example `.env` structure is included in the `/brainwave` folder.
 
+> Google Sign-In is configured via Firebase.
+
 ### 4. Run the app
 
 ```bash
@@ -110,84 +124,6 @@ npx expo run:ios
 # Production build
 eas build --platform android --profile production
 ```
-
----
-
-## Google Authentication Setup
-
-brAInwave uses Google Sign-in via Firebase Authentication. This is one of the more involved parts of the setup because it requires coordinating credentials across three places: Google Cloud, Firebase and EAS. Getting any one of them out of sync will break auth silently
-
-### Overview
-Google Sign-In requires a separate `OAuth 2.0 Client` for each platform (Android, iOS, Web). Each client ID tells Google which app is allowed to initiate the sign-in flow. Firebase acts as the auth middleware between your app and Google.
-
-### Step 1 - Enable Google as a sign-in provider
-1. Go to your firebase console
-2. Find and enable **Google** under **Authentication > Sign-in method**.
-3. Register an app for each platform you intend to support under **Project Settings > Your apps**.
-
-### Step 2 - Generate your SHA certificate fingerprints (Android only)
-Android Google Sign-In requires your app's SHA-1 (and optionally SHA-256) fingerprint to be registered in both Firebase and Google Cloud. You need two fingerprints: one for local development and one for production EAS builds.
-
-**Local / debug fingerprint:**
-```bash
-npx expo run:android
-# Then check the terminal output for the debug keystore SHA-1, or run:
-keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
-```
-
-**Production fingerprint (EAS managed keystore):**
-```bash
-eas credentials --platform android
-# Select your build profile and choose "Set up a new keystore" or view existing
-# EAS will display the SHA-1 and SHA-256 fingerprints for the managed keystore
-```
-
-Add both fingerprints to your Firebase Android app under **Project Settings > Your apps > Android app > Add fingerprint**.
-
-### Step 3 - Configure Google Cloud OAuth clients
-Firebase automatically creates some OAuth clients, but you need to verify and configure them manually in the [Google Cloud Console](https://console.cloud.google.com/) under **APIs and Services > Credentials**.
-
-Create or confirm the following clients exist:
-
-| Client Type | Used For | Notes |
-| :--- | :--- | :--- |
-| **Android** | Native Android Sign-In | Requires package name + SHA-1 fingerprint. Create one for debug and one for production. |
-| **iOS** | Native iOS Sign-In | Requires your iOS bundle identifier (e.g., `com.username.project_name`) |
-| **Web** | Firebase Auth backend + web builds | Used internally by Firebase; also required for Expo web target |
-
-> The Web client ID is what gets passed as `webClientId` in your app's Google Sign-In configuration. Do not use the Android or iOS client IDs here (ask me how I know lol).
-
-### Step 4 - Configure EAS credentials
-EAS Build needs to use the same keystore that generated the SHA fingerprint you registered in Firebase. If EAS generates a new keystore at build time, the fingerprint won't match and Google Sign-In will fail in production
-
-```bash
-#Lock in your credentials before building
-eas credentials --platform android
-```
-
-Select your production profile and confirm EAS is using the managed keystore whose SHA fingerprint is already registered. Do not let EAS auto-generate a new one mid-project.
-
-For iOS, EAS handles provisioning profiles and certificates. Ensure the bundle identifier in `app.json` matches the one registered in your Firebase iOS app exactly.
-
-### Step 5 - Environment variables
-
-Add the following to your `/brainwave/.env` (and to the Expo Dashboard for EAS builds):
-
-```env
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=       # Web client ID from Google Cloud Console
-EXPO_PUBLIC_FIREBASE_API_KEY=           # From Firebase project settings
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=       # e.g., your-project.firebaseapp.com
-EXPO_PUBLIC_FIREBASE_PROJECT_ID=        # Your Firebase project ID
-EXPO_PUBLIC_FIREBASE_APP_ID=            # From Firebase project settings
-```
-
-### Common failure points
-
-- **NEVER EVER use Expo Go** - If you're testing Google auth locally, always use a dev build otherwise it won't work (ask me how I know).
-- **Sign-in works in dev but fails in production** - The EAS production keystore SHA fingerprint is not registered in Firebase or Google Cloud. Run `eas credentials` and cross-check.
-- **iOS Sign-In fails** - The bundle identifier in `app.json` does not match the one in the Firebase iOS app registration.
-- **`DEVELOPER_ERROR` on Android** - Almost always a SHA fingerprint mismatch. Double-check both the debug and production fingerprints are registered.
-- **Web client ID missing** - Passing the Android client ID as `webClientId` instead of the Web client ID will cause auth to fail on all platforms.
 
 ---
 
@@ -205,10 +141,19 @@ Development builds are required due to native configurations and the modern `exp
 
 ## Project Status
 
-brAInwave is in active development. Core features such as study plan generation, timetable/syllabus upload, document export, and the Pomodoro timer are functional. Cross-device sync via Supabase and final production polish are in progress.
+| Feature | Status |
+| :--- | :--- |
+| Study plan generation (AI) | Complete |
+| Timetable / syllabus upload | Complete |
+| Offline-first local storage | Complete |
+| Pomodoro focus timer | Complete |
+| PDF export (iOS + Android) | Complete |
+| Push notifications | Complete |
+| Cross-device sync (Supabase) | Complete |
+| Google Sign-In | Complete |
 
 ---
 
 ## License
 
-To be added.
+MIT License — see [LICENSE](LICENSE) for details.
