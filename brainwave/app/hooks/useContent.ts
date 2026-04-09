@@ -89,7 +89,9 @@ export const useContent = () => {
         dirtyMaterials.length +
         dirtyTimetables.length +
         dirtyAssignments.length +
-        dirtyPlans.length;
+        dirtyPlans.length +
+        dirtyLogs.length +
+        dirtyModuleGoals.length;
 
       if (totalToSync === 0) {
         log("Nothing dirty to sync");

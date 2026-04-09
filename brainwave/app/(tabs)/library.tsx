@@ -137,11 +137,13 @@ export default function Library() {
 
   useFocusEffect(
     useCallback(() => {
-      if (activeTab === "library") {
-        refresh();
-      } else {
-        loadInsights();
-      }
+      const run = async () => {
+        await refresh();
+        if (activeTab === "insights") {
+          loadInsights();
+        }
+      };
+      run();
     }, [refresh, activeTab, loadInsights]),
   );
 
@@ -473,6 +475,7 @@ export default function Library() {
             {/* Module Study Hours */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Hours by Module</Text>
+              {moduleHours.length !== 0 ? (
               <Text
                 style={[
                   styles.insightText,
@@ -481,6 +484,7 @@ export default function Library() {
               >
                 This week · Tap a module to set a goal
               </Text>
+              ) : null}
               {moduleHours.length === 0 ? (
                 <Text
                   style={[

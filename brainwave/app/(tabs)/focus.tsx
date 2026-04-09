@@ -176,6 +176,7 @@ export default function FocusScreen() {
             text1: "Notifications disabled",
             text2: "You won't be alerted when the timer ends.",
             position: "bottom",
+            visibilityTime: 6000,
           });
         }
 
