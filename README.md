@@ -25,8 +25,8 @@ Most students don't fail because they're not smart, they fail because they're di
 - **Personalized Study Plans** - brAInwave learns your schedule, preferences, and goals to generate a realistic plan that fits your life, not the other way around. Powered by Gemini 3.0 Flash with multimodal PDF parsing in a single pass.
 - **Intelligent Gap Analysis** - Unlike general-purpose AI tools, brAInwave queries your fixed timetable to find actual open windows, not just suggest arbitrary time slots.
 - **Offline-First Knowledge Vault** - All processed documents and study plans are stored locally in SQLite. You can interact with your roadmap and export to PDF with no internet connection.
-- **Integrated Deep Work Timer (Pomodoro)** - Transition from planning to execution without leaving the app. Focus sessions are tracked locally and synced to Supabase — works fully offline.
-- **Contextual Push Notifications** - Native alerts tied to your actual timetable gaps remind you when a study block is coming up. Not arbitrary reminders — reminders that know your schedule.
+- **Integrated Deep Work Timer (Pomodoro)** - Transition from planning to execution without leaving the app. Focus sessions are tracked locally and synced to Supabase - works fully offline.
+- **Contextual Push Notifications** - Native alerts tied to your actual timetable gaps remind you when a study block is coming up. Not arbitrary reminders - reminders that know your schedule.
 - **Custom Task Support** - Add your own tasks alongside AI-generated ones. The engine incorporates them into the optimization process.
 - **Production-Grade Document Export** - Export study plans as polished PDFs. On Android, files save directly to your chosen folder via the Storage Access Framework; on iOS, via the native share sheet.
 
@@ -35,14 +35,14 @@ Most students don't fail because they're not smart, they fail because they're di
 ## Core User Flow
 
 1. **Sign in** with Google via Firebase Authentication
-2. **Set up your timetable** — enter your fixed weekly class schedule so the app knows your unavailable windows
-3. **Upload a syllabus PDF** — brAInwave sends it to the backend where Gemini parses it and extracts topics, deadlines, and weightings
-4. **AI generates your study plan** — a conflict-aware roadmap is built around your open windows and returned as structured tasks
-5. **Study plan lands in your Library** — tasks are surfaced on the Home screen, ordered by priority and due date
-6. **Start a Pomodoro session** — tap any task to begin a focus block; sessions are logged locally and synced to the cloud
+2. **Set up your timetable** - enter your fixed weekly class schedule so the app knows your unavailable windows
+3. **Upload a syllabus PDF** - brAInwave sends it to the backend where Gemini parses it and extracts topics, deadlines, and weightings
+4. **AI generates your study plan** - a conflict-aware roadmap is built around your open windows and returned as structured tasks
+5. **Study plan lands in your Library** - tasks are surfaced on the Home screen, ordered by priority and due date
+6. **Start a Pomodoro session** - tap any task to begin a focus block; sessions are logged locally and synced to the cloud
 7. **Push notifications** fire before upcoming study blocks based on your timetable
-8. **Export to PDF** — download a formatted version of your study plan directly to your device
-9. **Go offline** — all data remains accessible; any changes are flagged and synced automatically when you're back online
+8. **Export to PDF** - download a formatted version of your study plan directly to your device
+9. **Go offline** - all data remains accessible; any changes are flagged and synced automatically when you're back online
 
 ---
 
@@ -156,4 +156,4 @@ Development builds are required due to native configurations and the modern `exp
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License - see [LICENSE](LICENSE) for details.
