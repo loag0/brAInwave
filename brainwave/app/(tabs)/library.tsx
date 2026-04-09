@@ -29,6 +29,7 @@ import Svg, { Path, SvgProps } from "react-native-svg";
 import { useAlert } from "../contexts/AlertContext";
 import BrainwaveLoader from "@/components/BrainwaveLoader";
 import * as DocumentPicker from "expo-document-picker";
+import { backgroundSync } from "@/utils/backgroundSync";
 
 const MaterialSkeleton = ({ theme }: { theme: Theme }) => (
   <View
@@ -633,6 +634,7 @@ export default function Library() {
                                   setModuleGoals(
                                     LocalDB.getModuleGoals(user.id),
                                   );
+                                  backgroundSync(user.id);
                                 }
                                 setEditingGoal(null);
                                 setGoalInput("");
