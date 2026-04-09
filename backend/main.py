@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import anthropic
-from anthropic.types import TextBlock, MessageParam
+from google import genai
+from google.genai import types
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
@@ -11,8 +11,7 @@ import firebase_admin
 from firebase_admin import auth, credentials
 import os
 import json
-import base64
-from typing import List, Optional, cast
+from typing import List, Optional
 from urllib.parse import unquote
 from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashcard, DailyPlan, init_db, engine, CompletionLog
 from dotenv import load_dotenv
@@ -72,12 +71,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-apiKey = os.getenv("CLAUDE_API_KEY")
+apiKey = os.getenv("GEMINI_API_KEY")
 if not apiKey:
-    raise ValueError("CLAUDE_API_KEY not found in environment variables.")
+    raise ValueError("GEMINI_API_KEY not found in environment variables.")
 
-client = anthropic.Anthropic(api_key=apiKey)
-CLAUDE_MODEL = "claude-sonnet-4-20250514"
+client = genai.Client(api_key=apiKey)
 
 # Database Dependency
 def get_db():
@@ -146,7 +144,7 @@ class PlanRequest(BaseModel):
     classes: Optional[List[ClassItem]] = None
     customTasks: Optional[List[CustomTask]] = None
     userNote: Optional[str] = None
-
+    
 class CompletionLogEntry(BaseModel):
     date: str
     minutes_studied: int
@@ -162,7 +160,7 @@ class ModuleGoalSync(BaseModel):
 @limiter.limit("5/minute")
 async def processSyllabus(request: Request, user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Analyzes a syllabus PDF/image and generates a study plan using Claude.
+    Analyzes a syllabus PDF/image and generates a study plan using Gemini.
     Saves to Supabase (via SQLAlchemy).
     """
     try:
@@ -171,7 +169,7 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
         content = await file.read()
         if len(content) > MAX_UPLOAD_SIZE:
             raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
-        mime_type = file.content_type or "application/pdf"
+        mime_type = file.content_type or "text/plain"
 
         prompt = """
         You are brAInwave, an AI study planning engine built for college students. Analyze this syllabus or study material and produce a structured, actionable study plan in clean Markdown.
@@ -216,29 +214,18 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
         LENGTH: Comprehensive but scannable. Use bullet points and sub-bullets, not dense paragraphs.
         """
 
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=4096,
-            messages=cast(list, [{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "document",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mime_type,
-                            "data": base64.b64encode(content).decode("utf-8")
-                        }
-                    },
-                    {"type": "text", "text": prompt}
-                ]
-            }])
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[
+                types.Part.from_text(text=prompt),
+                types.Part.from_bytes(data=content, mime_type=mime_type)
+            ]
         )
 
-        studyPlan = next((block.text for block in response.content if isinstance(block, TextBlock)), None)
-
-        if not studyPlan:
+        if not response.text:
             raise HTTPException(status_code=500, detail="Failed to generate study plan")
+
+        studyPlan = response.text
 
         material = StudyMaterial(
             user_id=user_id,
@@ -285,40 +272,21 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         - marking_criteria: A JSON array of strings describing how marks are allocated, if stated in the document. Return an empty array if not found.
 
         Be precise. Do not guess wildly - use only what is in the document.
-        Respond with valid JSON only. No markdown, no backticks, no explanation.
         """
 
-        meta_response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=1024,
-            messages=cast(list, [{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "document",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mime_type,
-                            "data": base64.b64encode(content).decode("utf-8")
-                        }
-                    },
-                    {"type": "text", "text": meta_prompt}
-                ]
-            }])
+        meta_response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            contents=[
+                types.Part.from_text(text=meta_prompt),
+                types.Part.from_bytes(data=content, mime_type=mime_type)
+            ]
         )
 
-        meta_text = next((block.text for block in meta_response.content if isinstance(block, TextBlock)), None)
-
-        if not meta_text:
+        if not meta_response.text:
             raise HTTPException(status_code=500, detail="Failed to extract assignment metadata")
 
-        raw = meta_text.strip()
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        meta_data = json.loads(raw.strip())
+        meta_data = json.loads(meta_response.text)
 
         assignment_type = meta_data.get("assignment_type", "other")
         estimated_hours = meta_data.get("estimated_hours", "unknown")
@@ -382,26 +350,15 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         FORMATTING: Markdown only. No LaTeX. Unicode for any math symbols.
         """
 
-        guide_response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=4096,
-            messages=cast(list, [{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "document",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mime_type,
-                            "data": base64.b64encode(content).decode("utf-8")
-                        }
-                    },
-                    {"type": "text", "text": guide_prompt}
-                ]
-            }])
+        guide_response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[
+                types.Part.from_text(text=guide_prompt),
+                types.Part.from_bytes(data=content, mime_type=mime_type)
+            ]
         )
 
-        master_plan = next((block.text for block in guide_response.content if isinstance(block, TextBlock)), "")
+        master_plan = guide_response.text
 
         new_assignment = Assignment(
             user_id=user_id,
@@ -463,6 +420,7 @@ async def deleteAssignment(request: Request, assignment_id: int, user_id: str = 
 @app.patch("/assignment/{assignment_id}/due-date")
 @limiter.limit("20/minute")
 async def updateAssignmentDueDate(request: Request, assignment_id: int, data: DueDateUpdate, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    # Fetch by id only - user_id verified via token, no filter needed
     assignment = db.query(Assignment).filter(
         Assignment.id == assignment_id,
     ).first()
@@ -486,9 +444,6 @@ async def uploadTimetable(request: Request, user_id: str = Depends(verify_token)
     content = await file.read()
     if len(content) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
-
-    mime_type = file.content_type or "application/pdf"
-
     prompt = """
         You are brAInwave, a smart study planning assistant for college students.
         Extract the class schedule from this document.
@@ -506,32 +461,21 @@ async def uploadTimetable(request: Request, user_id: str = Depends(verify_token)
            - Humanities/language/social subjects (e.g., History, English, Sociology, Communication, Ethics) → "easy"
            - If unsure, default to "medium".
         5. For 'subject': use the exact course name as it appears in the document. Do not abbreviate or rename.
-
-        Respond with valid JSON only. No markdown, no backticks, no explanation.
     """
 
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=2048,
-        messages=cast(list, [{
-            "role": "user",
-            "content": [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": mime_type,
-                        "data": base64.b64encode(content).decode("utf-8")
-                    }
-                },
-                {"type": "text", "text": prompt}
-            ]
-        }]
-    ))
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+        contents=[
+            types.Part.from_text(text=prompt),
+            types.Part.from_bytes(data=content, mime_type=file.content_type or "application/octet-stream")
+        ]
+    )
 
-    raw = next((block.text for block in response.content if isinstance(block, TextBlock)), "").strip()
+    if not response.text:
+        raise HTTPException(status_code=500, detail="Failed to generate timetable data.")
 
-    timetableData = json.loads(raw)
+    timetableData = json.loads(response.text)
     weeklyTemplate = timetableData.get("weekly_template", {})
 
     newTimetable = Timetable(
@@ -611,6 +555,34 @@ async def syncStudyMaterial(request: Request, data: StudyMaterialSync, user_id: 
 @app.post("/daily-plan")
 @limiter.limit("20/minute")
 async def saveDailyPlan(request: Request, data: DailyPlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    pass
+
+# --- Module Goal Sync ---
+
+@app.get("/module-goals")
+@limiter.limit("60/minute")
+async def getModuleGoals(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    from database import ModuleGoal
+    goals = db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).all()
+    return {"goals": goals}
+
+@app.post("/module-goals")
+@limiter.limit("20/minute")
+async def syncModuleGoals(request: Request, goals: List[ModuleGoalSync], user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    from database import ModuleGoal
+
+    db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).delete()
+    
+    new_goals = [
+        ModuleGoal(
+            user_id=user_id,
+            module_tag=g.module_tag,
+            weekly_goal_minutes=g.weekly_goal_minutes
+        ) for g in goals
+    ]
+    db.add_all(new_goals)
+    db.commit()
+    return {"status": "success"}
     items_json = json.dumps(data.items)
 
     plan = db.query(DailyPlan).filter(
@@ -629,38 +601,11 @@ async def saveDailyPlan(request: Request, data: DailyPlanRequest, user_id: str =
     db.refresh(plan)
     return {"status": "success", "id": plan.id}
 
-# --- Module Goal Sync ---
-
-@app.get("/module-goals")
-@limiter.limit("60/minute")
-async def getModuleGoals(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
-    from database import ModuleGoal
-    goals = db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).all()
-    return {"goals": goals}
-
-@app.post("/module-goals")
-@limiter.limit("20/minute")
-async def syncModuleGoals(request: Request, goals: List[ModuleGoalSync], user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
-    from database import ModuleGoal
-
-    db.query(ModuleGoal).filter(ModuleGoal.user_id == user_id).delete()
-
-    new_goals = [
-        ModuleGoal(
-            user_id=user_id,
-            module_tag=g.module_tag,
-            weekly_goal_minutes=g.weekly_goal_minutes
-        ) for g in goals
-    ]
-    db.add_all(new_goals)
-    db.commit()
-    return {"status": "success"}
-
 @app.post("/generate-plan")
 @limiter.limit("10/minute")
 async def generateDailyPlan(request: Request, plan_data: PlanRequest, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     """
-    Uses Claude to generate a personalized daily study schedule.
+    Uses Gemini to generate a personalized daily study schedule.
     Saves the result to Supabase.
     """
     try:
@@ -742,9 +687,10 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
     if userNote and userNote.strip():
         userInstruction = f"\n\n--- USER'S ADDITIONAL INSTRUCTIONS ---\n{userNote.strip()[:200]}\nTreat this as a high-priority preference when building the schedule."
 
+    # Build canonical subject name list for the model to reference
     class_subjects = [c.get("subject", "") for c in classes if c.get("subject")]
     assignment_subjects = [a.get("title", "") for a in assignments if a.get("title")]
-    all_known_subjects = list(dict.fromkeys(class_subjects + priorityList + assignment_subjects))
+    all_known_subjects = list(dict.fromkeys(class_subjects + priorityList + assignment_subjects))  # deduplicated, order preserved
 
     prompt = f"""
         You are brAInwave, a professional AI Study Architect. Your goal is to build a high-performance daily schedule tailored to a student's specific cognitive profile and academic load.
@@ -778,7 +724,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
 
         --- SCHEDULING RULES ---
         1. CLASSES FIRST: Include every class from Today's Classes as a fixed block. Use each class's actual duration from the data. Mark these with "isCustom": false.
-        2. FIXED TASKS (ZERO TOLERANCE): Every item in Fixed Custom Tasks is a hard constraint.
+        2. FIXED TASKS (ZERO TOLERANCE): Every item in Fixed Custom Tasks is a hard constraint. 
             - Include ALL of them, at their exact times, with "isCustom": true.
             - Before finishing, verify: count Fixed Custom Tasks in input vs output. They must match.
         3. GAP ANALYSIS: Identify all free time gaps between fixed blocks.
@@ -808,18 +754,17 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         }}
         For class blocks, set "task" to "Class Lecture" and use the subject name exactly as it appears in Today's Classes.
         For brain breaks, set "subject" to "Break", "difficulty" to "easy", "isCustom" to false.
-        Respond with valid JSON only. No markdown, no backticks, no explanation.
     """
-
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=4096,
-        messages=cast(list, [{"role": "user", "content": prompt}])
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+        contents=[prompt]
     )
 
-    raw = next((block.text for block in response.content if isinstance(block, TextBlock)), "").strip()
+    if not response.text:
+        raise HTTPException(status_code=500, detail="Failed to generate plan")
 
-    result = json.loads(raw)
+    result = json.loads(response.text)
     return result.get("items", [])
 
 @app.get("/daily-plans")
@@ -858,7 +803,7 @@ async def syncCompletionLogs(
         ).first()
 
         if existing:
-            existing.minutes_studied = entry.minutes_studied
+            existing.minutes_studied = entry.minutes_studied # replace, not increment
         else:
             db.add(CompletionLog(
                 user_id=user_id,
@@ -935,6 +880,7 @@ async def generateFlashcards(request: Request, material_id: int, user_id: str = 
         if not material:
             raise HTTPException(status_code=404, detail="Material not found")
 
+        # Infer subject type to tailor flashcard style
         title_lower = material.title.lower()
         if any(k in title_lower for k in ["math", "calculus", "physics", "algorithm", "network", "engineer", "code", "programming", "software"]):
             subject_type = "technical/mathematical"
@@ -946,6 +892,7 @@ async def generateFlashcards(request: Request, material_id: int, user_id: str = 
             subject_type = "conceptual/humanities"
             card_style = "Focus on key arguments, definitions, theories, dates, and their significance. Questions should test understanding of relationships between ideas."
 
+        # Determine card count based on content length
         content_length = len(material.aiPlan or "")
         card_count = 10 if content_length > 3000 else 7 if content_length > 1500 else 5
 
@@ -973,26 +920,18 @@ async def generateFlashcards(request: Request, material_id: int, user_id: str = 
         8. Return JSON with a single key "flashcards" containing an array of objects.
 
         SUBJECT COHERENCE: Every question must be directly relevant to {material.title}. Do not generate generic study tips or off-topic questions.
-        Respond with valid JSON only. No markdown, no backticks, no explanation.
         """
 
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=2048,
-            messages=cast(list, [{"role": "user", "content": prompt}])
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            contents=[prompt]
         )
 
-        raw = next((block.text for block in response.content if isinstance(block, TextBlock)), "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        raw = raw.strip()
-
-        if not raw:
+        if not response.text:
             raise HTTPException(status_code=500, detail="Failed to generate flashcards")
 
-        flashcardData = json.loads(raw)
+        flashcardData = json.loads(response.text)
         cards = flashcardData.get("flashcards", [])
 
         db.query(Flashcard).filter(
