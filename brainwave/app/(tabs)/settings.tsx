@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   ActivityIndicator,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -169,6 +170,16 @@ export default function Settings() {
       setTimeout(() => setIsTogglingNotifications(false), 500);
     }
   };
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", async (nextState) => {
+      if(nextState === "active"){
+        const status = await getNotificationPermissionStatus();
+        setNotificationsEnabled(status === "granted")
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   const handleFocusUpdate = async (value: boolean) => {
     if (!user || user.studyPreferences.isMorningPerson === value) return;

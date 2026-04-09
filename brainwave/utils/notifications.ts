@@ -1,5 +1,5 @@
 import * as Notifications from "expo-notifications";
-import { Linking, Platform } from "react-native";
+import { Platform } from "react-native";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as Battery from "expo-battery";
 
@@ -53,8 +53,11 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   return status === "granted";
 }
 
-export function openAppSettings(): void {
-  Linking.openSettings();
+export async function openAppSettings(): Promise<void> {
+  await IntentLauncher.startActivityAsync(
+    "android.settings.APP_NOTIFICATION_SETTINGS",
+    { extra: { "android.provider.extra.APP_PACKAGE": "com.username0.brainwave" } }
+  );
 }
 
 // Notification channel for android
