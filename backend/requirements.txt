@@ -4,6 +4,7 @@ python-dotenv
 sqlalchemy
 httpx
 google-genai
+anthropic
 google-cloud-firestore
 firebase-admin
 PyPDF2

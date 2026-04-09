@@ -215,7 +215,7 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
         """
 
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             contents=[
                 types.Part.from_text(text=prompt),
                 types.Part.from_bytes(data=content, mime_type=mime_type)
@@ -275,7 +275,7 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         """
 
         meta_response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             config=types.GenerateContentConfig(response_mime_type="application/json"),
             contents=[
                 types.Part.from_text(text=meta_prompt),
@@ -351,7 +351,7 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         """
 
         guide_response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             contents=[
                 types.Part.from_text(text=guide_prompt),
                 types.Part.from_bytes(data=content, mime_type=mime_type)
@@ -464,7 +464,7 @@ async def uploadTimetable(request: Request, user_id: str = Depends(verify_token)
     """
 
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-2.5-flash",
         config=types.GenerateContentConfig(response_mime_type="application/json"),
         contents=[
             types.Part.from_text(text=prompt),
@@ -756,7 +756,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         For brain breaks, set "subject" to "Break", "difficulty" to "easy", "isCustom" to false.
     """
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-2.5-flash",
         config=types.GenerateContentConfig(response_mime_type="application/json"),
         contents=[prompt]
     )
@@ -923,7 +923,7 @@ async def generateFlashcards(request: Request, material_id: int, user_id: str = 
         """
 
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             config=types.GenerateContentConfig(response_mime_type="application/json"),
             contents=[prompt]
         )
