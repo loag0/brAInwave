@@ -204,7 +204,7 @@ export default function Home() {
       setIsLoading(false);
       showAlert?.({
         title: "Upload Failed",
-        message: (__DEV__) ? err.message : "Failed to upload assignment."
+        message: (__DEV__) ? err.message : "Upload failed. This may be a temporary issue - please try again in a little while.",
       });
     }
   }, [createAssignment, showAlert]);

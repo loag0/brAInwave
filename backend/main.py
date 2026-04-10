@@ -17,6 +17,7 @@ from database import SessionLocal, StudyMaterial, Timetable, Assignment, Flashca
 from dotenv import load_dotenv
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
+import time
 
 # 1. Setup environment and Database
 load_dotenv()
@@ -76,6 +77,45 @@ if not apiKey:
     raise ValueError("GEMINI_API_KEY not found in environment variables.")
 
 client = genai.Client(api_key=apiKey)
+
+GEMINI_MODELS = [
+    "gemini-3.0-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash-lite",
+]
+
+def call_gemini(contents, config=None) -> str:
+    """
+    Call Gemini with automatic model fallback on 503/overload errors.
+    Cycles through GEMINI_MODELS in order, waiting briefly between attempts.
+    Returns the response text, or raises if all models fail.
+    """
+    last_error: Exception = RuntimeError("All Gemini models unavailable")
+    for i, model in enumerate(GEMINI_MODELS):
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                **({"config": config} if config else {})
+            )
+            try:
+                text = response.text
+            except Exception:
+                text = None
+            if not text:
+                raise ValueError(f"Empty response from {model}")
+            return text
+        except Exception as e:
+            last_error = e
+            is_overload = any(
+                kw in str(e).lower()
+                for kw in ["503", "overloaded", "unavailable", "empty response"]
+            )
+            if is_overload and i < len(GEMINI_MODELS) - 1:
+                time.sleep(2 ** i)  # 1s before 2.5-flash, 2s before flash-lite
+                continue
+            raise
+    raise last_error
 
 # Database Dependency
 def get_db():
@@ -214,18 +254,12 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
         LENGTH: Comprehensive but scannable. Use bullet points and sub-bullets, not dense paragraphs.
         """
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
+        studyPlan = call_gemini(
             contents=[
                 types.Part.from_text(text=prompt),
                 types.Part.from_bytes(data=content, mime_type=mime_type)
             ]
         )
-
-        if not response.text:
-            raise HTTPException(status_code=500, detail="Failed to generate study plan")
-
-        studyPlan = response.text
 
         material = StudyMaterial(
             user_id=user_id,
@@ -274,19 +308,13 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         Be precise. Do not guess wildly - use only what is in the document.
         """
 
-        meta_response = client.models.generate_content(
-            model="gemini-2.0-flash",
+        meta_data = json.loads(call_gemini(
             config=types.GenerateContentConfig(response_mime_type="application/json"),
             contents=[
                 types.Part.from_text(text=meta_prompt),
                 types.Part.from_bytes(data=content, mime_type=mime_type)
             ]
-        )
-
-        if not meta_response.text:
-            raise HTTPException(status_code=500, detail="Failed to extract assignment metadata")
-
-        meta_data = json.loads(meta_response.text)
+        ))
 
         assignment_type = meta_data.get("assignment_type", "other")
         estimated_hours = meta_data.get("estimated_hours", "unknown")
@@ -350,15 +378,12 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         FORMATTING: Markdown only. No LaTeX. Unicode for any math symbols.
         """
 
-        guide_response = client.models.generate_content(
-            model="gemini-2.0-flash",
+        master_plan = call_gemini(
             contents=[
                 types.Part.from_text(text=guide_prompt),
                 types.Part.from_bytes(data=content, mime_type=mime_type)
             ]
         )
-
-        master_plan = guide_response.text
 
         new_assignment = Assignment(
             user_id=user_id,
@@ -463,19 +488,13 @@ async def uploadTimetable(request: Request, user_id: str = Depends(verify_token)
         5. For 'subject': use the exact course name as it appears in the document. Do not abbreviate or rename.
     """
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
+    timetableData = json.loads(call_gemini(
         config=types.GenerateContentConfig(response_mime_type="application/json"),
         contents=[
             types.Part.from_text(text=prompt),
             types.Part.from_bytes(data=content, mime_type=file.content_type or "application/octet-stream")
         ]
-    )
-
-    if not response.text:
-        raise HTTPException(status_code=500, detail="Failed to generate timetable data.")
-
-    timetableData = json.loads(response.text)
+    ))
     weeklyTemplate = timetableData.get("weekly_template", {})
 
     newTimetable = Timetable(
@@ -755,16 +774,10 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         For class blocks, set "task" to "Class Lecture" and use the subject name exactly as it appears in Today's Classes.
         For brain breaks, set "subject" to "Break", "difficulty" to "easy", "isCustom" to false.
     """
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
+    result = json.loads(call_gemini(
         config=types.GenerateContentConfig(response_mime_type="application/json"),
         contents=[prompt]
-    )
-
-    if not response.text:
-        raise HTTPException(status_code=500, detail="Failed to generate plan")
-
-    result = json.loads(response.text)
+    ))
     return result.get("items", [])
 
 @app.get("/daily-plans")
@@ -922,17 +935,10 @@ async def generateFlashcards(request: Request, material_id: int, user_id: str = 
         SUBJECT COHERENCE: Every question must be directly relevant to {material.title}. Do not generate generic study tips or off-topic questions.
         """
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
+        cards = json.loads(call_gemini(
             config=types.GenerateContentConfig(response_mime_type="application/json"),
             contents=[prompt]
-        )
-
-        if not response.text:
-            raise HTTPException(status_code=500, detail="Failed to generate flashcards")
-
-        flashcardData = json.loads(response.text)
-        cards = flashcardData.get("flashcards", [])
+        )).get("flashcards", [])
 
         db.query(Flashcard).filter(
             Flashcard.material_id == material_id,
