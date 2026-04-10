@@ -198,7 +198,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
           name="(onboarding)"
           options={{ gestureEnabled: false, animation: "slide_from_right" }}
         />
-        <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+        <Stack.Screen name="(tabs)" options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen
           name="(account)"
           options={{
@@ -209,7 +209,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
         />
         <Stack.Screen
           name="oauth2redirect/google"
-          options={{ headerShown: false }}
+          options={{ headerShown: false, animation: "none" }}
         />
         <Stack.Screen
           name="priorities"

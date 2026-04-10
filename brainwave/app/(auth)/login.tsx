@@ -21,6 +21,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useAlert } from "../contexts/AlertContext";
 import Svg, { Path } from "react-native-svg";
 import { ICONS, GoogleIcon } from "@/components/Icons";
+import Toast from "react-native-toast-message";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -42,6 +43,7 @@ export default function LoginScreen() {
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const isInitialMount = authLoading || isProcessing;
 
@@ -160,31 +162,31 @@ export default function LoginScreen() {
   };
 
   // --- STANDALONE LOADING VIEW ---
-  if (isProcessing) {
-    return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: theme.colors.background,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-        ]}
-      >
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text
-          style={{
-            marginTop: 16,
-            color: theme.colors.text.secondary,
-            fontSize: 16,
-          }}
+    if (isProcessing) {
+      return (
+        <View
+          style={[
+            styles.container,
+            {
+              backgroundColor: theme.colors.background,
+              justifyContent: "center",
+              alignItems: "center",
+            },
+          ]}
         >
-          Authenticating...
-        </Text>
-      </View>
-    );
-  }
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text
+            style={{
+              marginTop: 16,
+              color: theme.colors.text.secondary,
+              fontSize: 16,
+            }}
+          >
+            Authenticating...
+          </Text>
+        </View>
+      );
+    }
 
   if (isInitialMount)
     return (
@@ -283,13 +285,25 @@ export default function LoginScreen() {
         <TouchableOpacity
           style={[styles.googleButton, { borderColor: theme.colors.primary }]}
           onPress={async () => {
-            setIsProcessing(true);
+            setIsGoogleLoading(true);
             const result = await promptAsync();
-            if (!result || result.type !== "success") setIsProcessing(false);
+            setIsGoogleLoading(false);
+            if (result?.type === "cancel" || result?.type === "dismiss") {
+              Toast.show({
+                type: "error",
+                text1: "Sign in cancelled",
+                position: "bottom",
+                visibilityTime: 2000,
+              });
+            }
           }}
-          disabled={!request}
+          disabled={!request || isGoogleLoading}
         >
-          <GoogleIcon size={18} color={theme.colors.primary} />
+          {isGoogleLoading ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          ) : (
+            <GoogleIcon size={18} color={theme.colors.primary} />
+          )}
           <Text style={{ color: theme.colors.primary, fontWeight: "bold", marginLeft: 8 }}>
             Sign {isLogin ? "in" : "up"} with Google
           </Text>
