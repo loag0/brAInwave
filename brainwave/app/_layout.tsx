@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import {
@@ -23,6 +23,8 @@ import {
 } from "@/utils/notifications";
 import { ICONS } from "@/components/Icons";
 import { Providers } from "./providers";
+import NetInfo from "@react-native-community/netinfo";
+import Toast from "react-native-toast-message";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -50,6 +52,7 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   useKeepAwake();
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const segments = useSegments();
   const { theme, isDark, isThemeLoading } = useTheme();
   const [hasSeenWelcome, setHasSeenWelcome] = useState<boolean | null>(null);
   const [isOptimized, setIsOptimized] = useState<boolean | null>(null);
@@ -128,25 +131,24 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
   const prevUserRef = useRef<any>(undefined);
 
   useEffect(() => {
-    AsyncStorage.getItem("hasSeenWelcome").then((val) => {
-      setHasSeenWelcome(val === "true");
-    });
+    AsyncStorage.getItem("hasSeenWelcome")
+      .then((val) => setHasSeenWelcome(val === "true"))
+      .catch(() => setHasSeenWelcome(false));
   }, []);
 
+  // Hide splash as soon as fonts and theme are ready
   useEffect(() => {
-    if (
-      fontsLoaded &&
-      !isLoading &&
-      !isThemeLoading &&
-      hasSeenWelcome !== null
-    ) {
-      setTimeout(() => SplashScreen.hideAsync(), 100);
+    if (fontsLoaded && !isThemeLoading && hasSeenWelcome !== null) {
+      setTimeout(() => SplashScreen.hideAsync(), 150);
     }
-  }, [fontsLoaded, isLoading, isThemeLoading, hasSeenWelcome]);
+  }, [fontsLoaded, isThemeLoading, hasSeenWelcome]);
 
   useEffect(() => {
     if (isLoading || !fontsLoaded || isThemeLoading || hasSeenWelcome === null)
       return;
+
+    // Let oauth2redirect handle its own post-auth navigation
+    if (segments[0] === "oauth2redirect") return;
 
     const prevUser = prevUserRef.current;
     const userChanged = prevUser !== undefined && !!prevUser !== !!user;
@@ -169,7 +171,23 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
         router.replace("/(auth)/login");
       }
     }
-  }, [user, isLoading, fontsLoaded, isThemeLoading, hasSeenWelcome, router]);
+
+    // Show offline toast after the screen is visible
+    NetInfo.fetch().then((state) => {
+      if (!state.isConnected) {
+        setTimeout(() => {
+          Toast.show({
+            type: "info",
+            text1: "You're offline",
+            text2: user
+              ? "Showing your last synced data."
+              : "bro thinks he can sign in while offline im crine 😭😭.",
+            visibilityTime: 4000,
+          });
+        }, 700);
+      }
+    });
+  }, [user, isLoading, fontsLoaded, isThemeLoading, hasSeenWelcome, router, segments]);
 
   return (
     <>

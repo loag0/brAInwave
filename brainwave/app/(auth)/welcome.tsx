@@ -30,10 +30,10 @@ export default function Welcome() {
           <View
             style={[
               styles.logoBox,
-              { backgroundColor: theme.colors.text.primary },
+              { backgroundColor: theme.colors.border },
             ]}
           >
-            <BrainIcon size={40} color={theme.colors.background} />
+            <BrainIcon size={40} color={theme.colors.primary} />
           </View>
           <Text style={[styles.title, { color: theme.colors.text.primary }]}>
             Welcome to brAInwave

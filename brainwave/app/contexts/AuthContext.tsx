@@ -33,58 +33,67 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const jwt = await firebaseUser.getIdToken();
-        setToken(jwt);
+        //Allows the user to see the app immediately while fetching their profile in the background
+        const loadingTimeout = setTimeout(() => setIsLoading(false), 5000);
 
-        // Never stuck loading
-        const loadingTimeout = setTimeout(() => {
-          setIsLoading(false);
-        }, 5000);
-
+        // tries to load cached user from SQLite for instant UI
         try {
-          // 1. HYDRATE IMMEDIATELY FROM SQLITE
-          try {
-            const cachedUser = LocalDB.getUser(firebaseUser.uid) as any;
-            if (cachedUser) {
-              setUser({
-                ...cachedUser,
-                studyPreferences: JSON.parse(cachedUser.studyPreferences),
-                hasFinishedSetup: !!cachedUser.hasFinishedSetup,
-              });
-              setIsLoading(false); // UI moves to Home immediately
+          const cachedUser = LocalDB.getUser(firebaseUser.uid) as any;
+          if (cachedUser) {
+            let studyPreferences: any = {};
+            if (cachedUser.studyPreferences) {
+              if (typeof cachedUser.studyPreferences === "string") {
+                try {
+                  studyPreferences = JSON.parse(cachedUser.studyPreferences);
+                } catch {
+                  studyPreferences = {};
+                }
+              } else {
+                studyPreferences = cachedUser.studyPreferences;
+              }
             }
-          } catch (localDbError) {
-            if(__DEV__) console.log("LocalDB Error:", localDbError);
+            setUser({
+              ...cachedUser,
+              studyPreferences,
+              hasFinishedSetup: !!cachedUser.hasFinishedSetup,
+            });
+            setIsLoading(false); // UI unblocks immediately from cache
           }
+        } catch (localDbError) {
+          if (__DEV__) console.log("LocalDB Error:", localDbError);
+        }
 
-          // 2. BACKGROUND FETCH FROM FIRESTORE
+        // gets latest token in background (in case it changed or expired) but doesn't block UI
+        firebaseUser.getIdToken().then(setToken).catch(() => {});
+
+        // background fetch of latest profile from Firestore to ensure we have the most up-to-date data, then update cache and UI
+        try {
           const userDocRef = doc(firestore, "users", firebaseUser.uid);
           const userSnap = await getDoc(userDocRef);
 
           if (userSnap.exists()) {
             const data = userSnap.data() as User;
             setUser(data);
-
-            try{
-              LocalDB.saveUser(data); // Update local cache with latest data
-            } catch (saveError) {
-              if(__DEV__) console.log("Failed to save to LocalDB:", saveError);
-            }
-          } else{
-              await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate network delay
-              const retrySnap = await getDoc(userDocRef);
-              if(retrySnap.exists()){
-                const data = retrySnap.data() as User;
-                setUser(data);
             try {
-              LocalDB.saveUser(data); // Update local cache
+              LocalDB.saveUser(data);
             } catch (saveError) {
-              if(__DEV__) console.log("Failed to save to LocalDB:", saveError);
+              if (__DEV__) console.log("Failed to save to LocalDB:", saveError);
             }
-          }
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            const retrySnap = await getDoc(userDocRef);
+            if (retrySnap.exists()) {
+              const data = retrySnap.data() as User;
+              setUser(data);
+              try {
+                LocalDB.saveUser(data);
+              } catch (saveError) {
+                if (__DEV__) console.log("Failed to save to LocalDB:", saveError);
+              }
+            }
           }
         } catch (error) {
-          if(__DEV__) console.log("Offline mode: Using cached profile or fetching failed.", error);
+          if (__DEV__) console.log("Offline mode: Using cached profile or fetching failed.", error);
         } finally {
           clearTimeout(loadingTimeout);
           setIsLoading(false);

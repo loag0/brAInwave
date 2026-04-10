@@ -6,28 +6,27 @@ import { useRouter } from "expo-router";
 
 export default function GoogleOAuthRedirect() {
   const { theme } = useTheme();
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const hasRedirected = useRef(false);
 
+  // Navigates as soon as Firebase confirms the user
   useEffect(() => {
-    if (isLoading) return;
-    if(hasRedirected.current) return; // Prevent multiple redirects
-
+    if (!user || hasRedirected.current) return;
     hasRedirected.current = true;
+    router.replace(user.hasFinishedSetup ? "/(tabs)" : "/(onboarding)");
+  }, [user, router]);
 
-    if (user) {
-        // If user exists, redirect to the main app
-        if(!user.hasFinishedSetup){
-          router.replace("/(onboarding)");
-        } else{
-          router.replace("/(tabs)");
-        }
-      } else{
-        // If no user, redirect to login
+  // Fallback: if Firebase hasn't responded after 15s, go to login
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!hasRedirected.current) {
+        hasRedirected.current = true;
         router.replace("/(auth)/login");
       }
-  }, [user, isLoading, router]);
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [router]);
 
   return (
     <View

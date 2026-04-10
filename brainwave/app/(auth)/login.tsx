@@ -80,7 +80,7 @@ export default function LoginScreen() {
   useEffect(() => {
     if (response?.type !== "success") return;
 
-    //setIsProcessing(true);
+    setIsProcessing(true);
     const { id_token } = response.params;
     const credential = GoogleAuthProvider.credential(id_token);
 

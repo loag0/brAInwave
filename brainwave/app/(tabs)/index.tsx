@@ -151,6 +151,7 @@ export default function Home() {
       confirmText: "View Assignments",
       showCancel: true,
       cancelText: "Dismiss",
+      iconColor: theme.colors.warning,
       onConfirm: () => {
         if (overdueList.length === 1) {
           router.push({
@@ -160,7 +161,7 @@ export default function Home() {
         }
       },
     });
-  }, [assignments, contentLoading, showAlert]);
+  }, [assignments, contentLoading, showAlert, theme.colors.warning]);
 
   useEffect(() => {
     const interval = setInterval(() => {
