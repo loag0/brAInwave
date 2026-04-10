@@ -70,7 +70,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
           LocalDB.logStudyTime(user.id, today, studyMins, selectedModules ?? undefined);
           backgroundSync(user.id);
         } catch (e) {
-          console.error('Failed to log study time:', e);
+          if (__DEV__) console.error('Failed to log study time:', e);
         }
       }
 

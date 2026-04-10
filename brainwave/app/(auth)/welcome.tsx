@@ -7,9 +7,14 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FontAwesome5 } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "../contexts/ThemeContext";
+import {
+  BrainIcon,
+  ScheduleIcon,
+  BulbIcon,
+  StarIcon,
+} from "../../components/Icons";
 
 export default function Welcome() {
   const router = useRouter();
@@ -28,11 +33,7 @@ export default function Welcome() {
               { backgroundColor: theme.colors.text.primary },
             ]}
           >
-            <FontAwesome5
-              name="brain"
-              size={40}
-              color={theme.colors.background}
-            />
+            <BrainIcon size={40} color={theme.colors.background} />
           </View>
           <Text style={[styles.title, { color: theme.colors.text.primary }]}>
             Welcome to brAInwave
@@ -40,29 +41,29 @@ export default function Welcome() {
           <Text
             style={[styles.subtitle, { color: theme.colors.text.secondary }]}
           >
-            Your AI-powered study companion that adapts to your learning style
-            and helps you achieve your goals
+            Upload your syllabus or assignments - get an AI-powered study plan
+            instantly
           </Text>
         </View>
 
         {/* Features Section */}
         <View style={styles.featuresContainer}>
           <FeatureItem
-            icon="calendar-alt"
+            icon={ScheduleIcon}
             title="Smart scheduling"
-            desc="Manage classes and assignments effortlessly"
+            desc="Upload your timetable and brAInwave organizes your week"
             theme={theme}
           />
           <FeatureItem
-            icon="bullseye"
+            icon={BulbIcon}
             title="Personalized plans"
             desc="AI-generated study plans tailored to you"
             theme={theme}
           />
           <FeatureItem
-            icon="chart-line"
-            title="Track progress"
-            desc="Visualize your growth and stay motivated"
+            icon={StarIcon}
+            title="Stay consistent"
+            desc="Build streaks with focus sessions and smart reminders"
             theme={theme}
           />
         </View>
@@ -109,10 +110,10 @@ export default function Welcome() {
 }
 
 // Reusable Feature Component to keep it clean
-const FeatureItem = ({ icon, title, desc, theme }: any) => (
+const FeatureItem = ({ icon: Icon, title, desc, theme }: any) => (
   <View style={styles.featureRow}>
     <View style={styles.iconCircle}>
-      <FontAwesome5 name={icon} size={18} color={theme.colors.text.primary} />
+      <Icon size={18} color={theme.colors.text.primary} />
     </View>
     <View style={styles.featureTextCol}>
       <Text style={[styles.featureTitle, { color: theme.colors.text.primary }]}>

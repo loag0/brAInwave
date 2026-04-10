@@ -610,7 +610,7 @@ export default function Planner() {
         preferredSessionLength: tempSessionLength,
       };
 
-      console.log("Sending preferences:", JSON.stringify(overridenPreferences));
+      if (__DEV__) console.log("Sending preferences:", JSON.stringify(overridenPreferences));
 
       const response = await brainwaveApi.generateDailyPlan(
         user.id,

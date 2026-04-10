@@ -203,7 +203,7 @@ export default function Home() {
       setIsLoading(false);
       showAlert?.({
         title: "Upload Failed",
-        message: err.message || "Failed to upload assignment.",
+        message: (__DEV__) ? err.message : "Failed to upload assignment."
       });
     }
   }, [createAssignment, showAlert]);

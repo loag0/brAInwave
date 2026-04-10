@@ -19,9 +19,8 @@ import { auth, db as firestore } from "../../firebaseConfig";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAlert } from "../contexts/AlertContext";
-import { FontAwesome5 } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
-import { ICONS } from "@/components/Icons";
+import { ICONS, GoogleIcon } from "@/components/Icons";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -290,13 +289,8 @@ export default function LoginScreen() {
           }}
           disabled={!request}
         >
-          <FontAwesome5
-            name="google"
-            size={18}
-            color={theme.colors.primary}
-            style={{ marginRight: 12 }}
-          />
-          <Text style={{ color: theme.colors.primary, fontWeight: "bold" }}>
+          <GoogleIcon size={18} color={theme.colors.primary} />
+          <Text style={{ color: theme.colors.primary, fontWeight: "bold", marginLeft: 8 }}>
             Sign {isLogin ? "in" : "up"} with Google
           </Text>
         </TouchableOpacity>
