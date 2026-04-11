@@ -184,11 +184,11 @@ export default function Library() {
       });
     } catch (e: any) {
       if (__DEV__) console.error(e.message);
-      showAlert?.({ title: "Import Failed", message: "Failed to read file." });
+      showAlert?.({ title: "Import Failed", message: "Failed to read file.", iconColor: theme.colors.error });
     } finally {
       setIsUploading(false);
     }
-  }, [user?.id, createMaterial, showAlert]);
+  }, [user?.id, createMaterial, showAlert, theme.colors.error]);
 
   const filteredMaterials = useMemo(() => {
     return materials.filter((item) =>

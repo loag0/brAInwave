@@ -111,13 +111,14 @@ export default function LoginScreen() {
         setIsProcessing(false);
         showAlert({
           title: "Google Sync Error",
-          message: err.message,
+          message: (__DEV__) ? err.message : "Failed to sync with Google. Please try again.",
+          iconColor: theme.colors.error,
         });
       }
     };
 
       handleGoogleFirebaseSync();
-  }, [response, showAlert]);
+  }, [response, showAlert, theme.colors.error]);
 
   // --- Helper Functions ---
   const validatePassword = (pass: string) => {
@@ -134,7 +135,11 @@ export default function LoginScreen() {
 
     if (!isLogin && !name){
       setIsProcessing(false);
-      return showAlert({ title: "Error", message: "Please enter your name" });
+      return showAlert({ title: "Error",
+        message: "Please enter your name",
+        iconColor: theme.colors.error,
+        iconPath: ICONS.ERROR
+      });
     }
 
     if (!isLogin && !validatePassword(password)) {
@@ -142,6 +147,8 @@ export default function LoginScreen() {
       return showAlert({
         title: "Weak Password",
         message: "Password needs 6+ chars, uppercase, lowercase, and a number.",
+        iconColor: theme.colors.error,
+        iconPath: ICONS.ERROR
       });
     }
 
@@ -152,7 +159,7 @@ export default function LoginScreen() {
     } catch (error: any) {
       showAlert({
         title: "Authentication Error!",
-        message: error.message,
+        message: (__DEV__) ? error.message : "Failed to authenticate. Please try again.",
         iconPath: ICONS.ERROR,
         iconColor: theme.colors.error
       });

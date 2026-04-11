@@ -116,6 +116,7 @@ export default function SubjectPriorities() {
         message: "We couldn't reach the cloud. Check your connection brev.",
         confirmText: "Retry",
         showCancel: true,
+        iconColor: theme.colors.error,
         onConfirm: handleSave,
       });
     } finally {

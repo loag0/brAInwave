@@ -10,8 +10,6 @@
     "newArchEnabled": true,
     "android": {
       "package": "com.username0.brainwave",
-      "enableProguardInReleaseBuilds": true,
-      "enableShrinkResourcesInReleaseBuilds": true,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -93,8 +91,7 @@
         "expo-build-properties",
         {
           "android": {
-            "ndkVersion": "27.1.12297006",
-            "enableSeparateBuildPerCPUArchitecture": true
+            "ndkVersion": "27.1.12297006"
           }
         }
       ],

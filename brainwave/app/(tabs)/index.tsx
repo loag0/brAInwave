@@ -205,9 +205,10 @@ export default function Home() {
       showAlert?.({
         title: "Upload Failed",
         message: (__DEV__) ? err.message : "Upload failed. This may be a temporary issue - please try again in a little while.",
+        iconColor: theme.colors.error,
       });
     }
-  }, [createAssignment, showAlert]);
+  }, [createAssignment, showAlert, theme.colors.error]);
 
   const loadingText = !contentLoading
     ? loadingMessage

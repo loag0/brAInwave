@@ -12,11 +12,13 @@ import { useAuth } from "./AuthContext";
 import { LocalDB } from "../database/localDb";
 import { AppState } from "react-native";
 import { backgroundSync } from "@/utils/backgroundSync";
+import { useTheme } from "./ThemeContext";
 
 const TimerContext = createContext<any>(null);
 
 export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
   const { showAlert } = useAlert();
+  const { theme } = useTheme();
   const { user } = useAuth();
   // Derive initial duration from user preferences
   const getInitialMinutes = useCallback(() => {
@@ -78,6 +80,7 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
         title: "Session Complete!",
         message: `Nice work! You focused for ${studyMins} minutes.`,
         confirmText: "LFG!",
+        iconColor: theme.colors.success,
       });
     } else {
       setMinutes(Math.floor(totalSecsLeft / 60));

@@ -655,6 +655,7 @@ export default function Planner() {
       showAlert({
         title: "Hold Up!",
         message: "What's the name of the task homeblud?",
+        iconColor: theme.colors.warning,
       });
       return;
     }
@@ -696,6 +697,7 @@ export default function Planner() {
       showAlert({
         title: "Save Error",
         message: "Failed to save your changes.",
+        iconColor: theme.colors.error,
       });
       console.error("Error saving plan:", e);
     } finally {

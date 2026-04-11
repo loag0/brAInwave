@@ -131,6 +131,7 @@ export default function Settings() {
             message:
               "brAInwave doesn't have permission to send notifications. Enable it in your phone settings.",
             confirmText: "Open Settings",
+            iconColor: theme.colors.warning,
             showCancel: true,
             onConfirm: () => openAppSettings(),
           });

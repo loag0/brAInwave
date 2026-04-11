@@ -66,9 +66,10 @@ export default function ProfileScreen() {
           setIsDeleting(false);
           showAlert({
             title: "Error",
-            message:
-              "You may need to log in again before deleting your account.",
+            message: "You may need to log in again before deleting your account.",
             confirmText: "OK",
+            iconColor: theme.colors.error,
+            iconPath: ICONS.ERROR
           });
         }
       },
