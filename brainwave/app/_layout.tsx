@@ -25,8 +25,15 @@ import { ICONS } from "@/components/Icons";
 import { Providers } from "./providers";
 import NetInfo from "@react-native-community/netinfo";
 import Toast from "react-native-toast-message";
+import * as Updates from "expo-updates";
 
 SplashScreen.preventAutoHideAsync();
+
+if (__DEV__) {
+  console.log("[OTA] Channel:", Updates.channel);
+  console.log("[OTA] Update ID:", Updates.updateId ?? "embedded build");
+  console.log("[OTA] Is embedded launch:", Updates.isEmbeddedLaunch);
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
