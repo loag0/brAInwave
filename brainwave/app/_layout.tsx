@@ -29,11 +29,28 @@ import * as Updates from "expo-updates";
 
 SplashScreen.preventAutoHideAsync();
 
-if (__DEV__) {
-  console.log("[OTA] Channel:", Updates.channel);
-  console.log("[OTA] Update ID:", Updates.updateId ?? "embedded build");
-  console.log("[OTA] Is embedded launch:", Updates.isEmbeddedLaunch);
-}
+const checkForUpdates = async () => {
+  try{
+    if (__DEV__) {
+      console.log("[OTA] Channel:", Updates.channel);
+      console.log("[OTA] Update ID:", Updates.updateId ?? "embedded build");
+      console.log("[OTA] Is embedded launch:", Updates.isEmbeddedLaunch);
+    }
+
+    const update = await Updates.checkForUpdateAsync();
+    if (__DEV__) console.log("[OTA] Update available:", update.isAvailable);
+
+    if (update.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      if (__DEV__) console.log("[OTA] Update fetched, reloading...");
+      await Updates.reloadAsync();
+    }
+  } catch (e) {
+    if (__DEV__) console.error("[OTA] Error checking for updates:", e);
+  }
+};
+
+checkForUpdates();
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
