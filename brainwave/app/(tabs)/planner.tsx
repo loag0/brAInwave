@@ -19,6 +19,7 @@ import {
   Easing,
   RefreshControl,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -740,6 +741,13 @@ export default function Planner() {
           await brainwaveApi.deleteTask(user.id, selectedDay, taskId);
         } catch (e) {
           console.error("Error deleting task from backend:", e);
+          Toast.show({
+            type: "error",
+            text1: "Deletion failed",
+            text2: "Sync to server failed. Please try again later",
+            position: "bottom",
+            visibilityTime: 4000
+          })
         }
       },
     });

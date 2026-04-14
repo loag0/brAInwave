@@ -11,6 +11,7 @@ import {
   FlatList,
   Platform,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import Markdown from "react-native-markdown-display";
@@ -103,6 +104,13 @@ export default function MaterialDetail() {
       }
     } catch (e) {
       console.error("Error fetching study plan:", e);
+      Toast.show({
+        type: "error",
+        text1: "Failed to fetch plan",
+        text2: "Couldn't load the study plan. Please try again.",
+        position: "bottom",
+        visibilityTime: 6000
+      });
     } finally {
       setLoading(false);
     }
@@ -127,6 +135,13 @@ export default function MaterialDetail() {
       }
     } catch (e) {
       console.error("Error generating flashcards:", e);
+      Toast.show({
+        type: "error",
+        text1: "Upload Failed",
+        text2: "Generation failed. This may be a temporary issue - please try again in a little while.",
+          position: "bottom",
+          visibilityTime: 4000
+      });
     } finally {
       setGeneratingFlashcards(false);
     }
@@ -159,6 +174,13 @@ export default function MaterialDetail() {
           router.back();
         } catch (e) {
           console.error("Failed to delete material:", e);
+          Toast.show({
+            type: "error",
+            text1: "Failed to delete material",
+            text2: "Sorry, we couldn't delete the material. Please try again.",
+            position: "bottom",
+            visibilityTime: 6000
+          });
           setIsDeleting(false);
         }
       },
@@ -282,6 +304,13 @@ export default function MaterialDetail() {
       }
     } catch (e) {
       console.error("PDF Export Error:", e);
+      Toast.show({
+        type: "error",
+        text1: "Failed to export",
+        text2: "Sorry, we couldn't export the material. Please try again.",
+        position: "bottom",
+        visibilityTime: 6000,
+      });
     }
   };
 

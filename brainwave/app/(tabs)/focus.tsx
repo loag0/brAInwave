@@ -195,6 +195,13 @@ export default function FocusScreen() {
       }
     } catch (e) {
       console.error("Notification error", e);
+      Toast.show({
+        type: "error",
+        text1: "Notification error",
+        text2: "There may be an issue with your notification settings. Timer will still work tho  ✌️.",
+        position: "bottom",
+        visibilityTime: 6000,
+      });
     }
   };
 

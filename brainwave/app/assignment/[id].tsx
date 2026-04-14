@@ -24,6 +24,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { File, Paths } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
+import { Toast } from "react-native-toast-message/lib/src/Toast";
 
 /**
  * This is so inline code backticks from the AI plan dont render as actual backticks
@@ -95,6 +96,13 @@ export default function AssignmentDetail() {
       if (response) setData(response);
     } catch (e) {
       console.error("Error fetching assignment:", e);
+      Toast.show({
+        type: "error",
+        text1: "Failed to load assignment",
+        text2: "Sorry, we couldn't load the assignment. Please try again.",
+        position: "bottom",
+        visibilityTime: 6000
+      });
     } finally {
       setLoading(false);
     }
@@ -184,6 +192,13 @@ export default function AssignmentDetail() {
       }
     } catch (e) {
       console.error("Failed to save due date/time:", e);
+      Toast.show({
+        type: "error",
+        text1: "Failed to update due date/time",
+        text2: "Sorry, we couldn't update the due date/time. Please try again.",
+        position: "bottom",
+        visibilityTime: 6000,
+      });
       setData((prev: any) => ({
         ...prev,
         due_date: data.due_date,
@@ -316,6 +331,13 @@ export default function AssignmentDetail() {
       }
     } catch (e) {
       console.error("PDF Export Error:", e);
+      Toast.show({
+        type: "error",
+        text1: "Failed to export",
+        text2: "Sorry, we couldn't export the assignment. Please try again.",
+        position: "bottom",
+        visibilityTime: 6000,
+      });
     }
   };
 

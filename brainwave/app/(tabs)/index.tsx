@@ -41,6 +41,7 @@ import {
   FireIcon,
 } from "@/components/Icons";
 import { LocalDB } from "../database/localDb";
+import Toast from "react-native-toast-message";
 
 const HomeSkeleton = ({ styles, theme }: any) => (
   <View style={styles.container}>
@@ -186,9 +187,19 @@ export default function Home() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mimeType = asset.mimeType || "";
+        if (mimeType !== "application/pdf" && mimeType !== "text/plain") {
+          Toast.show({
+            type: "error",
+            text1: "Unsupported file type",
+            text2: "Please upload a PDF or text file.",
+            visibilityTime: 4000,
+          });
+          return;
+        }
         setIsLoading(true);
         setLoadingMessage("Analyzing Assignment...");
-        const asset = result.assets[0];
         await createAssignment(
           asset.name,
           asset.uri,
@@ -388,6 +399,14 @@ export default function Home() {
             </View>
 
             <View style={styles.cardContent}>
+              {timetables.length === 0 ? (
+                <View style={{ alignItems: "center", paddingVertical: 15 }}>
+                  <SunIcon size={32} color={theme.colors.warning} />
+                  <Text style={[ styles.emptyText, { color: theme.colors.text.primary, fontWeight: "600" }]}>
+                    Upload your timetable to get started!
+                  </Text>
+                </View>
+              ) : null}
               {todaysSchedule.length > 0 ? (
                 todaysSchedule.slice(0, 3).map((item, idx) => (
                   <View

@@ -166,6 +166,13 @@ export default function Settings() {
       }
     } catch (e) {
       console.error("Failed to update notification preference:", e);
+      Toast.show({
+        type: "error",
+        text1: "Update Failed",
+        text2: "Failed to update notification preference",
+        position: "bottom",
+        visibilityTime: 6000
+      })
       setNotificationsEnabled(!value);
     } finally {
       setTimeout(() => setIsTogglingNotifications(false), 500);
@@ -260,6 +267,13 @@ export default function Settings() {
       });
     } catch (e) {
       console.error(e);
+      Toast.show({
+        type: "error",
+        text1: "Update Failed",
+        text2: "Failed to update notification preference",
+        position: "bottom",
+        visibilityTime: 6000
+      });
     }
   };
 

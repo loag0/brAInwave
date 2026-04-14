@@ -3,6 +3,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
 import { LocalDB } from "../database/localDb";
 import brainwaveApi from "@/api/brAInwaveApi";
+import { Toast } from "react-native-toast-message/lib/src/Toast";
 
 export function useTimetableUpload(
   userId?: string,
@@ -27,6 +28,17 @@ export function useTimetableUpload(
     const file = result.assets[0];
     const title = `Schedule ${new Date().toLocaleDateString()}`;
     const mimeType = file.mimeType || "application/octet-stream";
+
+    if (mimeType !== "application/pdf" && !mimeType.startsWith("image/")) {
+      Toast.show({
+        type: "error",
+        text1: "Unsupported file type",
+        text2: "Please upload a PDF or photo of your timetable.",
+        position: "bottom",
+        visibilityTime: 4000,
+      });
+      return;
+    }
 
     setIsLoading?.(true);
     setLoadingMessage?.("Uploading Timetable...");
@@ -67,10 +79,12 @@ export function useTimetableUpload(
       showAlert?.({ title: "Success", message: "Timetable uploaded!" });
     } catch (error: any) {
       console.error("Timetable upload failed, remaining offline-only:", error);
-      showAlert?.({
-        title: "Saved offline",
-        message:
-          "We saved your timetable locally and will sync it when you're back online.",
+      Toast.show({
+        type: "warning",
+        text1: "Failed to upload",
+        text2: "Timetable upload failed. Your timetable has been saved locally and will sync when you're back online.",
+        position: "bottom",
+        visibilityTime: 6000
       });
     } finally {
       setIsLoading?.(false);
