@@ -109,7 +109,7 @@ export default function MaterialDetail() {
         text1: "Failed to fetch plan",
         text2: "Couldn't load the study plan. Please try again.",
         position: "bottom",
-        visibilityTime: 6000
+        visibilityTime: 6000,
       });
     } finally {
       setLoading(false);
@@ -138,7 +138,8 @@ export default function MaterialDetail() {
       Toast.show({
         type: "error",
         text1: "Generation failed",
-        text2: "This may be a temporary issue - please try again in a little while.",
+        text2:
+          "This may be a temporary issue - please try again in a little while.",
         position: "bottom",
         visibilityTime: 4000,
       });
@@ -179,7 +180,7 @@ export default function MaterialDetail() {
             text1: "Failed to delete material",
             text2: "Sorry, we couldn't delete the material. Please try again.",
             position: "bottom",
-            visibilityTime: 6000
+            visibilityTime: 6000,
           });
           setIsDeleting(false);
         }
@@ -319,8 +320,17 @@ export default function MaterialDetail() {
       {/* 1. Dynamic Header Title */}
       <Stack.Screen
         options={{
-          title: data?.title || "Study Plan",
-          headerTitleStyle: { fontFamily: theme.fonts.bold },
+          headerTitle: () => (
+            <Text
+              style={{
+                fontFamily: theme.fonts.bold,
+                fontSize: 14,
+                color: theme.colors.text.primary,
+              }}
+            >
+              {data?.title || "Study Plan"}
+            </Text>
+          ),
           headerRight: () => (
             <View style={{ flexDirection: "row", gap: 15, paddingRight: 10 }}>
               <TouchableOpacity onPress={exportToPDF}>
@@ -363,7 +373,8 @@ export default function MaterialDetail() {
               },
             }}
           >
-            {sanitizeAiMarkdown(data?.aiPlan) || "No content found for this syllabus."}
+            {sanitizeAiMarkdown(data?.aiPlan) ||
+              "No content found for this syllabus."}
           </Markdown>
 
           <View style={styles.flashcardContainer}>

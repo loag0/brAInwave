@@ -55,7 +55,8 @@ export default function AssignmentDetail() {
 
     showAlert({
       title: "Confirm Deletion",
-      message: "Are you sure you want to delete this assignment plan? This action cannot be undone.",
+      message:
+        "Are you sure you want to delete this assignment plan? This action cannot be undone.",
       iconPath: ICONS.ERROR,
       iconColor: theme.colors.error,
       confirmText: "Delete",
@@ -72,7 +73,8 @@ export default function AssignmentDetail() {
           setLoading(false);
           showAlert({
             title: "Deletion Failed",
-              message: "Sorry, we couldn't delete the assignment. Please try again.",
+            message:
+              "Sorry, we couldn't delete the assignment. Please try again.",
             iconPath: ICONS.ERROR,
             iconColor: theme.colors.error,
             confirmText: "OK",
@@ -101,7 +103,7 @@ export default function AssignmentDetail() {
         text1: "Failed to load assignment",
         text2: "Sorry, we couldn't load the assignment. Please try again.",
         position: "bottom",
-        visibilityTime: 6000
+        visibilityTime: 6000,
       });
     } finally {
       setLoading(false);
@@ -150,7 +152,7 @@ export default function AssignmentDetail() {
       if (timeStr.includes(":") && !timeStr.includes("M")) {
         const [h, m] = timeStr.split(":");
         initialDate.setHours(parseInt(h), parseInt(m), 0);
-      } 
+      }
       // Handle "11:59 PM" style
       else if (timeStr.includes("AM") || timeStr.includes("PM")) {
         const [time, ampm] = timeStr.trim().split(/\s+/);
@@ -219,7 +221,8 @@ export default function AssignmentDetail() {
     });
 
     if (timeStr) {
-      let hh = 0, mm = 0;
+      let hh = 0,
+        mm = 0;
       if (timeStr.includes("AM") || timeStr.includes("PM")) {
         const [time, ampm] = timeStr.trim().split(/\s+/);
         let [h, m] = time.split(":");
@@ -232,7 +235,7 @@ export default function AssignmentDetail() {
         hh = parseInt(h);
         mm = parseInt(m);
       }
-      
+
       const ampm = hh >= 12 ? "PM" : "AM";
       const h12 = hh % 12 || 12;
       const mPad = String(mm).padStart(2, "0");
@@ -345,8 +348,17 @@ export default function AssignmentDetail() {
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <Stack.Screen
         options={{
-          title: data?.title || "Assignment Plan",
-          headerTitleStyle: { fontFamily: theme.fonts.bold },
+          headerTitle: () => (
+            <Text
+              style={{
+                fontFamily: theme.fonts.bold,
+                fontSize: 14,
+                color: theme.colors.text.primary,
+              }}
+            >
+              {data?.title || "Assignment Plan"}
+            </Text>
+          ),
           headerRight: () => (
             <View style={{ flexDirection: "row", gap: 15, paddingRight: 10 }}>
               <TouchableOpacity onPress={exportToPDF}>
@@ -422,7 +434,8 @@ export default function AssignmentDetail() {
               >
                 {data?.due_time
                   ? (() => {
-                      let hh = 0, mm = 0;
+                      let hh = 0,
+                        mm = 0;
                       const timeStr = data.due_time;
                       if (timeStr.includes("AM") || timeStr.includes("PM")) {
                         const [time, ampm] = timeStr.trim().split(/\s+/);
