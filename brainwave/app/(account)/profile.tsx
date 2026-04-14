@@ -17,6 +17,7 @@ import {
   ICONS,
 } from "@/components/Icons";
 import { LocalDB } from "../database/localDb";
+import Toast from "react-native-toast-message";
 
 export default function ProfileScreen() {
   const { user, getAuth, deleteAccount } = useAuth();
@@ -30,10 +31,12 @@ export default function ProfileScreen() {
   const styles = createStyles(theme, isDark);
 
   const handleChangePassword = () => {
-    showAlert({
-      title: "Reset Password!",
-      message: "A password reset link has been sent to your email",
-      confirmText: "Ok",
+    Toast.show({
+      type: "info",
+      text1: "Password Reset",
+      text2: "A password reset link has been sent to your email",
+      position: "bottom",
+      visibilityTime: 6000,
     });
   };
 
