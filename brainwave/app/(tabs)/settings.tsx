@@ -278,21 +278,21 @@ export default function Settings() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerSubtitle}>
+            Customize your study experience
+          </Text>
+        </View>
+      </View>
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>Settings</Text>
-            <Text style={styles.headerSubtitle}>
-              Customize your study experience
-            </Text>
-          </View>
-        </View>
-
         <View style={styles.content}>
           {/* Profile Card */}
           <TouchableOpacity

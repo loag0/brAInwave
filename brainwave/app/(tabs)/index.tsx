@@ -300,6 +300,33 @@ export default function Home() {
         </View>
       )}
 
+      {/* Header */}
+      <View style={styles.headerBg}>
+        <View style={styles.headerContent}>
+          <Text style={styles.welcomeText}>
+            Welcome back, {user?.name?.split(" ")[0] || "User"}!
+          </Text>
+          <Text style={styles.dateText}>
+            {new Date().toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
+          </Text>
+          {streakCount > 0 && (
+            <View
+              style={[
+                styles.streakBadge,
+                { marginTop: 8, alignSelf: "flex-start" },
+              ]}
+            >
+              <FireIcon size={14} color="#FF9500" />
+              <Text style={styles.streakText}>{streakCount} day streak</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -311,33 +338,6 @@ export default function Home() {
           />
         }
       >
-        {/* Header */}
-        <View style={styles.headerBg}>
-          <View style={styles.headerContent}>
-            <Text style={styles.welcomeText}>
-              Welcome back, {user?.name?.split(" ")[0] || "User"}!
-            </Text>
-            <Text style={styles.dateText}>
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}
-            </Text>
-            {streakCount > 0 && (
-              <View
-                style={[
-                  styles.streakBadge,
-                  { marginTop: 8, alignSelf: "flex-start" },
-                ]}
-              >
-                <FireIcon size={14} color="#FF9500" />
-                <Text style={styles.streakText}>{streakCount} day streak</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
         {/* Status Chip */}
         <View style={styles.content}>
           <View style={styles.statusChip}>

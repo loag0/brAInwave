@@ -197,7 +197,7 @@ export default function Library() {
   }, [searchQuery, materials]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/* Header & Switcher */}
       <View style={styles.stickyHeader}>
         <Text style={styles.headerTitle}>
@@ -477,14 +477,14 @@ export default function Library() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Hours by Module</Text>
               {moduleHours.length !== 0 ? (
-              <Text
-                style={[
-                  styles.insightText,
-                  { marginTop: -8, marginBottom: 12 },
-                ]}
-              >
-                This week · Tap a module to set a goal
-              </Text>
+                <Text
+                  style={[
+                    styles.insightText,
+                    { marginTop: -8, marginBottom: 12 },
+                  ]}
+                >
+                  This week · Tap a module to set a goal
+                </Text>
               ) : null}
               {moduleHours.length === 0 ? (
                 <Text

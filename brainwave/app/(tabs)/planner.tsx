@@ -754,7 +754,7 @@ export default function Planner() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <Modal transparent visible={isOptimizing} animationType="fade">
         <View
           style={{
@@ -804,6 +804,16 @@ export default function Planner() {
         </View>
       </Modal>
 
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Study planner</Text>
+          <Text style={styles.headerSubtitle}>
+            AI-optimized planner for your success
+          </Text>
+        </View>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -816,20 +826,11 @@ export default function Planner() {
           />
         }
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>Study planner</Text>
-            <Text style={styles.headerSubtitle}>
-              AI-optimized planner for your success
-            </Text>
-          </View>
-        </View>
-
         <View style={styles.insightContainer}>
           <View
             style={[
               styles.insightCard,
-              { borderColor: theme.colors.primary + "40", borderWidth: 1 },
+              { borderColor: theme.colors.primary + "40", borderWidth: 1, marginTop: 10 },
             ]}
           >
             <View
