@@ -79,9 +79,9 @@ if not apiKey:
 client = genai.Client(api_key=apiKey)
 
 GEMINI_MODELS = [
-    "gemini-3.0-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
 ]
 
 def call_gemini(contents, config=None) -> str:

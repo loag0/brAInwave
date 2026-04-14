@@ -137,10 +137,10 @@ export default function MaterialDetail() {
       console.error("Error generating flashcards:", e);
       Toast.show({
         type: "error",
-        text1: "Upload Failed",
-        text2: "Generation failed. This may be a temporary issue - please try again in a little while.",
-          position: "bottom",
-          visibilityTime: 4000
+        text1: "Generation failed",
+        text2: "This may be a temporary issue - please try again in a little while.",
+        position: "bottom",
+        visibilityTime: 4000,
       });
     } finally {
       setGeneratingFlashcards(false);
