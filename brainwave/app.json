@@ -94,7 +94,10 @@
         "expo-build-properties",
         {
           "android": {
-            "ndkVersion": "27.1.12297006"
+            "ndkVersion": "27.1.12297006",
+            "buildArchs": ["arm64-v8a"],
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkerInReleaseBuilds": true
           }
         }
       ],
