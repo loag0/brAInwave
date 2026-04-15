@@ -406,8 +406,7 @@ export default function Home() {
                     Upload your timetable to get started!
                   </Text>
                 </View>
-              ) : null}
-              {todaysSchedule.length > 0 ? (() => {
+              ) : todaysSchedule.length > 0 ? (() => {
                 const upcoming = todaysSchedule.filter(
                   (item) => !isTaskPastHome(item) && !item.completed
                 );
@@ -471,7 +470,7 @@ export default function Home() {
                     </View>
                   </View>
                 ));
-              })( ) : (
+              })() : (
                 <View style={{ alignItems: "center", paddingVertical: 15 }}>
                   <SunIcon size={32} color={theme.colors.warning} />
                   <Text
