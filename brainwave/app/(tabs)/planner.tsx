@@ -497,7 +497,7 @@ export default function Planner() {
           id: `temp-${index}`,
           time: cls.time,
           subject: cls.subject || cls.course || cls.name || "Class",
-          task: "Class Lecture",
+          task: cls.task || "Class Lecture",
           duration: `${computedMins} min`,
           completed: false,
           difficulty: cls.difficulty || "unset",
@@ -510,10 +510,10 @@ export default function Planner() {
         assignments?.filter((a: any) => a.due_date === selectedDay) || [];
       const assignmentItems = dueAssignments.map((ass: any) => ({
         id: `ass-${ass.id}`,
-        time: "11:59 PM",
+        time: ass.due_time || "11:59 PM",
         subject: ass.subject || "Assignment",
         task: `Deadline: ${ass.title}`,
-        duration: "",
+        duration: null,
         completed: false,
         difficulty:
           ass.priority?.toLowerCase() === "high"
@@ -678,7 +678,7 @@ export default function Planner() {
       task: newTask.task,
       time: newTask.time,
       subject: newTask.subject || "Personal",
-      duration: newTask.duration.trim() || "1 hour",
+      duration: newTask.duration.trim() || "60 mins",
       completed: false,
       difficulty: newTask.difficulty || "unset",
       isCustom: !editingTaskId,
@@ -1053,7 +1053,7 @@ export default function Planner() {
                         </Text>
                         <View style={styles.durationBadge}>
                           <Text style={styles.durationText}>
-                            {item.duration || "60 min"}
+                            {item.duration}
                           </Text>
                         </View>
                       </View>
