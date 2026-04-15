@@ -1051,11 +1051,13 @@ export default function Planner() {
                         <Text style={styles.timeText}>
                           {formatTimeTo24h(item.time)}
                         </Text>
+                        {item.duration && (
                         <View style={styles.durationBadge}>
                           <Text style={styles.durationText}>
                             {item.duration}
                           </Text>
                         </View>
+                        )}
                       </View>
                     </View>
 
