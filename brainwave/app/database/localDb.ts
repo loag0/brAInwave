@@ -10,7 +10,10 @@ export const LocalDB = {
         name TEXT,
         email TEXT,
         studyPreferences TEXT,
-        hasFinishedSetup INTEGER
+        hasFinishedSetup INTEGER,
+        year_of_study TEXT,
+        degree TEXT,
+        weak_areas TEXT
       );
 
       CREATE TABLE IF NOT EXISTS study_materials (
@@ -168,18 +171,51 @@ export const LocalDB = {
         ON completion_logs(user_id, date, module_tag)
       `);
     } catch {}
+    // Profile personalization columns (added for AI context system)
+    try {
+      db.execSync(`ALTER TABLE user_profile ADD COLUMN year_of_study TEXT`);
+    } catch {}
+    try {
+      db.execSync(`ALTER TABLE user_profile ADD COLUMN degree TEXT`);
+    } catch {}
+    try {
+      db.execSync(`ALTER TABLE user_profile ADD COLUMN weak_areas TEXT`);
+    } catch {}
   },
 
   async saveUser(user: any) {
     const prefs = JSON.stringify(user.studyPreferences);
     db.runSync(
-      `INSERT OR REPLACE INTO user_profile (id, name, email, studyPreferences, hasFinishedSetup) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO user_profile (id, name, email, studyPreferences, hasFinishedSetup)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         name=excluded.name,
+         email=excluded.email,
+         studyPreferences=excluded.studyPreferences,
+         hasFinishedSetup=excluded.hasFinishedSetup`,
       [user.id, user.name, user.email, prefs, user.hasFinishedSetup ? 1 : 0],
     );
   },
 
   getUser: (uid: string) => {
     return db.getFirstSync(`SELECT * FROM user_profile WHERE id = ?`, [uid]);
+  },
+
+  saveUserProfile: (userId: string, yearOfStudy: string | null, degree: string | null, weakAreas: string[]) => {
+    db.runSync(
+      `UPDATE user_profile SET year_of_study = ?, degree = ?, weak_areas = ? WHERE id = ?`,
+      [yearOfStudy, degree, JSON.stringify(weakAreas), userId],
+    );
+  },
+
+  getUserProfile: (userId: string): { year_of_study: string | null; degree: string | null; weak_areas: string[] } => {
+    const row = db.getFirstSync(`SELECT year_of_study, degree, weak_areas FROM user_profile WHERE id = ?`, [userId]) as any;
+    if (!row) return { year_of_study: null, degree: null, weak_areas: [] };
+    return {
+      year_of_study: row.year_of_study ?? null,
+      degree: row.degree ?? null,
+      weak_areas: row.weak_areas ? JSON.parse(row.weak_areas) : [],
+    };
   },
 
   // MATERIALS

@@ -26,6 +26,7 @@ import { Providers } from "./providers";
 import NetInfo from "@react-native-community/netinfo";
 import Toast from "react-native-toast-message";
 import * as Updates from "expo-updates";
+import BrainwaveAPI from "@/api/brAInwaveApi";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -186,6 +187,19 @@ function NavigationHandler({ fontsLoaded }: { fontsLoaded: boolean }) {
 
     if (user) {
       router.replace(user.hasFinishedSetup ? "/(tabs)" : "/(onboarding)");
+      // Background: keep local profile cache fresh. Non-blocking, non-fatal.
+      BrainwaveAPI.getProfile()
+        .then((data: any) => {
+          if (data && user.id) {
+            LocalDB.saveUserProfile(
+              user.id,
+              data.year_of_study ?? null,
+              data.degree ?? null,
+              data.weak_areas ?? [],
+            );
+          }
+        })
+        .catch(() => {});
     } else {
       if (!hasSeenWelcome) {
         AsyncStorage.setItem("hasSeenWelcome", "true");

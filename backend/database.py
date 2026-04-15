@@ -113,6 +113,19 @@ class ModuleGoal(Base):
     module_tag: Mapped[str] = mapped_column(String, index=True)
     weekly_goal_minutes: Mapped[int] = mapped_column(Integer, default=0)
 
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    year_of_study: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    degree: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    weak_areas: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

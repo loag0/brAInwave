@@ -5,7 +5,7 @@ from google import genai
 from google.genai import types
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import auth, credentials
@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 import time
+import uuid
 
 # 1. Setup environment and Database
 load_dotenv()
@@ -194,6 +195,127 @@ class ModuleGoalSync(BaseModel):
     module_tag: str
     weekly_goal_minutes: int
 
+class UserProfileSchema(BaseModel):
+    year_of_study: Optional[str] = Field(None, max_length=20)
+    degree: Optional[str] = Field(None, max_length=120)
+    weak_areas: Optional[List[str]] = Field(default_factory=list, max_length=15)
+
+    @field_validator("year_of_study", "degree", mode="before")
+    @classmethod
+    def strip_and_sanitize_str(cls, v):
+        if v is None:
+            return v
+        # Remove non-printable control chars, collapse whitespace
+        cleaned = " ".join("".join(c for c in str(v) if c.isprintable()).split())
+        return cleaned or None
+
+    @field_validator("weak_areas", mode="before")
+    @classmethod
+    def sanitize_weak_areas(cls, v):
+        if not v:
+            return []
+        return [
+            " ".join("".join(c for c in str(s) if c.isprintable()).split())[:60]
+            for s in v
+            if isinstance(s, str) and s.strip()
+        ][:15]
+
+def sanitize_for_prompt(s: str, max_len: int = 120) -> str:
+    """Strip control chars and cap length to reduce prompt injection surface."""
+    if not s:
+        return s
+    cleaned = " ".join("".join(c for c in s if c.isprintable()).split())
+    return cleaned[:max_len]
+
+_SUBJECT_STOP_WORDS = {"and", "or", "of", "the", "to", "in", "for", "a", "an",
+                        "with", "introduction", "advanced", "applied", "fundamentals"}
+
+def subjects_overlap(a: str, b: str) -> bool:
+    """
+    Determines if two subject strings likely refer to the same area, even if phrased differently.
+    e.g., "Algorithms" and "Algorithm Design" would overlap, as would "Computer Networks" and "Network Security".
+    """
+    def tokenize(s: str):
+        words = s.lower().split()
+        tokens = set()
+        for w in words:
+            w = w.strip("()[].,;:'-")
+            w = w.rstrip("s")
+            if w and w not in _SUBJECT_STOP_WORDS and len(w) > 2:
+                tokens.add(w)
+        return tokens
+
+    return bool(tokenize(a) & tokenize(b))
+
+def build_user_context(user_id: str, db: Session) -> str:
+    """
+    Builds a student profile string to presend to Gemini prompts.
+    Returns empty string if no data exists (prompts still work cold).
+    """
+    from database import UserProfile
+    from datetime import timedelta
+
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+
+    # Behavioral signal: study engagement by subject in the last 30 days
+    cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    recent_logs = db.query(CompletionLog).filter(
+        CompletionLog.user_id == user_id,
+        CompletionLog.date >= cutoff
+    ).all()
+
+    subject_minutes: dict = {}
+    for log in recent_logs:
+        tag = log.module_tag
+        if tag and tag.strip():
+            subject_minutes[tag] = subject_minutes.get(tag, 0) + log.minutes_studied
+
+    # Less than 60 min in 30 days = low engagement / likely struggling or avoiding
+    low_engagement = [s for s, m in subject_minutes.items() if m < 60]
+
+    # Current course load from active assignments
+    active_assignments = db.query(Assignment).filter(
+        Assignment.user_id == user_id,
+        Assignment.is_deleted == 0
+    ).all()
+    current_subjects = list(dict.fromkeys(a.subject for a in active_assignments if a.subject))
+
+    # combine self-reported weak areas with low-engagement subjects
+    reported_weak = json.loads(profile.weak_areas or "[]") if profile else []
+    all_weak = list(dict.fromkeys(reported_weak + low_engagement))
+
+    lines = []
+    if profile:
+        if profile.year_of_study:
+            lines.append(f"- Year of study: {sanitize_for_prompt(profile.year_of_study, 20)}")
+        if profile.degree:
+            lines.append(f"- Degree programme: {sanitize_for_prompt(profile.degree, 120)}")
+
+    if current_subjects:
+        safe_subjects = [sanitize_for_prompt(s, 80) for s in current_subjects if s]
+        lines.append(f"- Current course load: {', '.join(safe_subjects)}")
+
+    if all_weak:
+        safe_weak = [sanitize_for_prompt(w, 60) for w in all_weak if w]
+        lines.append(
+            f"- Weak/low-engagement subjects (match semantically — 'Algorithms' covers "
+            f"'Algorithm Analysis', 'Algorithm Design'; 'Networks' covers 'Computer Networks', "
+            f"'Network Security'): {', '.join(safe_weak)}"
+        )
+
+    if subject_minutes:
+        most_studied = max(subject_minutes, key=lambda k: subject_minutes[k])
+        total_recent = sum(subject_minutes.values())
+        lines.append(
+            f"- Recent study focus: {sanitize_for_prompt(most_studied, 60)} "
+            f"({subject_minutes[most_studied]} min logged), {total_recent} min total in last 30 days"
+        )
+
+    if not lines:
+        return ""
+
+    return "STUDENT PROFILE:\n" + "\n".join(lines)
+
 # --- Routes ---
 
 @app.post("/upload-syllabus")
@@ -211,8 +333,20 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
             raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         mime_type = file.content_type or "text/plain"
 
-        prompt = """
+        today = datetime.now().strftime("%Y-%m-%d")
+        user_context = build_user_context(user_id, db)
+        profile_block = f"\n{user_context}\n" if user_context else ""
+        weak_area_note = (
+            "\nPERSONALIZATION DIRECTIVES:\n"
+            "- If a student profile is provided above, tailor the week-by-week timeline to their year of study (a 1st year needs more scaffolding; a final year needs precision and efficiency).\n"
+            "- If any topics in this syllabus match the student's weak/low-engagement subjects, flag them explicitly in the Time Allocation Breakdown with a [WEAK AREA] tag and increase their suggested hours by at least 30%.\n"
+            "- In the Retention Strategy, address the specific subject types this student struggles with — not generic advice.\n"
+        ) if user_context else ""
+
+        prompt = f"""
         You are brAInwave, an AI study planning engine built for college students. Analyze this syllabus or study material and produce a structured, actionable study plan in clean Markdown.
+        {profile_block}
+        TODAY'S DATE: {today}. Use this as the starting point for all timelines and schedules.
 
         Your output MUST contain exactly these sections in this order:
 
@@ -222,14 +356,20 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
         ## Key Topics & Concepts
         List every major topic extracted from the syllabus. Group related subtopics under each. Be exhaustive - don't skip anything listed in the document.
 
+        ## Exam Probability Matrix
+        Analyze the syllabus to estimate which topics are most likely to appear in assessments. Base your ranking on: how much content the syllabus dedicates to each topic, whether it appears in stated learning outcomes, and whether it's linked to graded assessments or practicals.
+        Rank the top 5-7 topics as High / Medium / Lower likelihood. Be explicit about your reasoning.
+        Example format: "Graph Algorithms: HIGH — appears in 3 learning outcomes, linked to the final project, and takes up 4 of 12 weeks."
+
         ## Week-by-Week Study Timeline
-        Break the content into a realistic weekly schedule from now until the end of the course or exam. Each week entry must include:
+        Break the content into a realistic weekly schedule starting from {today} until the end of the course or exam. Each week entry must include:
         - Which topics to cover
         - Suggested hours for that week
         - One specific study method suited to that week's content (e.g., "Use Cornell Notes for Week 1 - heavy theory load")
 
         ## Time Allocation Breakdown
         For each major topic, estimate total study hours needed and assign a priority level (High / Medium / Low) based on its weight in the course.
+        If a topic matches a student weak area (see profile above), flag it with [WEAK AREA] and add 30%+ to the suggested hours.
 
         ## Study Techniques by Topic Type
         Match specific techniques to the types of content in this course. Examples:
@@ -246,8 +386,8 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
         Provide 4-6 self-assessment checkpoints spaced across the study timeline. Each checkpoint must include a specific question or mini-test the student can do to verify understanding before moving on.
 
         ## Retention Strategy
-        3-5 evidence-based tips tailored to the content type in this course. Focus on long-term retention, not cramming. Be direct and specific - not generic advice.
-
+        3-5 evidence-based tips tailored to the content type in this course and this specific student's profile if provided. Focus on long-term retention, not cramming. Be direct and specific - not generic advice.
+        {weak_area_note}
         ---
         TONE: Sharp, encouraging, and honest. Write like a top tutor who knows what actually works for busy students.
         FORMATTING: Use Markdown only. No LaTeX. For any math or logic symbols use Unicode (e.g., ∀, ∃, Δ, →, ∑, √).
@@ -300,7 +440,7 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         - due_date: The submission deadline in YYYY-MM-DD format. ONLY extract this if a date is explicitly written in the document. If no date is found, return null - do NOT guess or infer.
         - due_time: The submission time if explicitly specified (e.g., "23:59", "11:59 PM"). Return null if not found.
         - priority: Assess complexity, weight, and scope. Return one of: 'low', 'medium', or 'high'.
-        - estimated_hours: Estimate realistic total hours needed to complete this assignment well. Return an integer.
+        - estimated_hours: Estimate realistic total hours needed to complete this assignment well. Return an integer between 1 and 40.
         - assignment_type: Classify the work. One of: 'essay', 'report', 'project', 'coding', 'presentation', 'research', 'problem_set', or 'other'.
         - key_requirements: A JSON array of strings, each being one core requirement extracted directly from the document (e.g., ["Minimum 2500 words", "Harvard referencing", "Include UML diagrams"]). Max 6 items.
         - marking_criteria: A JSON array of strings describing how marks are allocated, if stated in the document. Return an empty array if not found.
@@ -323,15 +463,59 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         key_requirements = meta_data.get("key_requirements", [])
         marking_criteria = meta_data.get("marking_criteria", [])
 
+        # Deadline conflict detection — check other assignments due within 7 days of this one
+        deadline_conflict_block = ""
+        if meta_data.get("due_date"):
+            try:
+                this_due = datetime.strptime(meta_data["due_date"], "%Y-%m-%d")
+                today_dt = datetime.now()
+                days_remaining = (this_due - today_dt).days
+                other_assignments = db.query(Assignment).filter(
+                    Assignment.user_id == user_id,
+                    Assignment.is_deleted == 0,
+                    Assignment.due_date != None
+                ).all()
+                conflicts = []
+                for a in other_assignments:
+                    try:
+                        other_due = datetime.strptime(a.due_date, "%Y-%m-%d")
+                        if abs((other_due - this_due).days) <= 7:
+                            delta = (other_due - today_dt).days
+                            conflicts.append(f"- {a.title} ({a.subject}) — due in {delta} day(s) ({a.due_date}), priority: {a.priority}")
+                    except Exception:
+                        pass
+                velocity = ""
+                if isinstance(estimated_hours, int) and days_remaining > 0:
+                    hrs_per_day = round(estimated_hours / days_remaining, 1)
+                    flag = " [TIGHT]" if hrs_per_day > 3 else ""
+                    velocity = f"\n- Velocity check: {estimated_hours}h needed, {days_remaining} days remaining = {hrs_per_day}h/day required{flag}"
+                if conflicts or velocity:
+                    deadline_conflict_block = "\n--- DEADLINE CONTEXT ---" + velocity
+                    if conflicts:
+                        deadline_conflict_block += "\nOther assignments due within 7 days of this one:\n" + "\n".join(conflicts)
+                        deadline_conflict_block += "\nADJUST the Time Allocation Guide to account for this competing load. Front-load this assignment if it's higher priority."
+            except Exception:
+                pass
+
+        # User profile context
+        user_context = build_user_context(user_id, db)
+        profile_block = f"\n{user_context}\n" if user_context else ""
+        weak_area_note = (
+            "\nPERSONALIZATION DIRECTIVES:\n"
+            "- If the assignment subject matches a student weak area (see profile above), increase estimated effort in the Time Allocation Guide by at least 25% and add a specific note in Red Flags about the most common comprehension gap for this subject.\n"
+            "- If a year of study is provided, calibrate your expectations: a 1st year needs more structure and hand-holding; a final year needs efficiency and depth.\n"
+        ) if user_context else ""
+
         guide_prompt = f"""
         You are brAInwave, a specialized academic consultant and assignment strategist. Your job is to produce a detailed, battle-tested Master Plan for this specific assignment.
-
-        --- ASSIGNMENT CONTEXT (already extracted) ---
+        {profile_block}
+        --- ASSIGNMENT CONTEXT (pre-extracted from the document - use it as your framework, and refer to the document itself for additional detail where needed) ---
         - Type: {assignment_type}
         - Estimated Hours to Complete: {estimated_hours}
         - Due Date: {due_date} {due_time or ""}
         - Key Requirements: {json.dumps(key_requirements)}
         - Marking Criteria: {json.dumps(marking_criteria)}
+        {deadline_conflict_block}
 
         Use this context to make every section of the plan specific and relevant. Do NOT write generic advice - every recommendation must reflect this assignment's type, scope, and requirements above.
 
@@ -364,6 +548,7 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         ## 5. Time Allocation Guide
         Break the {estimated_hours} estimated hours into phases. Show suggested hours per phase.
         Flag the most time-intensive phases. Recommend when to start each phase relative to the due date of {due_date}.
+        Reference any deadline conflicts listed above when sequencing the phases.
 
         ## 6. Mark-Maximizing Tips
         3-5 specific, high-value tips for THIS assignment type that most students overlook.
@@ -372,7 +557,7 @@ async def processAssignment(request: Request, user_id: str = Depends(verify_toke
         ## 7. Red Flags & Common Mistakes
         Top 3-5 mistakes students make on a {assignment_type} assignment. Be specific - not generic warnings.
         Include how to avoid each one.
-
+        {weak_area_note}
         ---
         TONE: Sharp, direct, and encouraging. Like a tutor who has seen hundreds of students fail and succeed at this exact type of work.
         FORMATTING: Markdown only. No LaTeX. Unicode for any math symbols.
@@ -478,7 +663,7 @@ async def uploadTimetable(request: Request, user_id: str = Depends(verify_token)
 
         CRITICAL INSTRUCTIONS:
         1. Extract the 'time' exactly as it appears in the document (e.g., "10:00 - 11:00"). Do NOT adjust for timezones.
-        2. For 'duration': calculate the length of the class from the time range and return it as a string (e.g., "60 min", "90 min", "2 hours"). If the time range is unclear, default to "60 min".
+        2. For 'duration': Calculate the EXACT difference between start and end time in minutes. Do NOT round to the nearest hour. Examples: "0800 - 0850" = "50 min", "0800 - 0950" = "110 min", "09:00 - 10:30" = "90 min". Return as "X min" always. If the time range is completely unparseable, default to "50 min".
         3. If a day has no classes, return an empty list for that day.
         4. For 'difficulty': infer from the subject name using these rules:
            - Technical/mathematical subjects (e.g., Engineering, Physics, Calculus, Programming, Networks, Algorithms) → "hard"
@@ -658,7 +843,22 @@ async def generateDailyPlan(request: Request, plan_data: PlanRequest, user_id: s
             StudyMaterial.user_id == user_id,
             StudyMaterial.is_deleted == 0
         ).all()
-        materials_list = [{"title": m.title, "summary": m.aiPlan[:300] if m.aiPlan else "No details"} for m in materials]
+        def extract_material_summary(plan: str) -> str:
+            if not plan:
+                return "No details"
+            # Try to extract just the Key Topics section for a denser summary
+            for marker in ["## Key Topics", "## Time Allocation", "## Week-by-Week"]:
+                idx = plan.find(marker)
+                if idx != -1:
+                    snippet = plan[idx:idx + 600]
+                    # Cut at last complete sentence/line to avoid mid-word truncation
+                    cut = snippet.rfind("\n", 0, 600)
+                    return snippet[:cut] if cut > 100 else snippet
+            # Fallback: first 600 chars, cut at last newline
+            cut = plan.rfind("\n", 0, 600)
+            return plan[:cut] if cut > 100 else plan[:600]
+
+        materials_list = [{"title": m.title, "summary": extract_material_summary(m.aiPlan)} for m in materials]
 
         generatedItems = await aiOptimization(
             classes=todaysClasses,
@@ -668,7 +868,9 @@ async def generateDailyPlan(request: Request, plan_data: PlanRequest, user_id: s
             dayOfWeek=dayOfWeekName.capitalize(),
             prefs=prefs,
             customTasks=customTaskList,
-            userNote=plan_data.userNote
+            userNote=plan_data.userNote,
+            user_id=user_id,
+            db=db
         )
 
         items_json = json.dumps(generatedItems)
@@ -692,7 +894,9 @@ async def generateDailyPlan(request: Request, plan_data: PlanRequest, user_id: s
         print(f"Error generating plan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs, customTasks=None, userNote=None):
+async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs, customTasks=None, userNote=None, user_id=None, db=None):
+    from datetime import timedelta
+
     customContext = json.dumps(customTasks) if customTasks else "None"
     materialsContext = json.dumps(materials) if materials else "None"
 
@@ -709,10 +913,59 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
     # Build canonical subject name list for the model to reference
     class_subjects = [c.get("subject", "") for c in classes if c.get("subject")]
     assignment_subjects = [a.get("title", "") for a in assignments if a.get("title")]
-    all_known_subjects = list(dict.fromkeys(class_subjects + priorityList + assignment_subjects))  # deduplicated, order preserved
+    all_known_subjects = list(dict.fromkeys(class_subjects + priorityList + assignment_subjects))
+
+    # --- Behavioral study context from completion logs ---
+    behavior_block = ""
+    if user_id and db:
+        try:
+            cutoff_7d = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+            week_logs = db.query(CompletionLog).filter(
+                CompletionLog.user_id == user_id,
+                CompletionLog.date >= cutoff_7d
+            ).all()
+
+            weekly_minutes: dict = {}
+            for log in week_logs:
+                tag = log.module_tag
+                if tag and tag.strip():
+                    weekly_minutes[tag] = weekly_minutes.get(tag, 0) + log.minutes_studied
+
+            total_weekly = sum(weekly_minutes.values())
+            studied_subjects = [f"{s} ({m} min)" for s, m in weekly_minutes.items()]
+            # Priority subjects that haven't been touched this week (word-level match)
+            unstudied_priorities = [
+                s for s in priorityList
+                if not any(subjects_overlap(s, k) for k in weekly_minutes)
+            ]
+            # Check if any priority subject has been completely avoided for 14+ days
+            cutoff_14d = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+            long_avoided = []
+            for subject in priorityList:
+                recent = db.query(CompletionLog).filter(
+                    CompletionLog.user_id == user_id,
+                    CompletionLog.date >= cutoff_14d,
+                    CompletionLog.module_tag.ilike(f"%{subject}%")
+                ).first()
+                if not recent:
+                    long_avoided.append(subject)
+
+            behavior_block = f"""
+        --- STUDY BEHAVIOR (last 7 days from completion logs) ---
+        - Total study time logged this week: {total_weekly} minutes
+        - Subjects studied this week: {', '.join(studied_subjects) if studied_subjects else "None logged yet"}
+        - Priority subjects NOT studied this week: {', '.join(unstudied_priorities) if unstudied_priorities else "None — good coverage this week"}
+        - Subjects not studied in 14+ days (avoidance signal): {', '.join(long_avoided) if long_avoided else "None detected"}
+        BEHAVIORAL DIRECTIVES:
+        - Any subject not studied this week that is in the priority list MUST appear in today's plan.
+        - If a subject hasn't been studied in 14+ days, add a 15-20 min "re-entry" warm-up block before the main study block for that subject. Label it as "Review & Restart: [subject]" to reduce re-entry friction.
+        - Do NOT schedule brain breaks immediately after re-entry blocks — the student needs momentum first.
+"""
+        except Exception:
+            behavior_block = ""
 
     prompt = f"""
-        You are brAInwave, a professional AI Study Architect. Your goal is to build a high-performance daily schedule tailored to a student's specific cognitive profile and academic load.
+        You are brAInwave, a professional AI Study Architect. Your goal is to build a high-performance daily schedule tailored to a student's specific cognitive profile, academic load, and actual study history.
 
         SCHEDULE DATE: {dayOfWeek}, {date}
 
@@ -721,6 +974,7 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         - Preferred Study Block Length: {targetRange} minutes
         - Goal Mode: {prefs.get('mode', 'stay_consistent').replace('_', ' ')}
         - Subject Priorities (index 0 = highest priority): {priorityContext}
+        {behavior_block}
 
         --- DATA INPUTS ---
         - Today's Classes: {json.dumps(classes)}
@@ -762,7 +1016,6 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         --- OUTPUT FORMAT ---
         Return a JSON object with a single key "items" containing an array. Each item MUST follow this exact schema:
         {{
-            "id": "unique_uuid_string",
             "time": "HH:MM AM/PM",
             "subject": "Exact name from Canonical Subject Names list",
             "task": "Specific actionable instruction",
@@ -778,7 +1031,10 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         config=types.GenerateContentConfig(response_mime_type="application/json"),
         contents=[prompt]
     ))
-    return result.get("items", [])
+    items = result.get("items", [])
+    for item in items:
+        item["id"] = str(uuid.uuid4())
+    return items
 
 @app.get("/daily-plans")
 @limiter.limit("60/minute")
@@ -882,6 +1138,39 @@ async def deleteStudyMaterial(request: Request, material_id: int, user_id: str =
     db.commit()
     return {"status": "success"}
 
+@app.get("/profile")
+@limiter.limit("60/minute")
+async def getProfile(request: Request, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    from database import UserProfile
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+    if not profile:
+        return {"year_of_study": None, "degree": None, "weak_areas": []}
+    return {
+        "year_of_study": profile.year_of_study,
+        "degree": profile.degree,
+        "weak_areas": json.loads(profile.weak_areas or "[]")
+    }
+
+@app.post("/profile")
+@limiter.limit("10/minute")
+async def saveProfile(request: Request, data: UserProfileSchema, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    from database import UserProfile
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+    if profile:
+        profile.year_of_study = data.year_of_study
+        profile.degree = data.degree
+        profile.weak_areas = json.dumps(data.weak_areas or [])
+        profile.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(UserProfile(
+            user_id=user_id,
+            year_of_study=data.year_of_study,
+            degree=data.degree,
+            weak_areas=json.dumps(data.weak_areas or [])
+        ))
+    db.commit()
+    return {"status": "success"}
+
 @app.post("/generate-flashcards")
 @limiter.limit("10/minute")
 async def generateFlashcards(request: Request, material_id: int, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
@@ -906,22 +1195,65 @@ async def generateFlashcards(request: Request, material_id: int, user_id: str = 
             card_style = "Focus on key arguments, definitions, theories, dates, and their significance. Questions should test understanding of relationships between ideas."
 
         # Determine card count based on content length
-        content_length = len(material.aiPlan or "")
+        content_length = len(material.aiPlan or "") + len(material.rawContent or "")
         card_count = 10 if content_length > 3000 else 7 if content_length > 1500 else 5
+
+        # Build content block: prefer original source, supplement with AI study plan
+        raw = (material.rawContent or "").strip()
+        plan = (material.aiPlan or "").strip()
+        if raw and plan:
+            combined_content = f"ORIGINAL CONTENT:\n{raw}\n\nAI STUDY PLAN (supplementary):\n{plan}"
+        elif plan:
+            combined_content = f"AI STUDY PLAN:\n{plan}"
+        else:
+            combined_content = f"ORIGINAL CONTENT:\n{raw}"
+
+        # Check if this subject is a known weak area to adjust difficulty distribution
+        user_context = build_user_context(user_id, db)
+        profile_block = f"\n{user_context}\n" if user_context else ""
+
+        # Detect weak area match by checking profile weak_areas against material title
+        is_weak_area = False
+        if user_context:
+            from database import UserProfile
+            from datetime import timedelta
+            profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            reported_weak = json.loads(profile.weak_areas or "[]") if profile else []
+            cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            low_logs = db.query(CompletionLog).filter(
+                CompletionLog.user_id == user_id,
+                CompletionLog.date >= cutoff
+            ).all()
+            low_subjects = [l.module_tag for l in low_logs if l.module_tag and l.minutes_studied < 60]
+            all_weak = reported_weak + low_subjects
+            # Use word-level semantic overlap instead of substring matching.
+            # "Algorithms" correctly matches "Algorithm Analysis" and "Graph Algorithms"
+            # but does NOT incorrectly match "Data Structures".
+            is_weak_area = any(subjects_overlap(w, material.title) for w in all_weak)
+
+        if is_weak_area:
+            difficulty_instruction = (
+                "DIFFICULTY DISTRIBUTION (WEAK AREA MODE): This subject is flagged as a weak area for this student. "
+                "Skew difficulty toward medium and hard — approximately 15% easy, 45% medium, 40% hard. "
+                "Prioritize foundational concept cards that address common misconceptions before advanced application. "
+                "Easy cards should still test genuine understanding, not just surface recall."
+            )
+        else:
+            difficulty_instruction = "Distribute difficulty evenly: approximately 1/3 easy, 1/3 medium, 1/3 hard."
 
         prompt = f"""
         You are brAInwave, a study assistant specializing in active recall techniques. Generate a set of high-quality flashcards from the study material below.
-
+        {profile_block}
         MATERIAL TITLE: {material.title}
         SUBJECT TYPE: {subject_type}
         CARD STYLE DIRECTIVE: {card_style}
 
         CONTENT:
-        {material.aiPlan}
+        {combined_content}
 
         INSTRUCTIONS:
         1. Generate exactly {card_count} flashcards. No more, no less.
-        2. Distribute difficulty evenly: approximately 1/3 easy, 1/3 medium, 1/3 hard.
+        2. {difficulty_instruction}
         3. Each flashcard must have:
            - "question": A concise, single-concept question. No multi-part questions.
            - "answer": A clear, complete answer. For technical topics, include the formula or step-by-step if relevant. Max 3 sentences.

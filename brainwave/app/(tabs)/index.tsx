@@ -407,8 +407,14 @@ export default function Home() {
                   </Text>
                 </View>
               ) : null}
-              {todaysSchedule.length > 0 ? (
-                todaysSchedule.slice(0, 3).map((item, idx) => (
+              {todaysSchedule.length > 0 ? (() => {
+                const upcoming = todaysSchedule.filter(
+                  (item) => !isTaskPastHome(item) && !item.completed
+                );
+                const displayTasks = upcoming.length > 0
+                  ? upcoming.slice(0, 3)
+                  : todaysSchedule.slice(-3);
+                return displayTasks.map((item, idx) => (
                   <View
                     key={idx}
                     style={[
@@ -464,8 +470,8 @@ export default function Home() {
                       </View>
                     </View>
                   </View>
-                ))
-              ) : (
+                ));
+              })( ) : (
                 <View style={{ alignItems: "center", paddingVertical: 15 }}>
                   <SunIcon size={32} color={theme.colors.warning} />
                   <Text

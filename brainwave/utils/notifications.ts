@@ -128,6 +128,43 @@ export function parseDurationMinutes(durationStr?: string): number {
   return val;
 }
 
+/**
+ * Parses a time range string like "0800 - 0950" or "09:00 - 10:30 AM" and returns the exact duration in minutes. Falls back to parseDurationMinutes
+*/
+export function parseDurationFromTimeRange(timeStr: string, fallbackDuration?: string): number {
+  if (!timeStr || !timeStr.includes("-")) {
+    return parseDurationMinutes(fallbackDuration);
+  }
+
+  const parts = timeStr.split("-").map((s) => s.trim());
+  if (parts.length < 2) return parseDurationMinutes(fallbackDuration);
+
+  const parseMinutes = (t: string): number | null => {
+    // "0800", "0950" — military no colon
+    const mil = t.match(/^(\d{2})(\d{2})$/);
+    if (mil) return parseInt(mil[1]) * 60 + parseInt(mil[2]);
+    // "10:30", "10:30 AM/PM"
+    const col = t.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+    if (col) {
+      let h = parseInt(col[1]);
+      const m = parseInt(col[2]);
+      const mod = col[3]?.toLowerCase();
+      if (mod === "pm" && h < 12) h += 12;
+      if (mod === "am" && h === 12) h = 0;
+      return h * 60 + m;
+    }
+    return null;
+  };
+
+  const startMins = parseMinutes(parts[0]);
+  const endMins = parseMinutes(parts[1]);
+
+  if (startMins === null || endMins === null) return parseDurationMinutes(fallbackDuration);
+
+  const diff = endMins - startMins;
+  return diff > 0 ? diff : parseDurationMinutes(fallbackDuration);
+}
+
 export function formatTimeTo24h(timeStr: string): string {
   if (!timeStr) return "";
 

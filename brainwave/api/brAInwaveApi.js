@@ -264,6 +264,16 @@ class BrAInwaveAPI {
     return response.data;
   }
 
+  async getProfile() {
+    const response = await axios.get(`${API_BASE_URL}/profile`);
+    return response.data;
+  }
+
+  async saveProfile(profileData) {
+    const response = await axios.post(`${API_BASE_URL}/profile`, profileData);
+    return response.data;
+  }
+
   async checkHealth() {
     const response = await axios.get(`${API_BASE_URL}/health`);
     return response.data;

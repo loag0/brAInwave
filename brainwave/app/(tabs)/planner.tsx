@@ -46,6 +46,7 @@ import {
   sortTasksByTime,
   parseStartDate,
   parseDurationMinutes,
+  parseDurationFromTimeRange,
   formatTimeTo24h,
 } from "@/utils/notifications";
 
@@ -487,16 +488,22 @@ export default function Planner() {
         .toLocaleDateString("en-US", { weekday: "long" })
         .toLowerCase();
       const templateClasses = weeklyTemplate?.[dayName] || [];
-      const formattedItems = templateClasses.map((cls: any, index: number) => ({
-        id: `temp-${index}`,
-        time: cls.time,
-        subject: cls.subject || cls.course || cls.name || "Class",
-        task: "Class Lecture",
-        duration: "1 hour",
-        completed: false,
-        difficulty: cls.difficulty || "unset",
-        isTemplate: true,
-      }));
+      const formattedItems = templateClasses.map((cls: any, index: number) => {
+        // Compute duration from the time range string (e.g. "0800 - 0950" → 110 min).
+        // This is reliable even when the stored cls.duration value is wrong (e.g. old data
+        // that Gemini rounded to "1 hour"). Falls back to stored duration if no range found.
+        const computedMins = parseDurationFromTimeRange(cls.time, cls.duration);
+        return {
+          id: `temp-${index}`,
+          time: cls.time,
+          subject: cls.subject || cls.course || cls.name || "Class",
+          task: "Class Lecture",
+          duration: `${computedMins} min`,
+          completed: false,
+          difficulty: cls.difficulty || "unset",
+          isTemplate: true,
+        };
+      });
 
       // Inject assignments due on this day
       const dueAssignments =
