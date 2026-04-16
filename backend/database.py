@@ -34,6 +34,7 @@ class StudyMaterial(Base):
     title: Mapped[str] = mapped_column(String, index=True)
     rawContent: Mapped[str] = mapped_column(Text)
     aiPlan: Mapped[str] = mapped_column(Text)
+    module_tag: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     file_uri: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     file_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

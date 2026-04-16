@@ -181,6 +181,10 @@ export const LocalDB = {
     try {
       db.execSync(`ALTER TABLE user_profile ADD COLUMN weak_areas TEXT`);
     } catch {}
+    // Module tagging for study materials
+    try {
+      db.execSync(`ALTER TABLE study_materials ADD COLUMN module_tag TEXT`);
+    } catch {}
   },
 
   async saveUser(user: any) {
@@ -229,10 +233,10 @@ export const LocalDB = {
 
   getMaterialById: (userId: string, id: string) => {
     return db.getFirstSync(
-      `SELECT title, aiPlan, remote_id FROM study_materials
+      `SELECT id, title, aiPlan, remote_id, module_tag FROM study_materials
       WHERE user_id = ? AND (id = ? OR remote_id = ?) AND is_deleted = 0`,
       [userId, id, id],
-    ) as { title: string; aiPlan: string; remote_id: number } | undefined;
+    ) as { id: number; title: string; aiPlan: string; remote_id: number; module_tag: string | null } | undefined;
   },
 
   createMaterialLocally: (
@@ -265,25 +269,39 @@ export const LocalDB = {
     }
     for (const m of materials) {
       db.runSync(
-        `INSERT OR REPLACE INTO study_materials (user_id, remote_id, title, rawContent, aiPlan, is_dirty, is_deleted)
-         VALUES (?, ?, ?, ?, ?, 0, 0)`,
-        [userId, m.id, m.title, m.rawContent, m.aiPlan],
+        `INSERT INTO study_materials (user_id, remote_id, title, rawContent, aiPlan, module_tag, is_dirty, is_deleted)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+         ON CONFLICT(remote_id) DO UPDATE SET
+           title = excluded.title,
+           rawContent = excluded.rawContent,
+           aiPlan = excluded.aiPlan,
+           module_tag = excluded.module_tag,
+           is_deleted = 0
+         WHERE is_dirty = 0`,
+        [userId, m.id, m.title, m.rawContent || "", m.aiPlan || "", m.module_tag ?? null],
       );
     }
   },
 
-  markMaterialSynced: (localId: number, remoteId: number, aiPlan?: string) => {
+  markMaterialSynced: (localId: number, remoteId: number, aiPlan?: string, moduleTag?: string | null) => {
     if (aiPlan) {
       db.runSync(
-        `UPDATE study_materials SET is_dirty = 0, remote_id = ?, aiPlan = ? WHERE id = ?`,
-        [remoteId, aiPlan, localId],
+        `UPDATE study_materials SET is_dirty = 0, remote_id = ?, aiPlan = ?, module_tag = ? WHERE id = ?`,
+        [remoteId, aiPlan, moduleTag ?? null, localId],
       );
     } else {
       db.runSync(
-        `UPDATE study_materials SET is_dirty = 0, remote_id = ? WHERE id = ?`,
-        [remoteId, localId],
+        `UPDATE study_materials SET is_dirty = 0, remote_id = ?, module_tag = ? WHERE id = ?`,
+        [remoteId, moduleTag ?? null, localId],
       );
     }
+  },
+
+  updateMaterialModuleTag: (userId: string, localId: number, moduleTag: string | null) => {
+    db.runSync(
+      `UPDATE study_materials SET module_tag = ?, is_dirty = 1 WHERE user_id = ? AND id = ?`,
+      [moduleTag ?? null, userId, localId],
+    );
   },
 
   deleteMaterial: (userId: string, id: string | number) => {
@@ -341,11 +359,24 @@ export const LocalDB = {
       ]);
     }
     for (const t of tables) {
-      db.runSync(
-        `INSERT OR REPLACE INTO timetables (user_id, remote_id, title, structuredData, is_dirty, is_deleted)
-         VALUES (?, ?, ?, ?, 0, 0)`,
-        [userId, t.id, t.title, JSON.stringify(t.structuredData)],
-      );
+      const existing = db.getFirstSync(
+        `SELECT id, is_dirty FROM timetables WHERE user_id = ? AND remote_id = ?`,
+        [userId, t.id],
+      ) as any;
+      if (existing) {
+        if (!existing.is_dirty) {
+          db.runSync(
+            `UPDATE timetables SET title = ?, structuredData = ?, is_deleted = 0 WHERE id = ?`,
+            [t.title, JSON.stringify(t.structuredData), existing.id],
+          );
+        }
+        // dirty = local changes win, skip
+      } else {
+        db.runSync(
+          `INSERT INTO timetables (user_id, remote_id, title, structuredData, is_dirty, is_deleted) VALUES (?, ?, ?, ?, 0, 0)`,
+          [userId, t.id, t.title, JSON.stringify(t.structuredData)],
+        );
+      }
     }
   },
 
@@ -516,8 +547,17 @@ export const LocalDB = {
     }
     for (const a of assignments) {
       db.runSync(
-        `INSERT OR REPLACE INTO assignments (user_id, remote_id, title, subject, due_date, due_time, priority, rawContent, is_dirty, is_deleted)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+        `INSERT INTO assignments (user_id, remote_id, title, subject, due_date, due_time, priority, rawContent, is_dirty, is_deleted)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+         ON CONFLICT(remote_id) DO UPDATE SET
+           title = excluded.title,
+           subject = excluded.subject,
+           due_date = excluded.due_date,
+           due_time = excluded.due_time,
+           priority = excluded.priority,
+           rawContent = excluded.rawContent,
+           is_deleted = 0
+         WHERE is_dirty = 0`,
         [
           userId,
           a.id,
@@ -704,11 +744,11 @@ export const LocalDB = {
   getModuleStudyHours: (userId: string) => {
     return db.getAllSync(
       `SELECT module_tag, SUM(minutes_studied) as total_minutes
-     FROM completion_logs
-     WHERE user_id = ? AND module_tag != ''
-     AND date >= date('now', '-7 days')
-     GROUP BY module_tag
-     ORDER BY total_minutes DESC`,
+      FROM completion_logs
+      WHERE user_id = ? AND module_tag != ''
+      AND date >= date('now', '-7 days')
+      GROUP BY module_tag
+      ORDER BY total_minutes DESC`,
       [userId],
     ) as { module_tag: string; total_minutes: number }[];
   },

@@ -118,6 +118,14 @@ class BrAInwaveAPI {
     return response.data;
   }
 
+  async updateMaterialModuleTag(materialId, moduleTag) {
+    const response = await axios.patch(
+      `${API_BASE_URL}/study-material/${materialId}/module-tag`,
+      { module_tag: moduleTag },
+    );
+    return response.data;
+  }
+
   /**
    * Syncs a local timetable to Supabase.
    * Matching Endpoint: POST /timetables

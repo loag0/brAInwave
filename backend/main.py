@@ -195,6 +195,9 @@ class ModuleGoalSync(BaseModel):
     module_tag: str
     weekly_goal_minutes: int
 
+class ModuleTagUpdate(BaseModel):
+    module_tag: Optional[str] = None
+
 class UserProfileSchema(BaseModel):
     year_of_study: Optional[str] = Field(None, max_length=20)
     degree: Optional[str] = Field(None, max_length=120)
@@ -230,22 +233,57 @@ def sanitize_for_prompt(s: str, max_len: int = 120) -> str:
 _SUBJECT_STOP_WORDS = {"and", "or", "of", "the", "to", "in", "for", "a", "an",
                         "with", "introduction", "advanced", "applied", "fundamentals"}
 
+def _tokenize_subject(s: str) -> set:
+    words = s.lower().split()
+    tokens = set()
+    for w in words:
+        w = w.strip("()[].,;:'-")
+        w = w.rstrip("s")
+        if w and w not in _SUBJECT_STOP_WORDS and len(w) > 2:
+            tokens.add(w)
+    return tokens
+
 def subjects_overlap(a: str, b: str) -> bool:
     """
     Determines if two subject strings likely refer to the same area, even if phrased differently.
     e.g., "Algorithms" and "Algorithm Design" would overlap, as would "Computer Networks" and "Network Security".
     """
-    def tokenize(s: str):
-        words = s.lower().split()
-        tokens = set()
-        for w in words:
-            w = w.strip("()[].,;:'-")
-            w = w.rstrip("s")
-            if w and w not in _SUBJECT_STOP_WORDS and len(w) > 2:
-                tokens.add(w)
-        return tokens
+    return bool(_tokenize_subject(a) & _tokenize_subject(b))
 
-    return bool(tokenize(a) & tokenize(b))
+def detect_module_tag(title: str, timetable_data: dict) -> Optional[str]:
+    """
+    Auto-detect a module tag for an uploaded material by scoring word overlap
+    between the material title and each unique subject in the user's timetable.
+    Returns the best single match, or None if ambiguous or no match found.
+    """
+    import re
+    subject_set: set = set()
+    for day_entries in timetable_data.values():
+        if not isinstance(day_entries, list):
+            continue
+        for entry in day_entries:
+            subj = entry.get("subject") or entry.get("course") or entry.get("name")
+            if subj:
+                cleaned = re.sub(
+                    r'\b(LAB|LECTURE|LEC|TUTORIAL|TUT|PRACTICAL|PRAC)\b',
+                    '', subj, flags=re.IGNORECASE
+                ).strip()
+                if cleaned:
+                    subject_set.add(cleaned)
+
+    scores = {}
+    title_tokens = _tokenize_subject(title)
+    for subj in subject_set:
+        overlap = len(title_tokens & _tokenize_subject(subj))
+        if overlap > 0:
+            scores[subj] = overlap
+
+    if not scores:
+        return None
+
+    max_score = max(scores.values())
+    best = [s for s, sc in scores.items() if sc == max_score]
+    return best[0] if len(best) == 1 else None
 
 def build_user_context(user_id: str, db: Session) -> str:
     """
@@ -401,19 +439,32 @@ async def processSyllabus(request: Request, user_id: str = Depends(verify_token)
             ]
         )
 
+        # Auto-detect module tag from title vs timetable subjects
+        detected_module_tag = None
+        latest_timetable = db.query(Timetable).filter(
+            Timetable.user_id == user_id
+        ).order_by(Timetable.created_at.desc()).first()
+        if latest_timetable:
+            try:
+                timetable_data = json.loads(str(latest_timetable.structuredData))
+                detected_module_tag = detect_module_tag(cleanTitle, timetable_data)
+            except Exception:
+                pass
+
         material = StudyMaterial(
             user_id=user_id,
             title=cleanTitle,
             rawContent=f"Uploaded {fileName}",
             aiPlan=studyPlan,
             file_uri=fileName,
-            file_type=mime_type
+            file_type=mime_type,
+            module_tag=detected_module_tag
         )
         db.add(material)
         db.commit()
         db.refresh(material)
 
-        return {"status": "success", "id": material.id, "studyPlan": studyPlan}
+        return {"status": "success", "id": material.id, "studyPlan": studyPlan, "module_tag": material.module_tag}
 
     except Exception as e:
         print(f"Syllabus error: {e}")
@@ -846,19 +897,19 @@ async def generateDailyPlan(request: Request, plan_data: PlanRequest, user_id: s
         def extract_material_summary(plan: str) -> str:
             if not plan:
                 return "No details"
-            # Try to extract just the Key Topics section for a denser summary
-            for marker in ["## Key Topics", "## Time Allocation", "## Week-by-Week"]:
+            # Try to extract the Week-by-Week timeline first 
+            # then Key Topics, then Time Allocation
+            for marker in ["## Week-by-Week", "## Key Topics", "## Time Allocation"]:
                 idx = plan.find(marker)
                 if idx != -1:
-                    snippet = plan[idx:idx + 600]
-                    # Cut at last complete sentence/line to avoid mid-word truncation
-                    cut = snippet.rfind("\n", 0, 600)
+                    snippet = plan[idx:idx + 1500]
+                    cut = snippet.rfind("\n", 0, 1500)
                     return snippet[:cut] if cut > 100 else snippet
-            # Fallback: first 600 chars, cut at last newline
-            cut = plan.rfind("\n", 0, 600)
-            return plan[:cut] if cut > 100 else plan[:600]
+            # Fallback: first 1500 chars, cut at last newline
+            cut = plan.rfind("\n", 0, 1500)
+            return plan[:cut] if cut > 100 else plan[:1500]
 
-        materials_list = [{"title": m.title, "summary": extract_material_summary(m.aiPlan)} for m in materials]
+        materials_list = [{"title": m.title, "module_tag": m.module_tag, "summary": extract_material_summary(m.aiPlan)} for m in materials]
 
         generatedItems = await aiOptimization(
             classes=todaysClasses,
@@ -979,7 +1030,8 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
         --- DATA INPUTS ---
         - Today's Classes: {json.dumps(classes)}
         - Pending Assignments (title, due_date, priority): {json.dumps(assignments)}
-        - Study Materials Context (Syllabus Snippets): {materialsContext}
+        - Study Materials Context (Syllabus Snippets with module tags): {materialsContext}
+            SYLLABUS ALIGNMENT (MANDATORY): Each material entry has a "module_tag" field. When scheduling a study block for a class, check if any material's module_tag matches that class's subject. If a match exists, the task description MUST reference specific topics, weeks, or concepts from that material's summary — not a generic "Study [subject]" instruction. Example: if module_tag="Digital Signal Processing" matches a class subject, write "Review Week 3: Fourier Transform derivations (from syllabus)" not "Study Digital Signal Processing".
         - User's Fixed Custom Tasks: {customContext}
             FIXED TASK RULES (MANDATORY - violating these is a critical failure):
             - Every item in Fixed Custom Tasks MUST appear in the output. Zero exceptions.
@@ -1002,15 +1054,18 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
             - Before finishing, verify: count Fixed Custom Tasks in input vs output. They must match.
         3. GAP ANALYSIS: Identify all free time gaps between fixed blocks.
         4. STUDY BLOCK ALLOCATION - The 3 Pillar Rule:
-           - PILLAR 1 (Priority): Subjects at index 0-1 in Subject Priorities get the longest blocks ({targetRange}m) scheduled during the Energy Peak window.
+           - SESSION LENGTH (HARD RULE): Every study block MUST be between {targetRange} minutes. Never schedule a study block shorter or longer than this range. This applies to ALL study blocks, not just priority subjects.
+           - PILLAR 1 (Priority): Subjects at index 0-1 in Subject Priorities get blocks scheduled during the Energy Peak window.
            - PILLAR 2 (Urgency): Any assignment due within 48 hours from {date} MUST be scheduled, overriding all other priorities.
            - PILLAR 3 (Mode):
              * 'exam prep' → 70% of free gaps go to active recall / practice questions for top priority subject
              * 'catch up' → Dedicate multiple consecutive blocks to the single most overdue subject
              * 'stay consistent' → Rotate across 2-3 different subjects to maintain momentum
-        5. HEALTH RULES:
+        5. HEALTH RULES (MANDATORY — violating these is a critical failure):
            - No study blocks between 11:00 PM and 7:00 AM.
-           - Insert a 15-minute Brain Break after every study block longer than 60 minutes.
+           - Insert a 10-minute Brain Break after EVERY study block, no exceptions. A study block immediately followed by another study block with no break in between is a scheduling error.
+           - Leave at least 90 minutes of total unscheduled time across the day (not counting class blocks or fixed tasks). Do NOT fill every free gap — the student needs time for meals, transit, and mental recovery. If the day is packed with classes, schedule fewer study blocks, not more.
+           - Never schedule more than 3 study blocks total if the student already has 4 or more class blocks in the day.
         6. TASK DESCRIPTIONS: Each task's "task" field must be a specific, actionable instruction - not vague (e.g., "Complete Introduction section draft for Research Paper" not "Study Research Paper").
 
         --- OUTPUT FORMAT ---
@@ -1099,7 +1154,7 @@ async def getStudyMaterial(request: Request, material_id: int, user_id: str = De
     ).first()
     if not material:
         raise HTTPException(status_code=404, detail="Study plan not found.")
-    return {"id": material.id, "title": material.title, "aiPlan": material.aiPlan, "createdAt": material.created_at}
+    return {"id": material.id, "title": material.title, "aiPlan": material.aiPlan, "createdAt": material.created_at, "module_tag": material.module_tag}
 
 @app.get("/study-plans")
 @limiter.limit("60/minute")
@@ -1108,7 +1163,7 @@ async def listStudyPlans(request: Request, user_id: str = Depends(verify_token),
         StudyMaterial.user_id == user_id,
         StudyMaterial.is_deleted == 0
     ).order_by(StudyMaterial.created_at.desc()).all()
-    return {"count": len(materials), "plans": [{"id": m.id, "title": m.title, "createdAt": m.created_at} for m in materials]}
+    return {"count": len(materials), "plans": [{"id": m.id, "title": m.title, "createdAt": m.created_at, "module_tag": m.module_tag} for m in materials]}
 
 @app.get("/daily-plan/{date}")
 @limiter.limit("60/minute")
@@ -1137,6 +1192,20 @@ async def deleteStudyMaterial(request: Request, material_id: int, user_id: str =
     db.delete(material)
     db.commit()
     return {"status": "success"}
+
+@app.patch("/study-material/{material_id}/module-tag")
+@limiter.limit("30/minute")
+async def updateMaterialModuleTag(request: Request, material_id: int, body: ModuleTagUpdate, user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
+    material = db.query(StudyMaterial).filter(
+        StudyMaterial.id == material_id,
+        StudyMaterial.user_id == user_id,
+        StudyMaterial.is_deleted == 0
+    ).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Study material not found.")
+    material.module_tag = body.module_tag
+    db.commit()
+    return {"status": "success", "module_tag": material.module_tag}
 
 @app.get("/profile")
 @limiter.limit("60/minute")

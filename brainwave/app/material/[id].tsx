@@ -21,7 +21,7 @@ import { useContent } from "../hooks/useContent";
 import { useAlert } from "../contexts/AlertContext";
 import brAInwaveApi from "@/api/brAInwaveApi";
 import { LocalDB } from "../database/localDb";
-import { ExportIcon, ICONS } from "@/components/Icons";
+import { ExportIcon, ICONS, ChevronDownIcon } from "@/components/Icons";
 import BrainwaveLoader from "@/components/BrainwaveLoader";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -51,6 +51,10 @@ export default function MaterialDetail() {
   const [showFlashcards, setShowFlashcards] = useState(false);
   const [generatingFlashcards, setGeneratingFlashcards] = useState(false);
   const [remoteId, setRemoteId] = useState<string | number | null>(null);
+  const [localId, setLocalId] = useState<number | null>(null);
+  const [moduleTag, setModuleTag] = useState<string | null>(null);
+  const [moduleDropdownOpen, setModuleDropdownOpen] = useState(false);
+  const [timetableSubjects, setTimetableSubjects] = useState<string[]>([]);
   const { deleteMaterial } = useContent();
   const router = useRouter();
   const { showAlert } = useAlert();
@@ -65,6 +69,9 @@ export default function MaterialDetail() {
 
       if (localData && localData.aiPlan) {
         setRemoteId(localData.remote_id || null);
+        setLocalId(localData.id || null);
+        setModuleTag(localData.module_tag || null);
+        setTimetableSubjects(LocalDB.getSubjectsFromTimetable(user.id));
         setData({
           title: localData.title,
           aiPlan: localData.aiPlan,
@@ -315,6 +322,20 @@ export default function MaterialDetail() {
     }
   };
 
+  const handleModuleTagSelect = async (subject: string | null) => {
+    setModuleDropdownOpen(false);
+    if (!user?.id || !localId) return;
+    setModuleTag(subject);
+    LocalDB.updateMaterialModuleTag(user.id, localId, subject);
+    if (remoteId) {
+      try {
+        await brAInwaveApi.updateMaterialModuleTag(remoteId, subject);
+      } catch (e) {
+        // will sync later when online
+      }
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* 1. Dynamic Header Title */}
@@ -345,7 +366,72 @@ export default function MaterialDetail() {
         <ActivityIndicator style={{ flex: 1 }} color={theme.colors.primary} />
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* 2. The Markdown Body */}
+          {/* 2. Module Tag Dropdown */}
+          <View
+            style={[
+              styles.moduleCard,
+              { borderColor: moduleTag ? theme.colors.primary : theme.colors.border },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.moduleDropdownBtn}
+              onPress={() => setModuleDropdownOpen((v) => !v)}
+              activeOpacity={0.7}
+            >
+              <View>
+                <Text style={[styles.moduleLabel, { color: theme.colors.text.secondary }]}>
+                  Module
+                </Text>
+                <Text
+                  style={[
+                    styles.moduleValue,
+                    { color: moduleTag ? theme.colors.primary : theme.colors.text.secondary },
+                  ]}
+                >
+                  {moduleTag ?? "Set module"}
+                </Text>
+              </View>
+              <ChevronDownIcon
+                size={16}
+                color={theme.colors.text.secondary}
+                style={{
+                  transform: [{ rotate: moduleDropdownOpen ? "180deg" : "0deg" }],
+                }}
+              />
+            </TouchableOpacity>
+
+            {moduleDropdownOpen && (
+              <View style={[styles.moduleList, { borderTopColor: theme.colors.border }]}>
+                {[null, ...timetableSubjects].map((s) => (
+                  <TouchableOpacity
+                    key={s ?? "__none__"}
+                    style={[styles.moduleItem, { borderBottomColor: theme.colors.border }]}
+                    onPress={() => handleModuleTagSelect(s)}
+                  >
+                    <Text
+                      style={[
+                        styles.moduleItemText,
+                        { color: s === moduleTag ? theme.colors.primary : theme.colors.text.primary },
+                        s === null && moduleTag === null && { color: theme.colors.text.secondary },
+                      ]}
+                    >
+                      {s === null ? "None" : s}
+                    </Text>
+                    {s === moduleTag && s !== null && (
+                      <Text style={{ color: theme.colors.primary, fontSize: 13 }}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+                {timetableSubjects.length === 0 && (
+                  <Text style={[styles.moduleItemText, { color: theme.colors.text.secondary, padding: 12 }]}>
+                    No timetable found. Upload a timetable first.
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* 3. The Markdown Body */}
           <Markdown
             style={{
               body: {
@@ -632,5 +718,42 @@ const styles = StyleSheet.create({
   answerText: {
     fontSize: 15,
     lineHeight: 22,
+  },
+  moduleCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 20,
+  },
+  moduleDropdownBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+  },
+  moduleLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  moduleValue: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  moduleList: {
+    borderTopWidth: 0.5,
+  },
+  moduleItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 0.5,
+  },
+  moduleItemText: {
+    fontSize: 14,
   },
 });

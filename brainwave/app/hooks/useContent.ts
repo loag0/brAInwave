@@ -131,8 +131,9 @@ export const useContent = () => {
               item.id,
               result.id,
               result.studyPlan,
+              result.module_tag ?? null,
             );
-            log(`Syllabus synced: ${item.title} → remote id ${result.id}`);
+            log(`Syllabus synced: ${item.title} → remote id ${result.id}, module_tag: ${result.module_tag ?? "none"}`);
           } else {
             log(`Syncing text material: ${item.title}`);
             const result = await BrainwaveAPI.createMaterial(user.id, {
@@ -352,9 +353,9 @@ export const useContent = () => {
 
         // 3. Pull from backend if forced or 12hr cache expired
         const lastSync = await AsyncStorage.getItem("lastPlansSync");
-        const TWELVE_HOURS = 1000 * 60 * 60 * 12;
+        const ONE_HOUR = 1000 * 60 * 60;
         const cacheExpired =
-          !lastSync || Date.now() - Number(lastSync) > TWELVE_HOURS;
+          !lastSync || Date.now() - Number(lastSync) > ONE_HOUR;
 
         if (force || cacheExpired) {
           log(
@@ -497,9 +498,9 @@ export const useContent = () => {
           title,
           type || "application/pdf",
         );
-        await LocalDB.markMaterialSynced(localId, result.id, result.studyPlan);
+        await LocalDB.markMaterialSynced(localId, result.id, result.studyPlan, result.module_tag ?? null);
         setMaterials(await LocalDB.getAllMaterials(user.id));
-        log(`Material uploaded: ${title} → remote id ${result.id}`);
+        log(`Material uploaded: ${title} → remote id ${result.id}, module_tag: ${result.module_tag ?? "none"}`);
       }
     } catch (syncError: any) {
       log(`Immediate upload failed, will retry on reconnect: ${syncError.message}`);
