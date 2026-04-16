@@ -63,6 +63,7 @@ export default function MaterialDetail() {
   const getSyllabus = useCallback(async () => {
     if (!user?.id || !id) return;
     setLoading(true);
+    setTimetableSubjects(LocalDB.getSubjectsFromTimetable(user.id));
 
     try {
       const localData = await LocalDB.getMaterialById(user.id, id as string);
@@ -71,7 +72,6 @@ export default function MaterialDetail() {
         setRemoteId(localData.remote_id || null);
         setLocalId(localData.id || null);
         setModuleTag(localData.module_tag || null);
-        setTimetableSubjects(LocalDB.getSubjectsFromTimetable(user.id));
         setData({
           title: localData.title,
           aiPlan: localData.aiPlan,

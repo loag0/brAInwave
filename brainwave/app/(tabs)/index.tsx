@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
@@ -390,6 +391,9 @@ export default function Home() {
                     ? "Today's Schedule"
                     : "Daily Schedule"}
                 </Text>
+                {contentLoading && timetables.length > 0 && (
+                  <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginLeft: 8 }} />
+                )}
               </View>
               {todaysSchedule.length > 0 && (
                 <TouchableOpacity onPress={() => router.push("/planner")}>
@@ -426,9 +430,7 @@ export default function Home() {
                       style={[
                         styles.classIndicator,
                         {
-                          backgroundColor: item.isAiGenerated
-                            ? theme.colors.secondary
-                            : theme.colors.primary,
+                          backgroundColor: theme.colors.primary
                         },
                       ]}
                     />
@@ -514,6 +516,9 @@ export default function Home() {
               <View style={styles.cardTitleContainer}>
                 <AssignmentIcon color={theme.colors.text.secondary} size={24} />
                 <Text style={styles.cardTitle}>Assignments</Text>
+                {contentLoading && timetables.length > 0 && (
+                  <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginLeft: 8 }} />
+                )}
               </View>
             </View>
             <View style={styles.cardContent}>
