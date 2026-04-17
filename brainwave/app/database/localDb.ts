@@ -185,6 +185,10 @@ export const LocalDB = {
     try {
       db.execSync(`ALTER TABLE study_materials ADD COLUMN module_tag TEXT`);
     } catch {}
+    // Offline assignment queuing — marks assignments awaiting server-side AI extraction
+    try {
+      db.execSync(`ALTER TABLE assignments ADD COLUMN pending_extraction INTEGER DEFAULT 0`);
+    } catch {}
   },
 
   async saveUser(user: any) {
@@ -220,6 +224,44 @@ export const LocalDB = {
       degree: row.degree ?? null,
       weak_areas: row.weak_areas ? JSON.parse(row.weak_areas) : [],
     };
+  },
+
+  // DIRTY RECORD READERS - used for syncing local changes to server
+
+  getDirtyMaterials: (userId: string) => {
+    return db.getAllSync(
+      `SELECT * FROM study_materials WHERE user_id = ? AND is_dirty = 1`,
+      [userId],
+    ) as any[];
+  },
+
+  getDirtyTimetables: (userId: string) => {
+    const rows = db.getAllSync(
+      `SELECT * FROM timetables WHERE user_id = ? AND is_dirty = 1`,
+      [userId],
+    ) as any[];
+    return rows.map((row) => ({
+      ...row,
+      structuredData: row.structuredData ? JSON.parse(row.structuredData) : null,
+    }));
+  },
+
+  getDirtyAssignments: (userId: string) => {
+    return db.getAllSync(
+      `SELECT * FROM assignments WHERE user_id = ? AND is_dirty = 1`,
+      [userId],
+    ) as any[];
+  },
+
+  getDirtyPlans: (userId: string) => {
+    const rows = db.getAllSync(
+      `SELECT * FROM daily_plans WHERE user_id = ? AND is_dirty = 1`,
+      [userId],
+    ) as any[];
+    return rows.map((row) => ({
+      ...row,
+      tasks: row.items_json ? JSON.parse(row.items_json) : [],
+    }));
   },
 
   // MATERIALS
@@ -466,15 +508,41 @@ export const LocalDB = {
     }
   },
 
-  // Inbound sync from server - always marks as clean
+  // Inbound sync from server - only touches clean rows, never overwrites locally-modified plans
   syncPlansFromServer: (userId: string, plans: any[]) => {
-    db.runSync(`DELETE FROM daily_plans WHERE user_id = ?`, [userId]);
-    for (const p of plans) {
-      const itemsJson = JSON.stringify(p.tasks || p.items || []);
+    const remoteDates = plans.map((p) => p.date || p.id);
+    // Remove clean local plans that no longer exist on the server
+    if (remoteDates.length > 0) {
+      const placeholders = remoteDates.map(() => "?").join(",");
       db.runSync(
-        `INSERT INTO daily_plans (user_id, date, items_json, is_dirty) VALUES (?, ?, ?, 0)`,
-        [userId, p.date || p.id, itemsJson],
+        `DELETE FROM daily_plans WHERE user_id = ? AND is_dirty = 0 AND date NOT IN (${placeholders})`,
+        [userId, ...remoteDates],
       );
+    } else {
+      db.runSync(`DELETE FROM daily_plans WHERE user_id = ? AND is_dirty = 0`, [userId]);
+    }
+    for (const p of plans) {
+      const date = p.date || p.id;
+      const itemsJson = JSON.stringify(p.tasks || p.items || []);
+      const existing = db.getFirstSync(
+        `SELECT id, is_dirty FROM daily_plans WHERE user_id = ? AND date = ?`,
+        [userId, date],
+      ) as { id: number; is_dirty: number } | undefined;
+      if (existing) {
+        // Only overwrite if the local copy is clean
+        if (!existing.is_dirty) {
+          db.runSync(
+            `UPDATE daily_plans SET items_json = ?, is_dirty = 0 WHERE id = ?`,
+            [itemsJson, existing.id],
+          );
+        }
+        // is_dirty = 1 means local edits win, skip
+      } else {
+        db.runSync(
+          `INSERT INTO daily_plans (user_id, date, items_json, is_dirty) VALUES (?, ?, ?, 0)`,
+          [userId, date, itemsJson],
+        );
+      }
     }
   },
 
@@ -513,10 +581,11 @@ export const LocalDB = {
     rawContent: string,
     uri?: string,
     type?: string,
+    pendingExtraction = false,
   ) => {
     const result = db.runSync(
-      `INSERT INTO assignments (user_id, title, subject, due_date, due_time, priority, rawContent, file_uri, file_type, is_dirty, is_deleted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)`,
+      `INSERT INTO assignments (user_id, title, subject, due_date, due_time, priority, rawContent, file_uri, file_type, is_dirty, is_deleted, pending_extraction)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?)`,
       [
         userId,
         title,
@@ -527,6 +596,7 @@ export const LocalDB = {
         rawContent,
         uri || null,
         type || null,
+        pendingExtraction ? 1 : 0,
       ],
     );
     return result.lastInsertRowId;
@@ -579,7 +649,7 @@ export const LocalDB = {
   ) => {
     if (extraData) {
       db.runSync(
-        `UPDATE assignments SET is_dirty = 0, remote_id = ?, title = ?, subject = ?, due_date = ?, due_time = ?, priority = ?, rawContent = ?
+        `UPDATE assignments SET is_dirty = 0, pending_extraction = 0, remote_id = ?, title = ?, subject = ?, due_date = ?, due_time = ?, priority = ?, rawContent = ?
          WHERE id = ?`,
         [
           remoteId,
@@ -594,7 +664,7 @@ export const LocalDB = {
       );
     } else {
       db.runSync(
-        `UPDATE assignments SET is_dirty = 0, remote_id = ? WHERE id = ?`,
+        `UPDATE assignments SET is_dirty = 0, pending_extraction = 0, remote_id = ? WHERE id = ?`,
         [remoteId, localId],
       );
     }

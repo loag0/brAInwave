@@ -875,7 +875,16 @@ async def generateDailyPlan(request: Request, plan_data: PlanRequest, user_id: s
 
         dayOfWeekName = datetime.strptime(plan_data.date, "%Y-%m-%d").strftime("%A")
         todaysClasses = weeklyTemplate.get(dayOfWeekName.lower(), [])
-        customTaskList = [t.model_dump() for t in plan_data.customTasks] if plan_data.customTasks else []
+        existing_plan = db.query(DailyPlan).filter(
+            DailyPlan.user_id == user_id,
+            DailyPlan.date == plan_data.date
+        ).first()
+        preserved_tasks = []
+        if existing_plan:
+            existing_items = json.loads(str(existing_plan.items_json))
+            preserved_tasks = [i for i in existing_items if i.get("isCustom") is True]
+
+        customTaskList = preserved_tasks + ([t.model_dump() for t in plan_data.customTasks] if plan_data.customTasks else [])
 
         prefs = {
             "isMorningPerson": plan_data.isMorningPerson,
@@ -1077,10 +1086,12 @@ async def aiOptimization(classes, assignments, materials, date, dayOfWeek, prefs
             "duration": "X min",
             "completed": false,
             "difficulty": "easy" | "medium" | "hard",
-            "isCustom": false
+            "isCustom": false,
+            "module_tag": "module name from materials list, or null if no match"
         }}
-        For class blocks, set "task" to "Class Lecture" and use the subject name exactly as it appears in Today's Classes.
-        For brain breaks, set "subject" to "Break", "difficulty" to "easy", "isCustom" to false.
+        For each study block, set "module_tag" to the "module_tag" value from the matching material entry in the materials list. If no material matches the subject, set "module_tag" to null.
+        For class blocks, set "task" to "Class Lecture", use the subject name exactly as it appears in Today's Classes, and set "module_tag" to the class subject name.
+        For brain breaks, set "subject" to "Break", "difficulty" to "easy", "isCustom" to false, "module_tag" to null.
     """
     result = json.loads(call_gemini(
         config=types.GenerateContentConfig(response_mime_type="application/json"),

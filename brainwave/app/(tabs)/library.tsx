@@ -239,29 +239,6 @@ export default function Library() {
         </View>
       </View>
 
-      {syncProgress.total > 0 && (
-        <View
-          style={{
-            padding: 12,
-            backgroundColor: theme.colors.surface,
-            alignItems: "center",
-            flexDirection: "row",
-            justifyContent: "center",
-          }}
-        >
-          <ActivityIndicator size="small" color={theme.colors.primary} />
-          <Text
-            style={{
-              color: theme.colors.text.primary,
-              fontSize: 14,
-              fontWeight: "600",
-              marginLeft: 10,
-            }}
-          >
-            Syncing {syncProgress.current}/{syncProgress.total} items...
-          </Text>
-        </View>
-      )}
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}

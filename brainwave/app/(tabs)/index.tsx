@@ -87,6 +87,7 @@ export default function Home() {
     plans,
     assignments,
     isLoading: contentLoading,
+    isInitializing,
     refresh,
     createAssignment,
     syncProgress,
@@ -281,7 +282,7 @@ export default function Home() {
     return theme.colors.text.secondary;
   }
 
-  if (contentLoading && timetables.length === 0) {
+  if (isInitializing) {
     return <HomeSkeleton styles={styles} theme={theme} />;
   }
 
@@ -391,10 +392,7 @@ export default function Home() {
                     ? "Today's Schedule"
                     : "Daily Schedule"}
                 </Text>
-                {contentLoading && timetables.length > 0 && (
-                  <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginLeft: 8 }} />
-                )}
-              </View>
+                </View>
               {todaysSchedule.length > 0 && (
                 <TouchableOpacity onPress={() => router.push("/planner")}>
                   <Text style={styles.viewAllText}>View All</Text>
@@ -403,7 +401,9 @@ export default function Home() {
             </View>
 
             <View style={styles.cardContent}>
-              {timetables.length === 0 ? (
+              {isInitializing ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
+              ) : timetables.length === 0 ? (
                 <View style={{ alignItems: "center", paddingVertical: 15 }}>
                   <SunIcon size={32} color={theme.colors.warning} />
                   <Text style={[ styles.emptyText, { color: theme.colors.text.primary, fontWeight: "600" }]}>
@@ -516,13 +516,12 @@ export default function Home() {
               <View style={styles.cardTitleContainer}>
                 <AssignmentIcon color={theme.colors.text.secondary} size={24} />
                 <Text style={styles.cardTitle}>Assignments</Text>
-                {contentLoading && timetables.length > 0 && (
-                  <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginLeft: 8 }} />
-                )}
               </View>
             </View>
             <View style={styles.cardContent}>
-              {assignments.length === 0 ? (
+              {isInitializing ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
+              ) : assignments.length === 0 ? (
                 <Text style={styles.emptyText}>No upcoming assignments.</Text>
               ) : (
                 assignments.map((a, idx) => {

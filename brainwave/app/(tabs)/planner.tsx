@@ -493,9 +493,10 @@ export default function Planner() {
         // This is reliable even when the stored cls.duration value is wrong (e.g. old data
         // that Gemini rounded to "1 hour"). Falls back to stored duration if no range found.
         const computedMins = parseDurationFromTimeRange(cls.time, cls.duration);
+        const startTime = cls.time?.includes("-") ? cls.time.split("-")[0].trim() : cls.time;
         return {
           id: `temp-${index}`,
-          time: cls.time,
+          time: startTime,
           subject: cls.subject || cls.course || cls.name || "Class",
           task: cls.task || "Class Lecture",
           duration: `${computedMins} min`,
@@ -1039,7 +1040,7 @@ export default function Planner() {
                         subject: item.subject || "Personal",
                         deadline: item.deadline || "",
                       });
-                      if (item.deadline) setModalVisible(true);
+                      setModalVisible(true);
                     }}
                   >
                     <View style={styles.planTimeContainer}>

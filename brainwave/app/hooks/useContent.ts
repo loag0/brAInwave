@@ -25,6 +25,18 @@ const isOnline = async (): Promise<boolean> => {
   return !!(state.isConnected && state.isInternetReachable);
 };
 
+const ONE_HOUR = 1000 * 60 * 60;
+
+// Per-resource cache keys so a stale assignment doesn't block a fresh material pull
+const SYNC_KEYS = {
+  materials: "lastSync_materials",
+  timetables: "lastSync_timetables",
+  assignments: "lastSync_assignments",
+  plans: "lastSync_plans",
+  goals: "lastSync_goals",
+  logs: "lastSync_logs",
+};
+
 export const useContent = () => {
   const { user } = useAuth();
   const [materials, setMaterials] = useState<any[]>([]);
@@ -32,15 +44,18 @@ export const useContent = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // True only until the first local DB read completes — gates the initial skeleton/spinner.
+  // Background server sync after that is silent; it does NOT reset this flag.
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isOnlineStatus, setIsOnlineStatus] = useState<boolean | null>(null);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const isSyncing = useRef(false);
   const lastErrorToast = useRef(0);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  //checks connectivity on mount
+  // Connectivity status listener
   useEffect(() => {
-    // Set initial status
     NetInfo.fetch().then((state) => {
       const online = !!(state.isConnected && state.isInternetReachable);
       setIsOnlineStatus(online);
@@ -50,9 +65,7 @@ export const useContent = () => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = !!(state.isConnected && state.isInternetReachable);
       setIsOnlineStatus((prev) => {
-        if (prev !== online) {
-          log(online ? "Back online" : "Gone offline");
-        }
+        if (prev !== online) log(online ? "Back online" : "Gone offline");
         return online;
       });
     });
@@ -60,268 +73,207 @@ export const useContent = () => {
     return () => unsubscribe();
   }, []);
 
-  // Sync dirty records to backend
-  const syncDirtyRecords = useCallback(
-    async (
-      currentMaterials: any[],
-      currentTimetables: any[],
-      currentAssignments: any[],
-      currentPlans: any[],
-    ) => {
-      if (!user?.id || isSyncing.current) return;
+  // Reads dirty records directly from the DB and pushes them to the backend.
+  const syncDirtyRecords = useCallback(async () => {
+    if (!user?.id || isSyncing.current) return;
 
-      const online = await isOnline();
-      if (!online) {
-        log("Skipping sync - offline");
-        return;
-      }
+    const online = await isOnline();
+    if (!online) {
+      log("Skipping sync - offline");
+      return;
+    }
 
-      const dirtyMaterials = currentMaterials.filter((m) => m.is_dirty === 1);
-      const dirtyTimetables = currentTimetables.filter((t) => t.is_dirty === 1);
-      const dirtyAssignments = currentAssignments.filter(
-        (a) => a.is_dirty === 1,
-      );
-      const dirtyPlans = currentPlans.filter((p) => p.is_dirty === 1);
-      const dirtyLogs = LocalDB.getDirtyCompletionLogs(user.id);
-      const dirtyModuleGoals = LocalDB.getDirtyModuleGoals(user.id);
+    const dirtyMaterials = LocalDB.getDirtyMaterials(user.id);
+    const dirtyTimetables = LocalDB.getDirtyTimetables(user.id);
+    const dirtyAssignments = LocalDB.getDirtyAssignments(user.id);
+    const dirtyPlans = LocalDB.getDirtyPlans(user.id);
+    const dirtyLogs = LocalDB.getDirtyCompletionLogs(user.id);
+    const dirtyModuleGoals = LocalDB.getDirtyModuleGoals(user.id);
 
-      const totalToSync =
-        dirtyMaterials.length +
-        dirtyTimetables.length +
-        dirtyAssignments.length +
-        dirtyPlans.length +
-        dirtyLogs.length +
-        dirtyModuleGoals.length;
+    const totalToSync =
+      dirtyMaterials.length +
+      dirtyTimetables.length +
+      dirtyAssignments.length +
+      dirtyPlans.length +
+      dirtyLogs.length +
+      dirtyModuleGoals.length;
 
-      if (totalToSync === 0) {
-        log("Nothing dirty to sync");
-        return;
-      }
+    if (totalToSync === 0) {
+      log("Nothing dirty to sync");
+      return;
+    }
 
-      log(`Starting sync - ${totalToSync} record(s) to push`, {
-        materials: dirtyMaterials.length,
-        timetables: dirtyTimetables.length,
-        assignments: dirtyAssignments.length,
-        plans: dirtyPlans.length,
-      });
+    log(`Starting sync - ${totalToSync} record(s) to push`, {
+      materials: dirtyMaterials.length,
+      timetables: dirtyTimetables.length,
+      assignments: dirtyAssignments.length,
+      plans: dirtyPlans.length,
+    });
 
-      isSyncing.current = true;
-      setSyncProgress({ current: 0, total: totalToSync });
-      let completed = 0;
+    isSyncing.current = true;
+    setSyncProgress({ current: 0, total: totalToSync });
+    let completed = 0;
 
-      // study materials, including syllabi and text notes
-      for (const item of dirtyMaterials) {
-        try {
-          if (item.is_deleted === 1) {
-            log(`Deleting material: ${item.title}`);
-            if (item.remote_id) {
-              await BrainwaveAPI.deleteMaterial(user.id, item.remote_id);
-            }
-            LocalDB.hardDeleteMaterial(item.id);
-            log(`Material deleted: ${item.title}`);
-          } else if (item.file_uri) {
-            log(`Uploading syllabus: ${item.title}`);
-            const result = await BrainwaveAPI.uploadSyllabus(
-              user.id,
-              item.file_uri,
-              item.title,
-              item.file_type || "application/pdf",
-            );
-            await LocalDB.markMaterialSynced(
-              item.id,
-              result.id,
-              result.studyPlan,
-              result.module_tag ?? null,
-            );
-            log(`Syllabus synced: ${item.title} → remote id ${result.id}, module_tag: ${result.module_tag ?? "none"}`);
-          } else {
-            log(`Syncing text material: ${item.title}`);
-            const result = await BrainwaveAPI.createMaterial(user.id, {
-              title: item.title,
-              rawContent: item.rawContent,
-            });
-            await LocalDB.markMaterialSynced(item.id, result.id);
-            log(`Text material synced: ${item.title} → remote id ${result.id}`);
-          }
-
-          completed++;
-          setSyncProgress({ current: completed, total: totalToSync });
-        } catch (e: any) {
-          log(`Material sync failed [${item.title}]: ${e.message}`);
-          // Only hard delete on definitive server error (5xx), leave alone otherwise
-          if (e.response?.status >= 500) {
-            log(`Hard deleting failed material after 5xx: ${item.title}`);
-            LocalDB.hardDeleteMaterial(item.id);
-          }
-        }
-      }
-
-      // timetables
-      for (const table of dirtyTimetables) {
-        try {
-          if (table.is_deleted === 1) {
-            log(`Deleting timetable: ${table.title}`);
-            if (table.remote_id) {
-              await BrainwaveAPI.deleteTimetable(user.id, table.remote_id);
-            }
-            LocalDB.hardDeleteTimetable(table.id);
-            log(`Timetable deleted: ${table.title}`);
-          } else if (table.uri) {
-            log(`Uploading timetable: ${table.title}`);
-            const result = await BrainwaveAPI.uploadTimetable(
-              user.id,
-              table.uri,
-              table.title,
-              table.type || "application/pdf",
-            );
-            await LocalDB.markTimetableSynced(
-              table.id,
-              result.id,
-              result.weekly_template,
-            );
-            log(`Timetable synced: ${table.title} → remote id ${result.id}`);
-          } else {
-            // Timetable exists locally but has no file: so manually created
-            log(`Syncing manual timetable: ${table.title}`);
-            const result = await BrainwaveAPI.syncTimetable(
-              user.id,
-              table.title,
-              table.structuredData,
-            );
-            await LocalDB.markTimetableSynced(table.id, result.id);
-            log(`Manual timetable synced: ${table.title} → remote id ${result.id}`);
-          }
-
-          completed++;
-          setSyncProgress({ current: completed, total: totalToSync });
-        } catch (e: any) {
-          log(`Timetable sync failed [${table.title}]: ${e.message}`);
-          if (e.response?.status >= 500) {
-            log(`Hard deleting failed timetable after 5xx: ${table.title}`);
-            LocalDB.hardDeleteTimetable(table.id);
-          }
-        }
-      }
-
-      // assignments
-      for (const ass of dirtyAssignments) {
-        try {
-          if (ass.is_deleted === 1) {
-            log(`Deleting assignment: ${ass.title}`);
-            if (ass.remote_id) {
-              await BrainwaveAPI.deleteAssignment(user.id, ass.remote_id);
-            }
-            LocalDB.hardDeleteAssignment(ass.id);
-            log(`Assignment deleted: ${ass.title}`);
-          } else if (ass.file_uri) {
-            log(`Uploading assignment: ${ass.title}`);
-            const result = await BrainwaveAPI.uploadAssignment(
-              user.id,
-              ass.file_uri,
-              ass.title,
-              ass.file_type || "application/pdf",
-            );
-            await LocalDB.markAssignmentSynced(ass.id, result.id, {
-              title: result.assignment.title,
-              subject: result.assignment.subject,
-              due_date: result.assignment.due_date,
-              due_time: result.assignment.due_time,
-              priority: result.assignment.priority,
-              rawContent: result.assignment.rawContent || ass.rawContent,
-            });
-            log(`Assignment synced: ${ass.title} → remote id ${result.id}`);
-          } else {
-            // Assignment with no file: just a catch
-            log(`Assignment has no file_uri, skipping: ${ass.title}`);
-          }
-
-          completed++;
-          setSyncProgress({ current: completed, total: totalToSync });
-        } catch (e: any) {
-          log(`Assignment sync failed [${ass.title}]: ${e.message}`);
-          if (e.response?.status >= 500) {
-            log(`Hard deleting failed assignment after 5xx: ${ass.title}`);
-            LocalDB.hardDeleteAssignment(ass.id);
-          }
-        }
-      }
-
-      // daily plans
-      for (const plan of dirtyPlans) {
-        try {
-          log(`Syncing plan for: ${plan.date}`);
-          await BrainwaveAPI.saveDailyPlan(user.id, plan.date, plan.tasks);
-          LocalDB.markPlanSynced(user.id, plan.date);
-          log(`Plan synced: ${plan.date}`);
-          completed++;
-          setSyncProgress({ current: completed, total: totalToSync });
-        } catch (e: any) {
-          log(`Plan sync failed [${plan.date}]: ${e.message}`);
-          // Stays dirty - retries on next reconnect
-        }
-      }
-
-      if (dirtyLogs.length > 0) {
-        try {
-          log(`Syncing ${dirtyLogs.length} completion log(s)`);
-          await BrainwaveAPI.syncCompletionLogs(
-            dirtyLogs.map((l) => ({
-              date: l.date,
-              minutes_studied: l.minutes_studied,
-              module_tag: l.module_tag,
-            })),
+    // --- Study materials ---
+    for (const item of dirtyMaterials) {
+      try {
+        if (item.is_deleted === 1) {
+          if (item.remote_id) await BrainwaveAPI.deleteMaterial(user.id, item.remote_id);
+          LocalDB.hardDeleteMaterial(item.id);
+          log(`Material deleted: ${item.title}`);
+        } else if (item.file_uri) {
+          const result = await BrainwaveAPI.uploadSyllabus(
+            user.id, item.file_uri, item.title, item.file_type || "application/pdf",
           );
-          LocalDB.markCompletionLogsSynced(
-            user.id,
-            dirtyLogs.map((l) => l.id),
-          );
-          completed += dirtyLogs.length;
-          setSyncProgress({ current: completed, total: totalToSync });
-          log(`Completion logs synced`);
-        } catch (e: any) {
-          log(`Completion logs sync failed: ${e.message}`);
+          await LocalDB.markMaterialSynced(item.id, result.id, result.studyPlan, result.module_tag ?? null);
+          log(`Syllabus synced: ${item.title} → ${result.id}`);
+        } else if (item.remote_id) {
+          await BrainwaveAPI.updateMaterialModuleTag(item.remote_id, item.module_tag ?? null);
+          await LocalDB.markMaterialSynced(item.id, item.remote_id, undefined, item.module_tag ?? null);
+          log(`Material module tag patched: ${item.title}`);
+        } else {
+          const result = await BrainwaveAPI.createMaterial(user.id, {
+            title: item.title, rawContent: item.rawContent,
+          });
+          await LocalDB.markMaterialSynced(item.id, result.id, undefined, item.module_tag ?? null);
+          log(`Text material synced: ${item.title} → ${result.id}`);
         }
+        completed++;
+        setSyncProgress({ current: completed, total: totalToSync });
+      } catch (e: any) {
+        log(`Material sync failed [${item.title}]: ${e.message}`);
+        if (e.response?.status >= 500) LocalDB.hardDeleteMaterial(item.id);
       }
+    }
 
-      if (dirtyModuleGoals.length > 0) {
-        try {
-          log(`Syncing ${dirtyModuleGoals.length} module goal(s)`);
-          await BrainwaveAPI.syncModuleGoals(
-            dirtyModuleGoals.map((g) => ({
-              module_tag: g.module_tag,
-              weekly_goal_minutes: g.weekly_goal_minutes,
-            })),
+    // --- Timetables ---
+    for (const table of dirtyTimetables) {
+      try {
+        if (table.is_deleted === 1) {
+          if (table.remote_id) await BrainwaveAPI.deleteTimetable(user.id, table.remote_id);
+          LocalDB.hardDeleteTimetable(table.id);
+          log(`Timetable deleted: ${table.title}`);
+        } else if (table.uri) {
+          const result = await BrainwaveAPI.uploadTimetable(
+            user.id, table.uri, table.title, table.type || "application/pdf",
           );
-          LocalDB.markModuleGoalsSynced(user.id);
-          completed++;
-          setSyncProgress({ current: completed, total: totalToSync });
-          log(`Module goals synced`);
-        } catch (e: any) {
-          log(`Module goals sync failed: ${e.message}`);
+          await LocalDB.markTimetableSynced(table.id, result.id, result.weekly_template);
+          log(`Timetable synced: ${table.title} → ${result.id}`);
+        } else {
+          const result = await BrainwaveAPI.syncTimetable(user.id, table.title, table.structuredData);
+          await LocalDB.markTimetableSynced(table.id, result.id);
+          log(`Manual timetable synced: ${table.title} → ${result.id}`);
         }
+        completed++;
+        setSyncProgress({ current: completed, total: totalToSync });
+      } catch (e: any) {
+        log(`Timetable sync failed [${table.title}]: ${e.message}`);
+        if (e.response?.status >= 500) LocalDB.hardDeleteTimetable(table.id);
       }
+    }
 
-      log(`Sync complete - ${completed}/${totalToSync} succeeded`);
+    // --- Assignments ---
+    for (const ass of dirtyAssignments) {
+      try {
+        if (ass.is_deleted === 1) {
+          if (ass.remote_id) await BrainwaveAPI.deleteAssignment(user.id, ass.remote_id);
+          LocalDB.hardDeleteAssignment(ass.id);
+          log(`Assignment deleted: ${ass.title}`);
+        } else if (ass.file_uri) {
+          // Handles both fresh uploads and assignments queued offline (pending_extraction=1)
+          const result = await BrainwaveAPI.uploadAssignment(user.id, ass.file_uri, ass.title, ass.file_type);
+          await LocalDB.markAssignmentSynced(ass.id, result.id, {
+            title: result.assignment.title,
+            subject: result.assignment.subject,
+            due_date: result.assignment.due_date,
+            due_time: result.assignment.due_time,
+            priority: result.assignment.priority,
+            rawContent: result.assignment.rawContent || ass.rawContent,
+          });
+          log(`Assignment synced: ${ass.title} → ${result.id}`);
+        } else if (ass.remote_id) {
+          // Due-date edit with no file — patch the server record
+          await BrainwaveAPI.updateAssignmentDueDate(ass.remote_id, ass.due_date, ass.due_time);
+          LocalDB.markAssignmentSynced(ass.id, ass.remote_id);
+          log(`Assignment due date patched: ${ass.title}`);
+        }
+        completed++;
+        setSyncProgress({ current: completed, total: totalToSync });
+      } catch (e: any) {
+        log(`Assignment sync failed [${ass.title}]: ${e.message}`);
+        if (e.response?.status >= 500) LocalDB.hardDeleteAssignment(ass.id);
+      }
+    }
 
-      setTimeout(() => setSyncProgress({ current: 0, total: 0 }), 2000);
-      isSyncing.current = false;
+    // --- Daily plans ---
+    for (const plan of dirtyPlans) {
+      try {
+        await BrainwaveAPI.saveDailyPlan(user.id, plan.date, plan.tasks);
+        LocalDB.markPlanSynced(user.id, plan.date);
+        log(`Plan synced: ${plan.date}`);
+        completed++;
+        setSyncProgress({ current: completed, total: totalToSync });
+      } catch (e: any) {
+        log(`Plan sync failed [${plan.date}]: ${e.message}`);
+        // Stays dirty — retries on next reconnect
+      }
+    }
 
-      // Refresh state from local DB after sync
-      setMaterials(await LocalDB.getAllMaterials(user.id));
-      setTimetables(await LocalDB.getAllTimetables(user.id));
-      setAssignments(await LocalDB.getAllAssignments(user.id));
-      setPlans(await LocalDB.getAllPlans(user.id));
-    },
-    [user?.id],
-  );
+    // --- Completion logs ---
+    if (dirtyLogs.length > 0) {
+      try {
+        await BrainwaveAPI.syncCompletionLogs(
+          dirtyLogs.map((l) => ({
+            date: l.date,
+            minutes_studied: l.minutes_studied,
+            module_tag: l.module_tag,
+          })),
+        );
+        LocalDB.markCompletionLogsSynced(user.id, dirtyLogs.map((l) => l.id));
+        completed += dirtyLogs.length;
+        setSyncProgress({ current: completed, total: totalToSync });
+        log("Completion logs synced");
+      } catch (e: any) {
+        log(`Completion logs sync failed: ${e.message}`);
+      }
+    }
 
-  // Fetch data with local-first strategy, then sync
+    // --- Module goals ---
+    if (dirtyModuleGoals.length > 0) {
+      try {
+        await BrainwaveAPI.syncModuleGoals(
+          dirtyModuleGoals.map((g) => ({
+            module_tag: g.module_tag,
+            weekly_goal_minutes: g.weekly_goal_minutes,
+          })),
+        );
+        LocalDB.markModuleGoalsSynced(user.id);
+        completed++;
+        setSyncProgress({ current: completed, total: totalToSync });
+        log("Module goals synced");
+      } catch (e: any) {
+        log(`Module goals sync failed: ${e.message}`);
+      }
+    }
+
+    log(`Sync complete - ${completed}/${totalToSync} succeeded`);
+    setTimeout(() => setSyncProgress({ current: 0, total: 0 }), 2000);
+    isSyncing.current = false;
+
+    // Refresh state from local DB after sync
+    setMaterials(await LocalDB.getAllMaterials(user.id));
+    setTimetables(await LocalDB.getAllTimetables(user.id));
+    setAssignments(await LocalDB.getAllAssignments(user.id));
+    setPlans(await LocalDB.getAllPlans(user.id));
+  }, [user?.id]);
+
+  // Local-first fetch: renders immediately from SQLite, then syncs + pulls from server in background.
   const fetchData = useCallback(
     async (force = false) => {
       if (!user?.id) return;
 
-      // 1. Load local immediately for instant UI
-      log("Loading from local DB...");
+      // Step 1: Load local DB immediately — UI renders with whatever is cached.
+      // isInitializing goes false here so the skeleton/spinner clears as soon as we have data.
       const localMaterials = await LocalDB.getAllMaterials(user.id);
       const localTimetables = await LocalDB.getAllTimetables(user.id);
       const localPlans = await LocalDB.getAllPlans(user.id);
@@ -331,91 +283,90 @@ export const useContent = () => {
       setTimetables(localTimetables);
       setPlans(localPlans);
       setAssignments(localAssignments);
+      setIsInitializing(false);
 
       setIsLoading(true);
       setError(null);
 
       try {
         const online = await isOnline();
-
         if (!online) {
           log("Offline - showing local data only");
           return;
         }
 
-        // 2. Push dirty records to backend first
-        await syncDirtyRecords(
-          localMaterials,
-          localTimetables,
-          localAssignments,
-          localPlans,
-        );
+        // Step 2: Push any dirty local changes before pulling.
+        await syncDirtyRecords();
 
-        // 3. Pull from backend if forced or 12hr cache expired
-        const lastSync = await AsyncStorage.getItem("lastPlansSync");
-        const ONE_HOUR = 1000 * 60 * 60;
-        const cacheExpired =
-          !lastSync || Date.now() - Number(lastSync) > ONE_HOUR;
+        // Step 3: Pull each resource independently based on its own cache timestamp.
+        // This means a fresh assignment pull doesn't re-pull materials that are still fresh.
+        const now = Date.now();
+        const [lastMat, lastTT, lastAss, lastPlan, lastGoals, lastLogs] = await Promise.all([
+          AsyncStorage.getItem(SYNC_KEYS.materials),
+          AsyncStorage.getItem(SYNC_KEYS.timetables),
+          AsyncStorage.getItem(SYNC_KEYS.assignments),
+          AsyncStorage.getItem(SYNC_KEYS.plans),
+          AsyncStorage.getItem(SYNC_KEYS.goals),
+          AsyncStorage.getItem(SYNC_KEYS.logs),
+        ]);
 
-        if (force || cacheExpired) {
-          log(
-            force
-              ? "Force pulling from server..."
-              : "Cache expired - pulling from server...",
-          );
+        const stale = (ts: string | null) => force || !ts || now - Number(ts) > ONE_HOUR;
 
-          const remotePlans = await BrainwaveAPI.listDailyPlans(user.id);
-          if (remotePlans?.plans) {
-            LocalDB.syncPlansFromServer(user.id, remotePlans.plans);
-            log(`Pulled ${remotePlans.plans.length} plans`);
+        if (stale(lastMat)) {
+          const r = await BrainwaveAPI.listStudyPlans(user.id);
+          if (r?.plans) {
+            await LocalDB.syncMaterialsFromServer(user.id, r.plans);
+            await AsyncStorage.setItem(SYNC_KEYS.materials, String(now));
+            log(`Pulled ${r.plans.length} materials`);
           }
-
-          const remoteMaterials = await BrainwaveAPI.listStudyPlans(user.id);
-          if (remoteMaterials?.plans) {
-            await LocalDB.syncMaterialsFromServer(
-              user.id,
-              remoteMaterials.plans,
-            );
-            log(`Pulled ${remoteMaterials.plans.length} materials`);
-          }
-
-          const remoteTimetables = await BrainwaveAPI.listTimetables(user.id);
-          if (remoteTimetables?.timetables) {
-            await LocalDB.syncTimetablesFromServer(
-              user.id,
-              remoteTimetables.timetables,
-            );
-            log(`Pulled ${remoteTimetables.timetables.length} timetables`);
-          }
-
-          const remoteAssignments = await BrainwaveAPI.listAssignments(user.id);
-          if (remoteAssignments?.assignments) {
-            await LocalDB.syncAssignmentsFromServer(
-              user.id,
-              remoteAssignments.assignments,
-            );
-            log(`Pulled ${remoteAssignments.assignments.length} assignments`);
-          }
-
-          const remoteGoals = await BrainwaveAPI.getModuleGoals();
-          if (remoteGoals?.goals) {
-            LocalDB.syncModuleGoalsFromServer(user.id, remoteGoals.goals);
-            log(`Pulled ${remoteGoals.goals.length} module goals`);
-          }
-
-          const remoteLogs = await BrainwaveAPI.getCompletionLogs();
-          if (remoteLogs?.logs) {
-            LocalDB.syncCompletionLogsFromServer(user.id, remoteLogs.logs);
-            log(`Pulled ${remoteLogs.logs.length} completion logs`);
-          }
-
-          await AsyncStorage.setItem("lastPlansSync", String(Date.now()));
-          log("Cache timestamp updated");
-        } else {
-          log("Cache still fresh - skipping server pull");
         }
 
-        // 4. Update app state after full sync
+        if (stale(lastTT)) {
+          const r = await BrainwaveAPI.listTimetables(user.id);
+          if (r?.timetables) {
+            await LocalDB.syncTimetablesFromServer(user.id, r.timetables);
+            await AsyncStorage.setItem(SYNC_KEYS.timetables, String(now));
+            log(`Pulled ${r.timetables.length} timetables`);
+          }
+        }
+
+        if (stale(lastAss)) {
+          const r = await BrainwaveAPI.listAssignments(user.id);
+          if (r?.assignments) {
+            await LocalDB.syncAssignmentsFromServer(user.id, r.assignments);
+            await AsyncStorage.setItem(SYNC_KEYS.assignments, String(now));
+            log(`Pulled ${r.assignments.length} assignments`);
+          }
+        }
+
+        if (stale(lastPlan)) {
+          const r = await BrainwaveAPI.listDailyPlans(user.id);
+          if (r?.plans) {
+            LocalDB.syncPlansFromServer(user.id, r.plans);
+            await AsyncStorage.setItem(SYNC_KEYS.plans, String(now));
+            log(`Pulled ${r.plans.length} plans`);
+          }
+        }
+
+        if (stale(lastGoals)) {
+          const r = await BrainwaveAPI.getModuleGoals();
+          if (r?.goals) {
+            LocalDB.syncModuleGoalsFromServer(user.id, r.goals);
+            await AsyncStorage.setItem(SYNC_KEYS.goals, String(now));
+            log(`Pulled ${r.goals.length} module goals`);
+          }
+        }
+
+        if (stale(lastLogs)) {
+          const r = await BrainwaveAPI.getCompletionLogs();
+          if (r?.logs) {
+            LocalDB.syncCompletionLogsFromServer(user.id, r.logs);
+            await AsyncStorage.setItem(SYNC_KEYS.logs, String(now));
+            log(`Pulled ${r.logs.length} completion logs`);
+          }
+        }
+
+        // Step 4: Update state after all pulls complete
         setMaterials(await LocalDB.getAllMaterials(user.id));
         setTimetables(await LocalDB.getAllTimetables(user.id));
         setPlans(await LocalDB.getAllPlans(user.id));
@@ -443,28 +394,32 @@ export const useContent = () => {
     [user?.id, syncDirtyRecords],
   );
 
-  // netinfo listener to auto-sync on reconnect
+  // Reconnect listener — debounced 3s to avoid multiple syncs on flaky wifi.
   useEffect(() => {
     if (!user?.id) return;
 
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = !!(state.isConnected && state.isInternetReachable);
-      if (online && !isSyncing.current) {
-        log("Reconnected - triggering sync");
-        fetchData();
+      if (online) {
+        if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = setTimeout(() => {
+          if (!isSyncing.current) fetchData();
+        }, 3000);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    };
   }, [user?.id, fetchData]);
 
-  //Initial load
+  // Initial load
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
   // Create new material (syllabus upload or text note)
-
   const createMaterial = async (
     title: string,
     rawContent: string,
@@ -474,13 +429,7 @@ export const useContent = () => {
     if (!user?.id) return null;
 
     log(`Creating material locally: ${title}`);
-    const localId = await LocalDB.createMaterialLocally(
-      user.id,
-      title,
-      rawContent,
-      uri,
-      type,
-    );
+    const localId = await LocalDB.createMaterialLocally(user.id, title, rawContent, uri, type);
     setMaterials(await LocalDB.getAllMaterials(user.id));
 
     const online = await isOnline();
@@ -492,15 +441,10 @@ export const useContent = () => {
     try {
       if (uri) {
         log(`Immediate upload: ${title}`);
-        const result = await BrainwaveAPI.uploadSyllabus(
-          user.id,
-          uri,
-          title,
-          type || "application/pdf",
-        );
+        const result = await BrainwaveAPI.uploadSyllabus(user.id, uri, title, type || "application/pdf");
         await LocalDB.markMaterialSynced(localId, result.id, result.studyPlan, result.module_tag ?? null);
         setMaterials(await LocalDB.getAllMaterials(user.id));
-        log(`Material uploaded: ${title} → remote id ${result.id}, module_tag: ${result.module_tag ?? "none"}`);
+        log(`Material uploaded: ${title} → ${result.id}`);
       }
     } catch (syncError: any) {
       log(`Immediate upload failed, will retry on reconnect: ${syncError.message}`);
@@ -516,44 +460,55 @@ export const useContent = () => {
     plans,
     assignments,
     isLoading,
+    isInitializing,
     isOnline: isOnlineStatus,
     error,
     refresh: fetchData,
     generatePlanForDate,
     createMaterial,
 
+    // Write locally first, upload when online. If offline, queued with pending_extraction=1
+    // and processed automatically when the device reconnects.
     createAssignment: async (title: string, uri: string, type: string) => {
       if (!user?.id) return null;
 
-      const online = await isOnline();
-      if (!online) {
-        throw new Error("You're offline. Connect to the internet and try again.");
-      }
-
-      log(`Uploading assignment: ${title}`);
-      const result = await BrainwaveAPI.uploadAssignment(user.id, uri, title, type);
-
       const localId = LocalDB.createAssignmentLocally(
         user.id,
-        result.assignment.title || title,
-        result.assignment.subject,
-        result.assignment.due_date,
-        result.assignment.priority,
-        result.assignment.rawContent || "",
+        title,
+        "",         // subject — filled by server extraction
+        "",         // due_date — filled by server extraction
+        "medium",   // priority — placeholder
+        "",         // rawContent — filled by server extraction
         uri,
         type,
+        true,       // pendingExtraction = true until server processes it
       );
-      LocalDB.markAssignmentSynced(localId, result.id, {
-        title: result.assignment.title,
-        subject: result.assignment.subject,
-        due_date: result.assignment.due_date,
-        due_time: result.assignment.due_time,
-        priority: result.assignment.priority,
-        rawContent: result.assignment.rawContent || "",
-      });
       setAssignments(await LocalDB.getAllAssignments(user.id));
-      log(`Assignment uploaded and saved: ${title} → remote id ${result.id}`);
-      return localId;
+
+      const online = await isOnline();
+      if (!online) {
+        log(`Offline - assignment queued locally: ${title}`);
+        return localId;
+      }
+
+      try {
+        log(`Uploading assignment: ${title}`);
+        const result = await BrainwaveAPI.uploadAssignment(user.id, uri, title, type);
+        LocalDB.markAssignmentSynced(localId, result.id, {
+          title: result.assignment.title,
+          subject: result.assignment.subject,
+          due_date: result.assignment.due_date,
+          due_time: result.assignment.due_time,
+          priority: result.assignment.priority,
+          rawContent: result.assignment.rawContent || "",
+        });
+        setAssignments(await LocalDB.getAllAssignments(user.id));
+        log(`Assignment uploaded and saved: ${title} → remote id ${result.id}`);
+        return localId;
+      } catch (syncError: any) {
+        log(`Assignment upload failed, queued for retry: ${syncError.message}`);
+        return localId;
+      }
     },
 
     deleteAssignment: async (id: string, remoteId?: number) => {
@@ -572,7 +527,7 @@ export const useContent = () => {
         return true;
       } catch (e: any) {
         log(`Delete assignment error: ${e.message}`);
-        return true; // Soft delete already happened, sync will retry
+        return true;
       }
     },
 
@@ -617,7 +572,7 @@ export const useContent = () => {
     },
   };
 
-  // generate AI study plan for a specific date, with optional preferences and custom tasks
+  // Generate AI study plan for a specific date
   async function generatePlanForDate(
     date: string,
     preferences?: any,
@@ -645,11 +600,9 @@ export const useContent = () => {
       );
 
       if (dailyPlan?.items) {
-        // Save locally as dirty first
         await LocalDB.upsertPlan(user.id, date, dailyPlan.items, true);
         log(`Plan saved locally as dirty for ${date}`);
 
-        // Try immediate backend push
         try {
           await BrainwaveAPI.saveDailyPlan(user.id, date, dailyPlan.items);
           LocalDB.markPlanSynced(user.id, date);

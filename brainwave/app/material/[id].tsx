@@ -59,6 +59,7 @@ export default function MaterialDetail() {
   const router = useRouter();
   const { showAlert } = useAlert();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingTag, setIsSavingTag] = useState(false);
 
   const getSyllabus = useCallback(async () => {
     if (!user?.id || !id) return;
@@ -328,10 +329,20 @@ export default function MaterialDetail() {
     setModuleTag(subject);
     LocalDB.updateMaterialModuleTag(user.id, localId, subject);
     if (remoteId) {
+      setIsSavingTag(true);
       try {
         await brAInwaveApi.updateMaterialModuleTag(remoteId, subject);
+        await LocalDB.markMaterialSynced(localId, remoteId as number, undefined, subject);
+        Toast.show({
+          type: "success",
+          text1: "Module tag saved",
+          position: "bottom",
+          visibilityTime: 4000,
+        });
       } catch (e) {
         // will sync later when online
+      } finally {
+        setIsSavingTag(false);
       }
     }
   };
@@ -391,13 +402,17 @@ export default function MaterialDetail() {
                   {moduleTag ?? "Set module"}
                 </Text>
               </View>
-              <ChevronDownIcon
-                size={16}
-                color={theme.colors.text.secondary}
-                style={{
-                  transform: [{ rotate: moduleDropdownOpen ? "180deg" : "0deg" }],
-                }}
-              />
+              {isSavingTag ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <ChevronDownIcon
+                  size={16}
+                  color={theme.colors.text.secondary}
+                  style={{
+                    transform: [{ rotate: moduleDropdownOpen ? "180deg" : "0deg" }],
+                  }}
+                />
+              )}
             </TouchableOpacity>
 
             {moduleDropdownOpen && (
