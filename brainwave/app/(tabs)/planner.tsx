@@ -1034,7 +1034,7 @@ export default function Planner() {
                       setEditingTaskId(item.id);
                       setNewTask({
                         task: item.task,
-                        time: item.time,
+                        time: formatTimeTo24h(item.time),
                         duration: item.duration || "1 hour",
                         difficulty: item.difficulty || "unset",
                         subject: item.subject || "Personal",
@@ -1372,11 +1372,20 @@ export default function Planner() {
                 <TouchableOpacity
                   style={styles.timePickerButton}
                   onPress={() => {
-                    const timeArr = newTask.time.split(" ");
-                    const [h, m] = timeArr[0].split(":").map(Number);
-                    const isPM = timeArr[1] === "PM";
+                    // Extract start time from range ("0800 - 0950" → "0800") or use as-is
+                    const rawTime = newTask.time.includes("-")
+                      ? newTask.time.split("-")[0].trim()
+                      : newTask.time;
+                    const milMatch = rawTime.match(/^(\d{2})(\d{2})$/);
                     const d = new Date();
-                    d.setHours(isPM ? (h % 12) + 12 : h % 12, m);
+                    if (milMatch) {
+                      d.setHours(parseInt(milMatch[1]), parseInt(milMatch[2]));
+                    } else {
+                      const timeArr = rawTime.split(" ");
+                      const [h, m] = timeArr[0].split(":").map(Number);
+                      const isPM = timeArr[1] === "PM";
+                      d.setHours(isPM ? (h % 12) + 12 : h % 12, isNaN(m) ? 0 : m);
+                    }
 
                     showPicker({
                       value: d,

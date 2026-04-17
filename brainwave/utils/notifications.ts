@@ -168,15 +168,17 @@ export function parseDurationFromTimeRange(timeStr: string, fallbackDuration?: s
 export function formatTimeTo24h(timeStr: string): string {
   if (!timeStr) return "";
 
-  if (timeStr.includes("-")) {
-    return timeStr
-      .split("-")
-      .map((s) => formatTimeTo24h(s.trim()))
-      .join(" - ");
+  // Extract start time only from a range like "0800 - 0950" or "10:00 - 11:00"
+  const raw = timeStr.includes("-") ? timeStr.split("-")[0].trim() : timeStr;
+
+  // Military format "0800" → "08:00"
+  const milMatch = raw.match(/^(\d{2})(\d{2})$/);
+  if (milMatch) {
+    return `${milMatch[1]}:${milMatch[2]}`;
   }
 
-  const match = timeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
-  if (!match) return timeStr;
+  const match = raw.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+  if (!match) return raw;
 
   let [, hourStr, minStr, modifier] = match;
   let hours = parseInt(hourStr, 10);
