@@ -121,16 +121,17 @@ export const useContent = () => {
           if (item.remote_id) await BrainwaveAPI.deleteMaterial(user.id, item.remote_id);
           LocalDB.hardDeleteMaterial(item.id);
           log(`Material deleted: ${item.title}`);
+        } else if (item.remote_id) {
+          // already on server — just patch the module tag, don't re-upload
+          await BrainwaveAPI.updateMaterialModuleTag(item.remote_id, item.module_tag ?? null);
+          await LocalDB.markMaterialSynced(item.id, item.remote_id, undefined, item.module_tag ?? null);
+          log(`Material module tag patched: ${item.title}`);
         } else if (item.file_uri) {
           const result = await BrainwaveAPI.uploadSyllabus(
             user.id, item.file_uri, item.title, item.file_type || "application/pdf",
           );
           await LocalDB.markMaterialSynced(item.id, result.id, result.studyPlan, result.module_tag ?? null);
           log(`Syllabus synced: ${item.title} → ${result.id}`);
-        } else if (item.remote_id) {
-          await BrainwaveAPI.updateMaterialModuleTag(item.remote_id, item.module_tag ?? null);
-          await LocalDB.markMaterialSynced(item.id, item.remote_id, undefined, item.module_tag ?? null);
-          log(`Material module tag patched: ${item.title}`);
         } else {
           const result = await BrainwaveAPI.createMaterial(user.id, {
             title: item.title, rawContent: item.rawContent,
