@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useState } from "react";
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useTheme } from "./ThemeContext";
 import Svg, { Path } from "react-native-svg";
@@ -25,10 +25,10 @@ export const AlertProvider = ({ children }: { children: React.ReactNode }) => {
     message: "",
   });
 
-  const showAlert = (options: AlertOptions) => {
+  const showAlert = useCallback((options: AlertOptions) => {
     setConfig(options);
     setVisible(true);
-  };
+  }, []);
 
   const hideAlert = () => setVisible(false);
 

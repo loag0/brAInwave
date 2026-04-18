@@ -18,7 +18,6 @@ import { doc, setDoc } from "firebase/firestore";
 import { db as firestore } from "../../firebaseConfig";
 import {
   ensureNotificationPermission,
-  openAppSettings,
 } from "@/utils/notifications";
 import { useAlert } from "../contexts/AlertContext";
 import BrainwaveAPI from "@/api/brAInwaveApi";
@@ -43,6 +42,7 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<Mode>("stay_consistent");
   const [sessionLength, setSessionLength] = useState<SessionLength>("medium");
+  const [isMorningPerson, setIsMorningPerson] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [yearOfStudy, setYearOfStudy] = useState<string | null>(null);
   const [degree, setDegree] = useState("");
@@ -50,8 +50,6 @@ export default function OnboardingScreen() {
 
   const handleFinish = async () => {
     if (!user?.id) return;
-    setIsSaving(true);
-
     try {
       showAlert({
         title: "Stay on track",
@@ -62,59 +60,27 @@ export default function OnboardingScreen() {
         cancelText: "Maybe later",
         onConfirm: async () => {
           const granted = await ensureNotificationPermission();
-
-          if (!granted) {
-            // Show blocked alert but still proceed to app with false
-            showAlert({
-              title: "Notifications Blocked",
-              message:
-                "Enable notifications in your phone settings to get study reminders.",
-              confirmText: "Open Settings",
-              showCancel: true,
-              cancelText: "Skip",
-              onConfirm: async () => {
-                openAppSettings();
-                await saveAndProceed(false); // ← proceed regardless
-              },
-              onCancel: async () => await saveAndProceed(false), // ← proceed on skip too
-            }, 300);
-            return; // ← don't call saveAndProceed here, the nested alert handles it
-          }
-
           await saveAndProceed(granted);
         },
         onCancel: async () => {
-          // ← add async here
           await saveAndProceed(false);
         },
       });
     } catch (e) {
       if (__DEV__) console.error("Onboarding error:", e);
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const saveAndProceed = async (granted: boolean) => {
-    if (__DEV__)
-      console.log(
-        "saveAndProceed called, user:",
-        user?.id,
-        "granted:",
-        granted,
-      );
-    if (!user?.id) {
-      if (__DEV__) console.log("returning early - no user id");
-      return;
-    }
-    if (__DEV__) console.log("proceeding with save...");
+    if (!user?.id) return;
+    setIsSaving(true);
     const userRef = doc(firestore, "users", user.id);
 
     const payload = {
       hasFinishedSetup: true,
       studyPreferences: {
         mode,
-        isMorningPerson: true,
+        isMorningPerson,
         preferredSessionLength: sessionLength,
         notificationLeadMinutes: 10,
         notifications: {
@@ -153,13 +119,21 @@ export default function OnboardingScreen() {
   if (step === 1) {
     return (
       <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.colors.background,
+            marginTop: theme.spacing.lg,
+          },
+        ]}
       >
         <Text style={[styles.title, { color: theme.colors.text.primary }]}>
           Let's set you up
         </Text>
 
-        <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+        <Text
+          style={[styles.sectionTitle, { color: theme.colors.text.primary }]}
+        >
           What's your main goal?
         </Text>
 
@@ -175,7 +149,8 @@ export default function OnboardingScreen() {
                     mode === m
                       ? theme.colors.primary
                       : theme.colors.primary + "20",
-                  borderColor: mode === m ? theme.colors.primary : "transparent",
+                  borderColor:
+                    mode === m ? theme.colors.primary : "transparent",
                 },
               ]}
             >
@@ -195,7 +170,51 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
-        <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+        <Text
+          style={[styles.sectionTitle, { color: theme.colors.text.primary }]}
+        >
+          When do you study best?
+        </Text>
+
+        <View style={[styles.row, { marginBottom: 28 }]}>
+          {([true, false] as boolean[]).map((morning) => (
+            <TouchableOpacity
+              key={String(morning)}
+              onPress={() => setIsMorningPerson(morning)}
+              style={[
+                styles.goalOption,
+                {
+                  backgroundColor:
+                    isMorningPerson === morning
+                      ? theme.colors.primary
+                      : theme.colors.primary + "20",
+                  borderColor:
+                    isMorningPerson === morning
+                      ? theme.colors.primary
+                      : "transparent",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.goalOptionText,
+                  {
+                    color:
+                      isMorningPerson === morning
+                        ? "#fff"
+                        : theme.colors.primary,
+                  },
+                ]}
+              >
+                {morning ? "Early bird" : "Night owl"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text
+          style={[styles.sectionTitle, { color: theme.colors.text.primary }]}
+        >
           Preferred study session length
         </Text>
 
@@ -324,11 +343,7 @@ export default function OnboardingScreen() {
           onPress={handleFinish}
           disabled={isSaving}
         >
-          {isSaving ? (
-            <ActivityIndicator color={theme.colors.primary} />
-          ) : (
-            <Text style={styles.buttonText}>Finish setup</Text>
-          )}
+          <Text style={styles.buttonText}>Finish setup</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -341,6 +356,20 @@ export default function OnboardingScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      {isSaving && (
+        <View
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              backgroundColor: theme.colors.background,
+              justifyContent: "center",
+              alignItems: "center",
+            },
+          ]}
+        >
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
