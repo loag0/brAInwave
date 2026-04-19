@@ -28,7 +28,7 @@ import {
   NotificationActiveIcon,
   ChevronDownIcon,
   BookIcon,
-  EnvelopeIcon,
+  CalendarIcon,
   MobileIcon,
   SettingsIcon,
   LogoutIcon,
@@ -40,6 +40,8 @@ import {
   getNotificationPermissionStatus,
 } from "@/utils/notifications";
 import { useFocusEffect } from "@react-navigation/native";
+import { useContent } from "../hooks/useContent";
+import { useTimetableUpload } from "../hooks/useTimetableUpload";
 
 interface IconProps {
   color: string;
@@ -49,6 +51,7 @@ interface IconProps {
 export default function Settings() {
   const { theme, isDark, toggleTheme } = useTheme();
   const { user, logout, updateProfileData } = useAuth();
+  const { timetables, refresh, deleteTimetable } = useContent();
   const router = useRouter();
   const { showAlert } = useAlert();
 
@@ -59,10 +62,60 @@ export default function Settings() {
   const [isUpdatingSession, setIsUpdatingSession] = useState(false);
   const [isModeExpanded, setIsModeExpanded] = useState(false);
   const [isUpdatingMode, setIsUpdatingMode] = useState(false);
+  const [isReplacingTimetable, setIsReplacingTimetable] = useState(false);
+  const [isDeletingTimetable, setIsDeletingTimetable] = useState(false);
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     user?.studyPreferences?.notifications?.studyReminders ?? false,
   );
+
+  const currentTimetable = timetables?.[0] ?? null;
+
+  const formatUploadDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const { upload: uploadTimetable } = useTimetableUpload(
+    user?.id,
+    refresh,
+    showAlert,
+    setIsReplacingTimetable,
+    undefined,
+    currentTimetable
+      ? {
+          id: currentTimetable.id,
+          remote_id: currentTimetable.remote_id ?? null,
+        }
+      : undefined,
+  );
+
+  const handleDelete = () => {
+    if (!currentTimetable) return;
+    showAlert({
+      title: "Delete Timetable",
+      message:
+        "This will remove your current schedule. You'll need to re-upload to generate plans.",
+      showCancel: true,
+      confirmText: "Delete",
+      iconColor: theme.colors.error,
+      onConfirm: async () => {
+        setIsDeletingTimetable(true);
+        try {
+          await deleteTimetable(
+            String(currentTimetable.id),
+            currentTimetable.remote_id ?? undefined,
+          );
+        } finally {
+          setIsDeletingTimetable(false);
+        }
+      },
+    });
+  };
 
   // Re-sync both notification toggle and battery dot every time screen comes into focus.
   useFocusEffect(
@@ -776,16 +829,41 @@ export default function Settings() {
 
               <Separator theme={theme} />
 
-              <TouchableOpacity style={styles.menuItemButton}>
+              <View style={styles.menuItem}>
                 <View style={styles.menuItemLeft}>
-                  <EnvelopeIcon color={theme.colors.text.secondary} size={18} />
-                  <Text style={styles.menuItemTitle}>Email preferences</Text>
+                  <CalendarIcon color={theme.colors.text.secondary} size={18} />
+                  <View style={styles.menuItemText}>
+                    <Text style={styles.menuItemTitle}>Timetable</Text>
+                    <Text style={styles.menuItemSubtitle}>
+                      {currentTimetable
+                        ? `Uploaded ${formatUploadDate(currentTimetable.created_at)}`
+                        : "No timetable uploaded"}
+                    </Text>
+                  </View>
                 </View>
-                <ChevronRightIcon
-                  color={theme.colors.text.secondary}
-                  size={28}
-                />
-              </TouchableOpacity>
+                {currentTimetable && (
+                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                    {isReplacingTimetable ? (
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                    ) : (
+                      <TouchableOpacity onPress={uploadTimetable}>
+                        <Text style={{ fontSize: 13, color: theme.colors.primary, fontFamily: theme.fonts.medium }}>
+                          Replace
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {isDeletingTimetable ? (
+                      <ActivityIndicator size="small" color={theme.colors.error} />
+                    ) : (
+                      <TouchableOpacity onPress={handleDelete}>
+                        <Text style={{ fontSize: 13, color: theme.colors.error, fontFamily: theme.fonts.medium }}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 

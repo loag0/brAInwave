@@ -695,6 +695,28 @@ async def updateAssignmentDueDate(request: Request, assignment_id: int, data: Du
     db.commit()
     return {"status": "success"}
 
+VALID_DIFFICULTIES = {"easy", "medium", "hard"}
+
+def validate_weekly_template(template: dict) -> tuple[bool, str]:
+    if not isinstance(template, dict):
+        return False, "Parsed result is not a valid schedule."
+    all_entries = [entry for day in template for entry in template.get(day, []) if isinstance(template.get(day), list)]
+    if not all_entries:
+        return False, "No classes found — is this actually a timetable?"
+    for day, entries in template.items():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry.get("subject", ""), str) or not entry.get("subject", "").strip():
+                return False, f"Invalid entry on {day}: missing subject."
+            if ":" not in entry.get("time", ""):
+                return False, f"Invalid entry on {day}: time format unrecognizable."
+            if not entry.get("duration", "").strip():
+                return False, f"Invalid entry on {day}: missing duration."
+            if entry.get("difficulty") not in VALID_DIFFICULTIES:
+                entry["difficulty"] = "medium"
+    return True, ""
+
 @app.post("/upload-timetable")
 @limiter.limit("5/minute")
 async def uploadTimetable(request: Request, user_id: str = Depends(verify_token), file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -724,14 +746,22 @@ async def uploadTimetable(request: Request, user_id: str = Depends(verify_token)
         5. For 'subject': use the exact course name as it appears in the document. Do not abbreviate or rename.
     """
 
-    timetableData = json.loads(call_gemini(
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
-        contents=[
-            types.Part.from_text(text=prompt),
-            types.Part.from_bytes(data=content, mime_type=file.content_type or "application/octet-stream")
-        ]
-    ))
+    try:
+        timetableData = json.loads(call_gemini(
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            contents=[
+                types.Part.from_text(text=prompt),
+                types.Part.from_bytes(data=content, mime_type=file.content_type or "application/octet-stream")
+            ]
+        ))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Failed to parse timetable. Please try again.")
+
     weeklyTemplate = timetableData.get("weekly_template", {})
+
+    is_valid, error_msg = validate_weekly_template(weeklyTemplate)
+    if not is_valid:
+        raise HTTPException(status_code=422, detail=error_msg)
 
     newTimetable = Timetable(
         user_id=user_id,

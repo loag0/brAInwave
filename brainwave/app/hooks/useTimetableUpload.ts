@@ -11,6 +11,7 @@ export function useTimetableUpload(
   showAlert?: any,
   setIsLoading?: (loading: boolean) => void,
   setLoadingMessage?: (msg: string) => void,
+  replacingTimetable?: { id: number; remote_id: number | null },
 ) {
   const upload = async () => {
     if (!userId) {
@@ -43,15 +44,6 @@ export function useTimetableUpload(
     setIsLoading?.(true);
     setLoadingMessage?.("Uploading Timetable...");
 
-    // Create local copy first for offline support
-    const localId = LocalDB.createTimetableLocally(
-      userId,
-      title,
-      {},
-      file.uri,
-      mimeType,
-    );
-
     try {
       const response = await brainwaveApi.uploadTimetable(
         userId,
@@ -60,12 +52,24 @@ export function useTimetableUpload(
         mimeType,
       );
 
-      // Mark local record as synced with structured data from backend
-      LocalDB.markTimetableSynced(
-        localId,
-        response.id,
+      // Create local record once backend confirms valid parse
+      const localId = LocalDB.createTimetableLocally(
+        userId,
+        title,
         response.weekly_template,
+        file.uri,
+        mimeType,
       );
+
+      LocalDB.markTimetableSynced(localId, response.id, response.weekly_template);
+
+      // Delete old timetable before refresh so both never coexist in state
+      if (replacingTimetable) {
+        LocalDB.hardDeleteTimetable(replacingTimetable.id);
+        if (replacingTimetable.remote_id) {
+          brainwaveApi.deleteTimetable(userId, replacingTimetable.remote_id).catch(() => {});
+        }
+      }
 
       // Write to Firestore so planner and home screen update in real time
       await setDoc(
@@ -76,15 +80,32 @@ export function useTimetableUpload(
 
       await refresh?.(true);
 
-      showAlert?.({ title: "Success", message: "Timetable uploaded!" });
+      Toast.show({ type: "success", text1: "Timetable uploaded", position: "bottom", visibilityTime: 4000 });
     } catch (error: any) {
-      console.error("Timetable upload failed, remaining offline-only:", error);
+      const status = error?.response?.status;
+
+      if (status === 422) {
+        const detail =
+          error?.response?.data?.detail ||
+          "We couldn't find any classes in that file. u sure it's a timetable twin?";
+        showAlert?.({ title: "Upload Failed", message: detail });
+        return;
+      }
+
+      if (status === 413) {
+        showAlert?.({ title: "File Too Large", message: "Please upload a file smaller than 10MB." });
+        return;
+      }
+
+      // Network/server error — save locally for later sync
+      if (__DEV__) console.error("Timetable upload failed, remaining offline-only:", error);
+      LocalDB.createTimetableLocally(userId, title, {}, file.uri, mimeType);
       Toast.show({
         type: "warning",
-        text1: "Failed to upload",
-        text2: "Timetable upload failed. Your timetable has been saved locally and will sync when you're back online.",
+        text1: "Saved locally",
+        text2: "Upload failed. Your timetable has been saved and will sync when you're back online.",
         position: "bottom",
-        visibilityTime: 6000
+        visibilityTime: 6000,
       });
     } finally {
       setIsLoading?.(false);
