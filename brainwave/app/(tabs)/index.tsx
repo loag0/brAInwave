@@ -21,6 +21,7 @@ import Skeleton from "@/components/HomeSkeleton";
 import BrainwaveLoader from "@/components/BrainwaveLoader";
 import { useTodaySchedule } from "../hooks/useTodaySchedule";
 import { useTimetableUpload } from "../hooks/useTimetableUpload";
+import { useUploadOverlay } from "../contexts/UploadOverlayContext";
 import { useNextClass } from "../hooks/useNextClass";
 import {
   ensureNotificationPermission,
@@ -93,10 +94,8 @@ export default function Home() {
     syncProgress,
   } = useContent();
 
-  const [isLoading, setIsLoading] = useState(false);
-  const isManualLoading = isLoading;
+  const { showUploadOverlay, hideUploadOverlay } = useUploadOverlay();
   const isBackgroundSyncing = syncProgress.total > 0;
-  const [loadingMessage, setLoadingMessage] = useState("Analyzing...");
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
 
@@ -173,12 +172,16 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  const setTimetableLoading = useCallback((loading: boolean) => {
+    if (loading) showUploadOverlay("Uploading timetable...");
+    else hideUploadOverlay();
+  }, [showUploadOverlay, hideUploadOverlay]);
+
   const { upload } = useTimetableUpload(
     user?.id,
     refresh,
     showAlert,
-    setIsLoading,
-    setLoadingMessage,
+    setTimetableLoading,
   );
 
   const handleUploadAssignment = useCallback(async () => {
@@ -200,32 +203,28 @@ export default function Home() {
           });
           return;
         }
-        setIsLoading(true);
-        setLoadingMessage("Analyzing Assignment...");
+        showUploadOverlay("Analyzing assignment...");
         await createAssignment(
           asset.name,
           asset.uri,
           asset.mimeType || "application/pdf",
         );
-        setIsLoading(false);
+        hideUploadOverlay();
         showAlert?.({
           title: "Assignment Uploaded",
           message: "brAInwave is busy building your master plan!",
         });
       }
     } catch (err: any) {
-      setIsLoading(false);
+      hideUploadOverlay();
       showAlert?.({
         title: "Upload Failed",
         message: (__DEV__) ? err.message : "Upload failed. This may be a temporary issue - please try again in a little while.",
         iconColor: theme.colors.error,
       });
     }
-  }, [createAssignment, showAlert, theme.colors.error]);
+  }, [createAssignment, showAlert, showUploadOverlay, hideUploadOverlay, theme.colors.error]);
 
-  const loadingText = !contentLoading
-    ? loadingMessage
-    : `Syncing records (${syncProgress.current}/${syncProgress.total})...`;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -288,7 +287,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      {(isManualLoading || isBackgroundSyncing) && (
+      {isBackgroundSyncing && (
         <View style={styles.loaderOverlay}>
           <BrainwaveLoader theme={theme} />
           <Text
@@ -297,7 +296,7 @@ export default function Home() {
               { marginTop: 16, fontWeight: "600", color: "#fff" },
             ]}
           >
-            {loadingText}
+            {`Syncing records (${syncProgress.current}/${syncProgress.total})...`}
           </Text>
         </View>
       )}

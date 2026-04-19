@@ -27,7 +27,7 @@ import { LocalDB } from "../database/localDb";
 import { useFocusEffect } from "@react-navigation/native";
 import Svg, { Path, SvgProps } from "react-native-svg";
 import { useAlert } from "../contexts/AlertContext";
-import BrainwaveLoader from "@/components/BrainwaveLoader";
+import { useUploadOverlay } from "../contexts/UploadOverlayContext";
 import * as DocumentPicker from "expo-document-picker";
 import { backgroundSync } from "@/utils/backgroundSync";
 
@@ -84,7 +84,7 @@ export default function Library() {
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const { showAlert } = useAlert();
-  const [isUploading, setIsUploading] = useState(false);
+  const { showUploadOverlay, hideUploadOverlay } = useUploadOverlay();
 
   // Insights Data State
   const [streakCount, setStreakCount] = useState(0);
@@ -162,7 +162,7 @@ export default function Library() {
 
     if (result.canceled || !result.assets) return;
 
-    setIsUploading(true);
+    showUploadOverlay("Importing syllabus...");
 
     try {
       for (const asset of result.assets) {
@@ -186,7 +186,7 @@ export default function Library() {
       if (__DEV__) console.error(e.message);
       showAlert?.({ title: "Import Failed", message: "Failed to read file.", iconColor: theme.colors.error });
     } finally {
-      setIsUploading(false);
+      hideUploadOverlay();
     }
   }, [user?.id, createMaterial, showAlert, theme.colors.error]);
 
@@ -654,24 +654,6 @@ export default function Library() {
           </View>
         )}
       </ScrollView>
-
-      {/* Uploading overlay */}
-      {isUploading && (
-        <View
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            backgroundColor: "rgba(0,0,0,0.7)",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 999,
-          }}
-        >
-          <BrainwaveLoader theme={theme} />
-          <Text style={{ color: "#fff", marginTop: 16, fontWeight: "600" }}>
-            Importing syllabus...
-          </Text>
-        </View>
-      )}
 
       {/* FAB - only show on library tab */}
       {activeTab === "library" && (

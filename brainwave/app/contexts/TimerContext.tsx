@@ -37,14 +37,15 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
   const intervalRef = useRef<any>(null);
   const expectedEndTimeRef = useRef<number | null>(null);
 
-  // Update initial minutes if user preferences load/change while not running
+  // Update initial minutes if user preferences change while not running.
   useEffect(() => {
     if (!isRunning) {
       const newMins = getInitialMinutes();
       setMinutes(newMins);
       setTotalSeconds(newMins * 60);
     }
-  }, [getInitialMinutes, isRunning]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getInitialMinutes]);
 
   // Derived value for the progress ring: (Current Seconds / Total Seconds)
   const timeLeftInSeconds = minutes * 60 + seconds;

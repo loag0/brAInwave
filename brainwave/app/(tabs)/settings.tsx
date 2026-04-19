@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   AppState,
   Modal,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -46,6 +47,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { useContent } from "../hooks/useContent";
 import { useTimetableUpload } from "../hooks/useTimetableUpload";
+import { useUploadOverlay } from "../contexts/UploadOverlayContext";
 
 interface IconProps {
   color: string;
@@ -58,6 +60,7 @@ export default function Settings() {
   const { timetables, refresh, deleteTimetable } = useContent();
   const router = useRouter();
   const { showAlert } = useAlert();
+  const { showUploadOverlay, hideUploadOverlay } = useUploadOverlay();
 
   const [isNotificationExpanded, setIsNotificationExpanded] = useState(false);
   const [isFocusExpanded, setIsFocusExpanded] = useState(false);
@@ -69,6 +72,34 @@ export default function Settings() {
   const [isReplacingTimetable, setIsReplacingTimetable] = useState(false);
   const [isDeletingTimetable, setIsDeletingTimetable] = useState(false);
   const [isTimetableSheetOpen, setIsTimetableSheetOpen] = useState(false);
+  const sheetTranslateY = useRef(new Animated.Value(300)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const isSheetClosingRef = useRef(false);
+
+  const openTimetableSheet = () => {
+    if (isReplacingTimetable || isDeletingTimetable) return;
+    isSheetClosingRef.current = false;
+    setIsTimetableSheetOpen(true);
+    sheetTranslateY.setValue(300);
+    backdropOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(sheetTranslateY, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const closeTimetableSheet = (callback?: () => void) => {
+    if (isSheetClosingRef.current) return;
+    isSheetClosingRef.current = true;
+    Animated.parallel([
+      Animated.timing(sheetTranslateY, { toValue: 300, duration: 250, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => {
+      isSheetClosingRef.current = false;
+      setIsTimetableSheetOpen(false);
+      callback?.();
+    });
+  };
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     user?.studyPreferences?.notifications?.studyReminders ?? false,
@@ -85,11 +116,17 @@ export default function Settings() {
     });
   };
 
+  const setTimetableLoading = useCallback((loading: boolean) => {
+    setIsReplacingTimetable(loading);
+    if (loading) showUploadOverlay("Uploading timetable...");
+    else hideUploadOverlay();
+  }, [showUploadOverlay, hideUploadOverlay]);
+
   const { upload: uploadTimetable } = useTimetableUpload(
     user?.id,
     refresh,
     showAlert,
-    setIsReplacingTimetable,
+    setTimetableLoading,
     undefined,
     currentTimetable
       ? {
@@ -850,7 +887,7 @@ export default function Settings() {
                   isReplacingTimetable || isDeletingTimetable ? (
                     <ActivityIndicator size="small" color={isReplacingTimetable ? theme.colors.primary : theme.colors.error} />
                   ) : (
-                    <TouchableOpacity onPress={() => setIsTimetableSheetOpen(true)} hitSlop={8}>
+                    <TouchableOpacity onPress={openTimetableSheet} hitSlop={8}>
                       <KebabIcon color={theme.colors.text.secondary} size={20} />
                     </TouchableOpacity>
                   )
@@ -884,31 +921,44 @@ export default function Settings() {
       <Modal
         visible={isTimetableSheetOpen}
         transparent
-        animationType="slide"
-        onRequestClose={() => setIsTimetableSheetOpen(false)}
+        animationType="none"
+        onRequestClose={() => {
+          if (isReplacingTimetable || isDeletingTimetable) return;
+          closeTimetableSheet();
+        }}
       >
-        <TouchableOpacity
-          style={styles.sheetBackdrop}
-          activeOpacity={1}
-          onPress={() => setIsTimetableSheetOpen(false)}
-        />
-        <View style={styles.sheet}>
-          <View style={styles.sheetHandle} />
+        <Animated.View
+          style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: backdropOpacity }]}
+          pointerEvents="box-none"
+        >
           <TouchableOpacity
-            style={styles.sheetRow}
-            onPress={() => { setIsTimetableSheetOpen(false); uploadTimetable(); }}
-          >
-            <CompareIcon color={theme.colors.primary} size={20} />
-            <Text style={[styles.sheetRowText, { color: theme.colors.text.primary }]}>Replace</Text>
-          </TouchableOpacity>
-          <View style={{ height: 1, backgroundColor: theme.colors.border }} />
-          <TouchableOpacity
-            style={styles.sheetRow}
-            onPress={() => { setIsTimetableSheetOpen(false); handleDelete(); }}
-          >
-            <DeleteIcon color={theme.colors.error} size={20} />
-            <Text style={[styles.sheetRowText, { color: theme.colors.error }]}>Delete</Text>
-          </TouchableOpacity>
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => {
+              if (isReplacingTimetable || isDeletingTimetable) return;
+              closeTimetableSheet();
+            }}
+          />
+        </Animated.View>
+        <View style={styles.sheetContainer} pointerEvents="box-none">
+          <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }] }]}>
+            <View style={styles.sheetHandle} />
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => closeTimetableSheet(uploadTimetable)}
+            >
+              <CompareIcon color={theme.colors.primary} size={20} />
+              <Text style={[styles.sheetRowText, { color: theme.colors.text.primary }]}>Replace</Text>
+            </TouchableOpacity>
+            <View style={{ height: 1, backgroundColor: theme.colors.border }} />
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => closeTimetableSheet(handleDelete)}
+            >
+              <DeleteIcon color={theme.colors.error} size={20} />
+              <Text style={[styles.sheetRowText, { color: theme.colors.error }]}>Delete</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1096,8 +1146,11 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       marginBottom: -67,
     },
     sheetBackdrop: {
-      flex: 1,
       backgroundColor: "rgba(0,0,0,0.4)",
+    },
+    sheetContainer: {
+      flex: 1,
+      justifyContent: "flex-end",
     },
     sheet: {
       backgroundColor: theme.colors.surface,
