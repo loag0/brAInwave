@@ -702,15 +702,17 @@ def validate_weekly_template(template: dict) -> tuple[bool, str]:
         return False, "Parsed result is not a valid schedule."
     all_entries = [entry for day in template for entry in template.get(day, []) if isinstance(template.get(day), list)]
     if not all_entries:
-        return False, "No classes found — is this actually a timetable?"
+        return False, "No classes found - i don't think this is a timetable vro 🥀"
     for day, entries in template.items():
         if not isinstance(entries, list):
             continue
         for entry in entries:
             if not isinstance(entry.get("subject", ""), str) or not entry.get("subject", "").strip():
                 return False, f"Invalid entry on {day}: missing subject."
+            """
             if ":" not in entry.get("time", ""):
                 return False, f"Invalid entry on {day}: time format unrecognizable."
+            """
             if not entry.get("duration", "").strip():
                 return False, f"Invalid entry on {day}: missing duration."
             if entry.get("difficulty") not in VALID_DIFFICULTIES:

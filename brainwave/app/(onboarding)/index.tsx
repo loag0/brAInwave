@@ -266,96 +266,98 @@ export default function OnboardingScreen() {
 
   // Step 2
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <Text style={[styles.title, { color: theme.colors.text.primary }]}>
-          One more thing
-        </Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={[styles.title, { color: theme.colors.text.primary }]}>
+            One more thing
+          </Text>
 
-        <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
-          What year are you in?
-        </Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+            What year are you in?
+          </Text>
 
-        <View style={[styles.row, { marginBottom: 28 }]}>
-          {YEAR_OPTIONS.map((y) => (
-            <TouchableOpacity
-              key={y}
-              onPress={() => setYearOfStudy(yearOfStudy === y ? null : y)}
-              style={[
-                styles.goalOption,
-                {
-                  backgroundColor:
-                    yearOfStudy === y
-                      ? theme.colors.primary
-                      : theme.colors.primary + "20",
-                  borderColor:
-                    yearOfStudy === y ? theme.colors.primary : "transparent",
-                },
-              ]}
-            >
-              <Text
+          <View style={[styles.row, { marginBottom: 28 }]}>
+            {YEAR_OPTIONS.map((y) => (
+              <TouchableOpacity
+                key={y}
+                onPress={() => setYearOfStudy(yearOfStudy === y ? null : y)}
                 style={[
-                  styles.goalOptionText,
-                  { color: yearOfStudy === y ? "#fff" : theme.colors.primary },
+                  styles.goalOption,
+                  {
+                    backgroundColor:
+                      yearOfStudy === y
+                        ? theme.colors.primary
+                        : theme.colors.primary + "20",
+                    borderColor:
+                      yearOfStudy === y ? theme.colors.primary : "transparent",
+                  },
                 ]}
               >
-                {y}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Text
+                  style={[
+                    styles.goalOptionText,
+                    { color: yearOfStudy === y ? "#fff" : theme.colors.primary },
+                  ]}
+                >
+                  {y}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
-          Your degree / programme
-        </Text>
-
-        <TextInput
-          style={[
-            styles.textInput,
-            {
-              backgroundColor: theme.colors.primary + "20",
-              color: theme.colors.text.primary,
-              borderColor: degree.length > 0 ? theme.colors.primary : "transparent",
-            },
-          ]}
-          placeholder="e.g. Computer Science"
-          placeholderTextColor={theme.colors.text.secondary}
-          value={degree}
-          onChangeText={setDegree}
-          returnKeyType="done"
-          maxLength={120}
-        />
-        {degree.length > 90 && (
-          <Text style={{ color: theme.colors.text.secondary, fontSize: 12, textAlign: "right", marginTop: 4 }}>
-            {120 - degree.length} characters left
+          <Text style={[styles.sectionTitle, { color: theme.colors.text.primary }]}>
+            Your degree / programme
           </Text>
-        )}
 
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: theme.colors.primary, marginTop: 32 }]}
-          onPress={handleFinish}
-          disabled={isSaving}
-        >
-          <Text style={styles.buttonText}>Finish setup</Text>
-        </TouchableOpacity>
+          <TextInput
+            style={[
+              styles.textInput,
+              {
+                backgroundColor: theme.colors.primary + "20",
+                color: theme.colors.text.primary,
+                borderColor: degree.length > 0 ? theme.colors.primary : "transparent",
+              },
+            ]}
+            placeholder="e.g. Computer Science"
+            placeholderTextColor={theme.colors.text.secondary}
+            value={degree}
+            onChangeText={setDegree}
+            returnKeyType="done"
+            maxLength={120}
+          />
+          {degree.length > 90 && (
+            <Text style={{ color: theme.colors.text.secondary, fontSize: 12, textAlign: "right", marginTop: 4 }}>
+              {120 - degree.length} characters left
+            </Text>
+          )}
 
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={handleFinish}
-          disabled={isSaving}
-        >
-          <Text style={[styles.skipText, { color: theme.colors.text.secondary }]}>
-            Skip
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: theme.colors.primary, marginTop: 32 }]}
+            onPress={handleFinish}
+            disabled={isSaving}
+          >
+            <Text style={styles.buttonText}>Finish setup</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleFinish}
+            disabled={isSaving}
+          >
+            <Text style={[styles.skipText, { color: theme.colors.text.secondary }]}>
+              Skip
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
       {isSaving && (
         <View
           style={[
@@ -370,7 +372,7 @@ export default function OnboardingScreen() {
           <ActivityIndicator size="small" color={theme.colors.primary} />
         </View>
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
