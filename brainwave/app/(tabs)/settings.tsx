@@ -8,6 +8,7 @@ import {
   Switch,
   ActivityIndicator,
   AppState,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -32,6 +33,9 @@ import {
   MobileIcon,
   SettingsIcon,
   LogoutIcon,
+  KebabIcon,
+  DeleteIcon,
+  CompareIcon,
   ICONS,
 } from "@/components/Icons";
 import {
@@ -64,6 +68,7 @@ export default function Settings() {
   const [isUpdatingMode, setIsUpdatingMode] = useState(false);
   const [isReplacingTimetable, setIsReplacingTimetable] = useState(false);
   const [isDeletingTimetable, setIsDeletingTimetable] = useState(false);
+  const [isTimetableSheetOpen, setIsTimetableSheetOpen] = useState(false);
   const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     user?.studyPreferences?.notifications?.studyReminders ?? false,
@@ -842,26 +847,13 @@ export default function Settings() {
                   </View>
                 </View>
                 {currentTimetable && (
-                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-                    {isReplacingTimetable ? (
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                    ) : (
-                      <TouchableOpacity onPress={uploadTimetable}>
-                        <Text style={{ fontSize: 13, color: theme.colors.primary, fontFamily: theme.fonts.medium }}>
-                          Replace
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    {isDeletingTimetable ? (
-                      <ActivityIndicator size="small" color={theme.colors.error} />
-                    ) : (
-                      <TouchableOpacity onPress={handleDelete}>
-                        <Text style={{ fontSize: 13, color: theme.colors.error, fontFamily: theme.fonts.medium }}>
-                          Delete
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                  isReplacingTimetable || isDeletingTimetable ? (
+                    <ActivityIndicator size="small" color={isReplacingTimetable ? theme.colors.primary : theme.colors.error} />
+                  ) : (
+                    <TouchableOpacity onPress={() => setIsTimetableSheetOpen(true)} hitSlop={8}>
+                      <KebabIcon color={theme.colors.text.secondary} size={20} />
+                    </TouchableOpacity>
+                  )
                 )}
               </View>
             </View>
@@ -888,6 +880,37 @@ export default function Settings() {
           <Text style={styles.version}>brAInwave v1.0.0</Text>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={isTimetableSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsTimetableSheetOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.sheetBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsTimetableSheetOpen(false)}
+        />
+        <View style={styles.sheet}>
+          <View style={styles.sheetHandle} />
+          <TouchableOpacity
+            style={styles.sheetRow}
+            onPress={() => { setIsTimetableSheetOpen(false); uploadTimetable(); }}
+          >
+            <CompareIcon color={theme.colors.primary} size={20} />
+            <Text style={[styles.sheetRowText, { color: theme.colors.text.primary }]}>Replace</Text>
+          </TouchableOpacity>
+          <View style={{ height: 1, backgroundColor: theme.colors.border }} />
+          <TouchableOpacity
+            style={styles.sheetRow}
+            onPress={() => { setIsTimetableSheetOpen(false); handleDelete(); }}
+          >
+            <DeleteIcon color={theme.colors.error} size={20} />
+            <Text style={[styles.sheetRowText, { color: theme.colors.error }]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1071,6 +1094,39 @@ const createStyles = (theme: Theme, isDark: boolean) =>
       textAlign: "center",
       paddingVertical: theme.spacing.lg,
       marginBottom: -67,
+    },
+    sheetBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+    },
+    sheet: {
+      backgroundColor: theme.colors.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingHorizontal: 20,
+      paddingBottom: 36,
+      paddingTop: 12,
+      borderWidth: 1,
+      borderBottomWidth: 0,
+      borderColor: theme.colors.border,
+    },
+    sheetHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.colors.border,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    sheetRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      paddingVertical: 16,
+    },
+    sheetRowText: {
+      fontSize: 15,
+      fontFamily: theme.fonts.medium,
     },
     accordionContainer: { width: "100%" },
     expandedContent: {
