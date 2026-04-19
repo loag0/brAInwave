@@ -18,7 +18,6 @@ import { Theme } from "../types";
 import { useContent } from "../hooks/useContent";
 import { router } from "expo-router";
 import Skeleton from "@/components/HomeSkeleton";
-import BrainwaveLoader from "@/components/BrainwaveLoader";
 import { useTodaySchedule } from "../hooks/useTodaySchedule";
 import { useTimetableUpload } from "../hooks/useTimetableUpload";
 import { useUploadOverlay } from "../contexts/UploadOverlayContext";
@@ -91,11 +90,9 @@ export default function Home() {
     isInitializing,
     refresh,
     createAssignment,
-    syncProgress,
   } = useContent();
 
   const { showUploadOverlay, hideUploadOverlay } = useUploadOverlay();
-  const isBackgroundSyncing = syncProgress.total > 0;
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
 
@@ -287,20 +284,6 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      {isBackgroundSyncing && (
-        <View style={styles.loaderOverlay}>
-          <BrainwaveLoader theme={theme} />
-          <Text
-            style={[
-              styles.dateText,
-              { marginTop: 16, fontWeight: "600", color: "#fff" },
-            ]}
-          >
-            {`Syncing records (${syncProgress.current}/${syncProgress.total})...`}
-          </Text>
-        </View>
-      )}
-
       {/* Header */}
       <View style={styles.headerBg}>
         <View style={styles.headerContent}>

@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../contexts/ThemeContext";
@@ -77,7 +76,7 @@ export default function Library() {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
-  const { refresh, createMaterial, materials, syncProgress, isLoading } =
+  const { refresh, createMaterial, materials, isLoading } =
     useContent();
 
   const [activeTab, setActiveTab] = useState<"library" | "insights">("library");
@@ -184,10 +183,15 @@ export default function Library() {
       });
     } catch (e: any) {
       if (__DEV__) console.error(e.message);
-      showAlert?.({ title: "Import Failed", message: "Failed to read file.", iconColor: theme.colors.error });
+      showAlert?.({
+        title: "Import Failed",
+        message: "Failed to read file.",
+        iconColor: theme.colors.error,
+      });
     } finally {
       hideUploadOverlay();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, createMaterial, showAlert, theme.colors.error]);
 
   const filteredMaterials = useMemo(() => {

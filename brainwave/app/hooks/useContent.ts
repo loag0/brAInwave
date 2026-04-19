@@ -48,7 +48,6 @@ export const useContent = () => {
   // Background server sync after that is silent; it does NOT reset this flag.
   const [isInitializing, setIsInitializing] = useState(true);
   const [isOnlineStatus, setIsOnlineStatus] = useState<boolean | null>(null);
-  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const isSyncing = useRef(false);
   const lastErrorToast = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,7 +110,6 @@ export const useContent = () => {
     });
 
     isSyncing.current = true;
-    setSyncProgress({ current: 0, total: totalToSync });
     let completed = 0;
 
     // --- Study materials ---
@@ -131,6 +129,7 @@ export const useContent = () => {
             user.id, item.file_uri, item.title, item.file_type || "application/pdf",
           );
           await LocalDB.markMaterialSynced(item.id, result.id, result.studyPlan, result.module_tag ?? null);
+          Toast.show({ type: "success", text1: "Material uploaded", position: "bottom", visibilityTime: 4000 });
           log(`Syllabus synced: ${item.title} → ${result.id}`);
         } else {
           const result = await BrainwaveAPI.createMaterial(user.id, {
@@ -140,7 +139,6 @@ export const useContent = () => {
           log(`Text material synced: ${item.title} → ${result.id}`);
         }
         completed++;
-        setSyncProgress({ current: completed, total: totalToSync });
       } catch (e: any) {
         log(`Material sync failed [${item.title}]: ${e.message}`);
         if (e.response?.status >= 500) LocalDB.hardDeleteMaterial(item.id);
@@ -166,7 +164,6 @@ export const useContent = () => {
           log(`Manual timetable synced: ${table.title} → ${result.id}`);
         }
         completed++;
-        setSyncProgress({ current: completed, total: totalToSync });
       } catch (e: any) {
         log(`Timetable sync failed [${table.title}]: ${e.message}`);
         if (e.response?.status >= 500) LocalDB.hardDeleteTimetable(table.id);
@@ -191,6 +188,7 @@ export const useContent = () => {
             priority: result.assignment.priority,
             rawContent: result.assignment.rawContent || ass.rawContent,
           });
+          Toast.show({ type: "success", text1: "Assignment uploaded", position: "bottom", visibilityTime: 4000 });
           log(`Assignment synced: ${ass.title} → ${result.id}`);
         } else if (ass.remote_id) {
           // Due-date edit with no file — patch the server record
@@ -199,7 +197,6 @@ export const useContent = () => {
           log(`Assignment due date patched: ${ass.title}`);
         }
         completed++;
-        setSyncProgress({ current: completed, total: totalToSync });
       } catch (e: any) {
         log(`Assignment sync failed [${ass.title}]: ${e.message}`);
         if (e.response?.status >= 500) LocalDB.hardDeleteAssignment(ass.id);
@@ -213,7 +210,6 @@ export const useContent = () => {
         LocalDB.markPlanSynced(user.id, plan.date);
         log(`Plan synced: ${plan.date}`);
         completed++;
-        setSyncProgress({ current: completed, total: totalToSync });
       } catch (e: any) {
         log(`Plan sync failed [${plan.date}]: ${e.message}`);
         // Stays dirty — retries on next reconnect
@@ -232,7 +228,6 @@ export const useContent = () => {
         );
         LocalDB.markCompletionLogsSynced(user.id, dirtyLogs.map((l) => l.id));
         completed += dirtyLogs.length;
-        setSyncProgress({ current: completed, total: totalToSync });
         log("Completion logs synced");
       } catch (e: any) {
         log(`Completion logs sync failed: ${e.message}`);
@@ -250,7 +245,6 @@ export const useContent = () => {
         );
         LocalDB.markModuleGoalsSynced(user.id);
         completed++;
-        setSyncProgress({ current: completed, total: totalToSync });
         log("Module goals synced");
       } catch (e: any) {
         log(`Module goals sync failed: ${e.message}`);
@@ -258,7 +252,6 @@ export const useContent = () => {
     }
 
     log(`Sync complete - ${completed}/${totalToSync} succeeded`);
-    setTimeout(() => setSyncProgress({ current: 0, total: 0 }), 2000);
     isSyncing.current = false;
 
     // Refresh state from local DB after sync
@@ -457,7 +450,6 @@ export const useContent = () => {
   return {
     materials,
     timetables,
-    syncProgress,
     plans,
     assignments,
     isLoading,
