@@ -149,28 +149,6 @@ Development builds are required due to native configurations and the modern `exp
 
 ---
 
-## Project Status
-
-| Feature | Status |
-| :--- | :--- |
-| Study plan generation (AI) | Complete |
-| Timetable / syllabus upload | Complete |
-| Offline-first local storage | Complete |
-| Pomodoro focus timer | Complete |
-| AI-generated flashcards | Complete |
-| Assignment tracker | Complete |
-| Study analytics & insights | Complete |
-| Study streak tracking | Complete |
-| Subject priorities (drag-and-drop) | Complete |
-| Study preferences & modes | Complete |
-| Dark mode | Complete |
-| PDF export (iOS + Android) | Complete |
-| Push notifications | Complete |
-| Cross-device sync (Supabase) | Complete |
-| Google Sign-In | Complete |
-
----
-
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
