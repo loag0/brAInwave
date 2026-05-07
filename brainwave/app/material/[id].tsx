@@ -326,24 +326,36 @@ export default function MaterialDetail() {
   const handleModuleTagSelect = async (subject: string | null) => {
     setModuleDropdownOpen(false);
     if (!user?.id || !localId) return;
-    setModuleTag(subject);
-    LocalDB.updateMaterialModuleTag(user.id, localId, subject);
-    if (remoteId) {
-      setIsSavingTag(true);
-      try {
-        await brAInwaveApi.updateMaterialModuleTag(remoteId, subject);
-        await LocalDB.markMaterialSynced(localId, remoteId as number, undefined, subject);
-        Toast.show({
-          type: "success",
-          text1: "Module tag saved",
-          position: "bottom",
-          visibilityTime: 4000,
-        });
-      } catch (e) {
-        // will sync later when online
-      } finally {
-        setIsSavingTag(false);
+
+    try {
+      await LocalDB.updateMaterialModuleTag(user.id, localId, subject);
+
+      setModuleTag(subject);
+      
+      if (remoteId) {
+        setIsSavingTag(true);
+          await brAInwaveApi.updateMaterialModuleTag(remoteId, subject);
+          await LocalDB.markMaterialSynced(localId, remoteId as number, undefined, subject);
+        
+          Toast.show({
+            type: "success",
+            text1: "Module tag saved",
+            position: "bottom",
+            visibilityTime: 4000,
+          });
       }
+    } catch (e) {
+        console.error("Failed to save module tag:", e);
+        Toast.show({
+          type: "error",
+          text1: "Failed to save module tag",
+          text2: "The tag has been saved locally and will sync when you're back online.",
+          position: "bottom",
+          visibilityTime: 6000,
+        });
+        // will sync later when online
+    } finally {
+        setIsSavingTag(false);
     }
   };
 

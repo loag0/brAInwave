@@ -1,4 +1,5 @@
 import * as SQLite from "expo-sqlite";
+import Toast from "react-native-toast-message"
 
 export const db = SQLite.openDatabaseSync("brainwave.db");
 
@@ -340,10 +341,15 @@ export const LocalDB = {
   },
 
   updateMaterialModuleTag: (userId: string, localId: number, moduleTag: string | null) => {
-    db.runSync(
+    const result = db.runSync(
       `UPDATE study_materials SET module_tag = ?, is_dirty = 1 WHERE user_id = ? AND id = ?`,
       [moduleTag ?? null, userId, localId],
     );
+
+    Toast.show({
+      type: "info",
+      text1: `rows affected: ${result.changes}`,
+    });
   },
 
   deleteMaterial: (userId: string, id: string | number) => {
