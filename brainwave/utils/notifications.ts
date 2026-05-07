@@ -2,6 +2,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as Battery from "expo-battery";
+import { PermissionResponse } from "expo-notifications";
 
 // Battery optimization for Android
 export async function isBatteryOptimizationEnabled(): Promise<boolean> {
@@ -41,16 +42,24 @@ export async function ensureBatteryOptimizationExemption(): Promise<void> {
 export async function getNotificationPermissionStatus(): Promise<
   "granted" | "denied" | "undetermined"
 > {
-  const { status } = await Notifications.getPermissionsAsync();
-  return status as "granted" | "denied" | "undetermined";
+  const permissions = (await Notifications.getPermissionsAsync()) as PermissionResponse;
+
+  if(__DEV__) console.log("Notification permissions: ", permissions);
+  
+  if (permissions.granted) return "granted";
+  if (!permissions.canAskAgain) return "denied";
+  return "undetermined";
 }
 
 export async function ensureNotificationPermission(): Promise<boolean> {
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  if (existingStatus === "granted") return true;
-  if (existingStatus === "denied") return false;
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status === "granted";
+  const permissions = (await Notifications.getPermissionsAsync()) as PermissionResponse;
+  if(__DEV__) console.log("Notification permissions: ", permissions);
+
+  if (permissions.granted) return true;
+  if (!permissions.canAskAgain) return false;
+
+  const request = (await Notifications.requestPermissionsAsync()) as PermissionResponse;
+  return request.granted;
 }
 
 export async function openAppSettings(): Promise<void> {
