@@ -1,6 +1,4 @@
 import * as SQLite from "expo-sqlite";
-import Toast from "react-native-toast-message"
-
 export const db = SQLite.openDatabaseSync("brainwave.db");
 
 export const LocalDB = {
@@ -210,6 +208,10 @@ export const LocalDB = {
     return db.getFirstSync(`SELECT * FROM user_profile WHERE id = ?`, [uid]);
   },
 
+  getLastCachedUser: () => {
+    return db.getFirstSync(`SELECT * FROM user_profile LIMIT 1`);
+  },
+
   saveUserProfile: (userId: string, yearOfStudy: string | null, degree: string | null, weakAreas: string[]) => {
     db.runSync(
       `UPDATE user_profile SET year_of_study = ?, degree = ?, weak_areas = ? WHERE id = ?`,
@@ -276,10 +278,10 @@ export const LocalDB = {
 
   getMaterialById: (userId: string, id: string) => {
     return db.getFirstSync(
-      `SELECT id, title, aiPlan, remote_id, module_tag FROM study_materials
+      `SELECT id, title, rawContent, aiPlan, remote_id, module_tag FROM study_materials
       WHERE user_id = ? AND (id = ? OR remote_id = ?) AND is_deleted = 0`,
       [userId, id, id],
-    ) as { id: number; title: string; aiPlan: string; remote_id: number; module_tag: string | null } | undefined;
+    ) as { id: number; title: string; rawContent: string; aiPlan: string; remote_id: number; module_tag: string | null } | undefined;
   },
 
   createMaterialLocally: (
@@ -346,10 +348,7 @@ export const LocalDB = {
       [moduleTag ?? null, userId, localId],
     );
 
-    Toast.show({
-      type: "info",
-      text1: `rows affected: ${result.changes}`,
-    });
+    return result.changes;
   },
 
   deleteMaterial: (userId: string, id: string | number) => {

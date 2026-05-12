@@ -141,7 +141,13 @@ export const useContent = () => {
         completed++;
       } catch (e: any) {
         log(`Material sync failed [${item.title}]: ${e.message}`);
-        if (e.response?.status >= 500) LocalDB.hardDeleteMaterial(item.id);
+        Toast.show({
+          type: "warning",
+          text1: "Material not synced yet",
+          text2: "It is saved locally and will retry when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 4000,
+        });
       }
     }
 
@@ -166,7 +172,13 @@ export const useContent = () => {
         completed++;
       } catch (e: any) {
         log(`Timetable sync failed [${table.title}]: ${e.message}`);
-        if (e.response?.status >= 500) LocalDB.hardDeleteTimetable(table.id);
+        Toast.show({
+          type: "warning",
+          text1: "Timetable not synced yet",
+          text2: "It is saved locally and will retry when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 4000,
+        });
       }
     }
 
@@ -199,7 +211,13 @@ export const useContent = () => {
         completed++;
       } catch (e: any) {
         log(`Assignment sync failed [${ass.title}]: ${e.message}`);
-        if (e.response?.status >= 500) LocalDB.hardDeleteAssignment(ass.id);
+        Toast.show({
+          type: "warning",
+          text1: "Assignment not synced yet",
+          text2: "It is saved locally and will retry when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 4000,
+        });
       }
     }
 
@@ -212,6 +230,13 @@ export const useContent = () => {
         completed++;
       } catch (e: any) {
         log(`Plan sync failed [${plan.date}]: ${e.message}`);
+        Toast.show({
+          type: "warning",
+          text1: "Plan not synced yet",
+          text2: "It is saved locally and will retry when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 4000,
+        });
         // Stays dirty — retries on next reconnect
       }
     }
@@ -231,6 +256,13 @@ export const useContent = () => {
         log("Completion logs synced");
       } catch (e: any) {
         log(`Completion logs sync failed: ${e.message}`);
+        Toast.show({
+          type: "warning",
+          text1: "Study time not synced yet",
+          text2: "Your local progress is saved and will retry later.",
+          position: "bottom",
+          visibilityTime: 4000,
+        });
       }
     }
 
@@ -248,6 +280,13 @@ export const useContent = () => {
         log("Module goals synced");
       } catch (e: any) {
         log(`Module goals sync failed: ${e.message}`);
+        Toast.show({
+          type: "warning",
+          text1: "Module goals not synced yet",
+          text2: "Your local goals are saved and will retry later.",
+          position: "bottom",
+          visibilityTime: 4000,
+        });
       }
     }
 
@@ -442,6 +481,13 @@ export const useContent = () => {
       }
     } catch (syncError: any) {
       log(`Immediate upload failed, will retry on reconnect: ${syncError.message}`);
+      Toast.show({
+        type: "warning",
+        text1: "Saved locally",
+        text2: "Upload failed. This material will sync when the server is reachable.",
+        position: "bottom",
+        visibilityTime: 5000,
+      });
     }
 
     return localId;
@@ -500,6 +546,13 @@ export const useContent = () => {
         return localId;
       } catch (syncError: any) {
         log(`Assignment upload failed, queued for retry: ${syncError.message}`);
+        Toast.show({
+          type: "warning",
+          text1: "Saved locally",
+          text2: "Upload failed. This assignment will sync when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 5000,
+        });
         return localId;
       }
     },
@@ -520,6 +573,13 @@ export const useContent = () => {
         return true;
       } catch (e: any) {
         log(`Delete assignment error: ${e.message}`);
+        Toast.show({
+          type: "warning",
+          text1: "Delete saved locally",
+          text2: "Cloud deletion failed. It will retry when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 5000,
+        });
         return true;
       }
     },
@@ -540,6 +600,13 @@ export const useContent = () => {
         return true;
       } catch (e: any) {
         log(`Delete material error: ${e.message}`);
+        Toast.show({
+          type: "warning",
+          text1: "Delete saved locally",
+          text2: "Cloud deletion failed. It will retry when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 5000,
+        });
         return true;
       }
     },
@@ -560,6 +627,13 @@ export const useContent = () => {
         return true;
       } catch (e: any) {
         log(`Delete timetable error: ${e.message}`);
+        Toast.show({
+          type: "warning",
+          text1: "Delete saved locally",
+          text2: "Cloud deletion failed. It will retry when the server is reachable.",
+          position: "bottom",
+          visibilityTime: 5000,
+        });
         return true;
       }
     },
@@ -602,6 +676,13 @@ export const useContent = () => {
           log(`Plan pushed to server and marked clean for ${date}`);
         } catch {
           log(`Plan push failed - stays dirty, will retry on reconnect: ${date}`);
+          Toast.show({
+            type: "warning",
+            text1: "Plan saved locally",
+            text2: "Cloud sync failed. It will retry when the server is reachable.",
+            position: "bottom",
+            visibilityTime: 5000,
+          });
         }
 
         const updatedPlans = await LocalDB.getAllPlans(user.id);

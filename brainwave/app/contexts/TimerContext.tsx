@@ -11,6 +11,7 @@ import { useAlert } from "./AlertContext";
 import { useAuth } from "./AuthContext";
 import { LocalDB } from "../database/localDb";
 import { AppState } from "react-native";
+import Toast from "react-native-toast-message";
 import { backgroundSync } from "@/utils/backgroundSync";
 import { useTheme } from "./ThemeContext";
 
@@ -74,6 +75,13 @@ export const TimerProvider = ({ children }: { children: React.ReactNode }) => {
           backgroundSync(user.id);
         } catch (e) {
           if (__DEV__) console.error('Failed to log study time:', e);
+          Toast.show({
+            type: "error",
+            text1: "Study time not saved",
+            text2: "Please try logging this session again.",
+            position: "bottom",
+            visibilityTime: 5000,
+          });
         }
       }
 

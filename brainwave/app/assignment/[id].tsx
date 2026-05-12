@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import NetInfo from "@react-native-community/netinfo";
 import Markdown from "react-native-markdown-display";
 import { useTheme } from "../contexts/ThemeContext";
 import { useDatePicker } from "../contexts/DatePickerContext";
@@ -89,10 +90,16 @@ export default function AssignmentDetail() {
     setLoading(true);
     try {
       const localData = await LocalDB.getAssignmentById(user.id, id as string);
-      if (localData && (localData as any).rawContent) {
+      if (localData) {
         setData(localData);
-        setLoading(false);
-        return;
+        if (
+          (localData as any).rawContent ||
+          (localData as any).pending_extraction ||
+          !(localData as any).remote_id
+        ) {
+          setLoading(false);
+          return;
+        }
       }
       const response = await brAInwaveApi.getAssignment(user.id, id as string);
       if (response) setData(response);
@@ -185,12 +192,27 @@ export default function AssignmentDetail() {
       const localId = Number(data.id);
       await LocalDB.updateAssignmentDueDate(localId, dateStr, timeStr);
       if (data.remote_id) {
-        await brAInwaveApi.updateAssignmentDueDate(
-          data.remote_id,
-          dateStr,
-          timeStr,
-        );
-        LocalDB.markAssignmentSynced(localId, data.remote_id);
+        const state = await NetInfo.fetch();
+        const online = !!(state.isConnected && state.isInternetReachable);
+        if (online) {
+          try {
+            await brAInwaveApi.updateAssignmentDueDate(
+              data.remote_id,
+              dateStr,
+              timeStr,
+            );
+            LocalDB.markAssignmentSynced(localId, data.remote_id);
+          } catch (syncError) {
+            console.error("Failed to sync due date/time:", syncError);
+            Toast.show({
+              type: "warning",
+              text1: "Saved locally",
+              text2: "The due date will sync when you're back online.",
+              position: "bottom",
+              visibilityTime: 6000,
+            });
+          }
+        }
       }
     } catch (e) {
       console.error("Failed to save due date/time:", e);

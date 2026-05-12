@@ -67,7 +67,15 @@ export function useTimetableUpload(
       if (replacingTimetable) {
         LocalDB.hardDeleteTimetable(replacingTimetable.id);
         if (replacingTimetable.remote_id) {
-          brainwaveApi.deleteTimetable(userId, replacingTimetable.remote_id).catch(() => {});
+          brainwaveApi.deleteTimetable(userId, replacingTimetable.remote_id).catch(() => {
+            Toast.show({
+              type: "warning",
+              text1: "Old timetable still syncing",
+              text2: "The new timetable is saved. We'll retry removing the old cloud copy later.",
+              position: "bottom",
+              visibilityTime: 5000,
+            });
+          });
         }
       }
 
@@ -100,6 +108,7 @@ export function useTimetableUpload(
       // Network/server error — save locally for later sync
       if (__DEV__) console.error("Timetable upload failed, remaining offline-only:", error);
       LocalDB.createTimetableLocally(userId, title, {}, file.uri, mimeType);
+      await refresh?.();
       Toast.show({
         type: "warning",
         text1: "Saved locally",

@@ -15,11 +15,37 @@ import {
   deleteUser,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
+import Toast from "react-native-toast-message";
 import { auth, db as firestore } from "../../firebaseConfig";
 import { User, AuthContextType, SignupData } from "../types";
 import { LocalDB } from "../database/localDb";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const LAST_AUTH_USER_ID = "lastAuthUserId";
+const EXPLICIT_LOGOUT = "explicitLogout";
+
+const normalizeCachedUser = (cachedUser: any): User => {
+  let studyPreferences: any = {};
+  if (cachedUser.studyPreferences) {
+    if (typeof cachedUser.studyPreferences === "string") {
+      try {
+        studyPreferences = JSON.parse(cachedUser.studyPreferences);
+      } catch {
+        studyPreferences = {};
+      }
+    } else {
+      studyPreferences = cachedUser.studyPreferences;
+    }
+  }
+
+  return {
+    ...cachedUser,
+    studyPreferences,
+    hasFinishedSetup: !!cachedUser.hasFinishedSetup,
+  };
+};
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   children,
@@ -33,6 +59,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        await AsyncStorage.multiSet([
+          [LAST_AUTH_USER_ID, firebaseUser.uid],
+          [EXPLICIT_LOGOUT, "false"],
+        ]);
+
         //Allows the user to see the app immediately while fetching their profile in the background
         const loadingTimeout = setTimeout(() => setIsLoading(false), 5000);
 
@@ -40,23 +71,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         try {
           const cachedUser = LocalDB.getUser(firebaseUser.uid) as any;
           if (cachedUser) {
-            let studyPreferences: any = {};
-            if (cachedUser.studyPreferences) {
-              if (typeof cachedUser.studyPreferences === "string") {
-                try {
-                  studyPreferences = JSON.parse(cachedUser.studyPreferences);
-                } catch {
-                  studyPreferences = {};
-                }
-              } else {
-                studyPreferences = cachedUser.studyPreferences;
-              }
-            }
-            setUser({
-              ...cachedUser,
-              studyPreferences,
-              hasFinishedSetup: !!cachedUser.hasFinishedSetup,
-            });
+            setUser(normalizeCachedUser(cachedUser));
             setIsLoading(false); // UI unblocks immediately from cache
           }
         } catch (localDbError) {
@@ -99,6 +114,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
           setIsLoading(false);
         }
       } else {
+        try {
+          const [explicitLogout, lastUserId] = await Promise.all([
+            AsyncStorage.getItem(EXPLICIT_LOGOUT),
+            AsyncStorage.getItem(LAST_AUTH_USER_ID),
+          ]);
+          const state = await NetInfo.fetch();
+          const online = !!(state.isConnected && state.isInternetReachable);
+
+          if (!online && explicitLogout !== "true") {
+            const cachedUser = lastUserId
+              ? (LocalDB.getUser(lastUserId) as any)
+              : (LocalDB.getLastCachedUser() as any);
+            if (cachedUser) {
+              setUser(normalizeCachedUser(cachedUser));
+              await AsyncStorage.setItem(LAST_AUTH_USER_ID, cachedUser.id);
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (localDbError) {
+          if (__DEV__) console.log("Offline cached auth failed:", localDbError);
+        }
+
         setUser(null);
         setToken(null);
         setIsLoading(false);
@@ -128,6 +166,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         studyPreferences: {},
         createdAt: new Date().toISOString(),
       });
+      await AsyncStorage.multiSet([
+        [LAST_AUTH_USER_ID, userCredential.user.uid],
+        [EXPLICIT_LOGOUT, "false"],
+      ]);
 
       return userCredential;
     } finally {
@@ -143,6 +185,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
         email,
         password,
       );
+      await AsyncStorage.multiSet([
+        [LAST_AUTH_USER_ID, userCredential.user.uid],
+        [EXPLICIT_LOGOUT, "false"],
+      ]);
       return userCredential;
     } finally {
       setIsLoading(false);
@@ -200,11 +246,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       updateDoc(userRef, flatUpdates);
     } catch (error) {
       console.error("Sync failed:", error);
+      Toast.show({
+        type: "warning",
+        text1: "Profile saved locally",
+        text2: "Cloud sync failed. Reopen settings when you're online to retry.",
+        position: "bottom",
+        visibilityTime: 5000,
+      });
     }
   };
 
   const logout = async () => {
     // if (user?.id) LocalDB.clearUser(user.id);
+    await AsyncStorage.setItem(EXPLICIT_LOGOUT, "true");
     await signOut(auth);
   };
 
@@ -230,6 +284,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       setToken(null);
     } catch (error) {
       console.error("Account deletion failed:", error);
+      Toast.show({
+        type: "error",
+        text1: "Account deletion failed",
+        text2: "Please check your connection and try again.",
+        position: "bottom",
+        visibilityTime: 5000,
+      });
     }
   };
 

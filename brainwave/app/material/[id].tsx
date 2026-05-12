@@ -69,16 +69,18 @@ export default function MaterialDetail() {
     try {
       const localData = await LocalDB.getMaterialById(user.id, id as string);
 
-      if (localData && localData.aiPlan) {
+      if (localData) {
         setRemoteId(localData.remote_id || null);
         setLocalId(localData.id || null);
         setModuleTag(localData.module_tag || null);
-        setData({
-          title: localData.title,
-          aiPlan: localData.aiPlan,
-        });
-        setLoading(false);
-        return;
+        if (localData.aiPlan || !localData.remote_id) {
+          setData({
+            title: localData.title,
+            aiPlan: localData.aiPlan || localData.rawContent || "",
+          });
+          setLoading(false);
+          return;
+        }
       }
 
       const rId = localData?.remote_id || id;
@@ -328,7 +330,10 @@ export default function MaterialDetail() {
     if (!user?.id || !localId) return;
 
     try {
-      await LocalDB.updateMaterialModuleTag(user.id, localId, subject);
+      const rowsUpdated = await LocalDB.updateMaterialModuleTag(user.id, localId, subject);
+      if (rowsUpdated === 0) {
+        throw new Error("Local material not found");
+      }
 
       setModuleTag(subject);
       
