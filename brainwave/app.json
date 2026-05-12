@@ -25,10 +25,7 @@
               "scheme": "com.username0.brainwave"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ],
       "edgeToEdgeEnabled": true,
@@ -93,9 +90,7 @@
         {
           "android": {
             "ndkVersion": "27.1.12297006",
-            "buildArchs": [
-              "arm64-v8a"
-            ],
+            "buildArchs": ["arm64-v8a"],
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkerInReleaseBuilds": true
           }
